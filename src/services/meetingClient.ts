@@ -1,4 +1,4 @@
-import { joinRoom, type Room } from 'trystero';
+import { joinRoom, selfId, type Room } from 'trystero';
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
 
 export interface MeetingClientEvents {
@@ -30,22 +30,12 @@ export interface MeetingClientEvents {
 
 interface ParticipantProfile {
   [key: string]: unknown;
-  userId: string;
   name: string;
   isHost: boolean;
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
   handRaised: boolean;
-  knownPeers?: Array<{
-    id: string;
-    name: string;
-    isHost: boolean;
-    isMuted: boolean;
-    isVideoOff: boolean;
-    isScreenSharing: boolean;
-    handRaised: boolean;
-  }>;
 }
 
 interface StatusPayload {
@@ -67,15 +57,6 @@ interface ModerationPayload {
   reason?: string;
 }
 
-// 5 top-tier high-availability global relays ensuring ALL clients connect to the exact same nodes
-const DEDICATED_RELAYS = [
-  'wss://nos.lol',
-  'wss://relay.damus.io',
-  'wss://purplerelay.com',
-  'wss://relay.snort.social',
-  'wss://relay.primal.net',
-];
-
 export class MeetingClient {
   private room: Room | null = null;
   private localStream: MediaStream | null = null;
@@ -90,10 +71,7 @@ export class MeetingClient {
   private moderationAction: any = null;
 
   private participants = new Map<string, Participant>();
-  private peerIdToUserId = new Map<string, string>();
-  private userIdToPeerId = new Map<string, string>();
   private syncTimer: number | null = null;
-  private localChannel: BroadcastChannel | null = null;
 
   public roomId: string = '';
   public userId: string = '';
@@ -112,76 +90,19 @@ export class MeetingClient {
     localStream: MediaStream | null
   ) {
     this.roomId = roomId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || 'majlis-main';
-    this.userId = userId;
-    this.userName = userName;
+    this.userId = userId || selfId;
+    this.userName = userName || 'Member';
     this.isHost = isHost;
     this.localStream = localStream;
     this.isClosed = false;
     this.isLocked = false;
     this.participants.clear();
-    this.peerIdToUserId.clear();
-    this.userIdToPeerId.clear();
-
-    // 1. Same-device / multi-tab instant discovery via BroadcastChannel
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        this.localChannel = new BroadcastChannel(`twl_majlis_${this.roomId}`);
-        this.localChannel.onmessage = (event) => {
-          const data = event.data;
-          if (!data || data.senderId === this.userId) return;
-
-          if (data.type === 'presence') {
-            const remoteUser = data.user;
-            if (remoteUser && remoteUser.id && remoteUser.id !== this.userId) {
-              const existing = this.participants.get(remoteUser.id);
-              const participant: Participant = {
-                id: remoteUser.id,
-                name: remoteUser.name || 'Member',
-                isHost: !!remoteUser.isHost,
-                isLocal: false,
-                isMuted: !!remoteUser.isMuted,
-                isVideoOff: !!remoteUser.isVideoOff,
-                isScreenSharing: !!remoteUser.isScreenSharing,
-                handRaised: !!remoteUser.handRaised,
-                stream: existing?.stream,
-              };
-              this.participants.set(remoteUser.id, participant);
-              if (!existing) {
-                this.events.onUserJoined(participant);
-              } else {
-                this.events.onUserStatusChanged({
-                  userId: remoteUser.id,
-                  isMuted: participant.isMuted,
-                  isVideoOff: participant.isVideoOff,
-                  isScreenSharing: participant.isScreenSharing,
-                  handRaised: participant.handRaised,
-                });
-              }
-            }
-          } else if (data.type === 'leave') {
-            if (data.userId && data.userId !== this.userId && this.participants.has(data.userId)) {
-              const existing = this.participants.get(data.userId);
-              this.participants.delete(data.userId);
-              this.events.onUserLeft(data.userId, existing?.name);
-            }
-          }
-        };
-
-        this.broadcastLocalPresence();
-      } catch (e) {
-        console.warn('BroadcastChannel error:', e);
-      }
-    }
 
     try {
-      // 2. Connect to serverless WebRTC room with dedicated, deterministic relays
+      // Connect using Trystero's default Nostr discovery engine
       this.room = joinRoom(
         {
           appId: 'the-wisdom-lounge-majlis',
-          relayConfig: {
-            urls: DEDICATED_RELAYS,
-            redundancy: DEDICATED_RELAYS.length,
-          },
         },
         this.roomId
       );
@@ -193,7 +114,7 @@ export class MeetingClient {
       this.statusAction = this.room.makeAction('status');
       this.moderationAction = this.room.makeAction('moderation');
 
-      // Add local stream once initially - Trystero automatically distributes to current & new peers
+      // Add local media stream
       if (this.localStream) {
         try {
           this.room.addStream(this.localStream);
@@ -202,15 +123,13 @@ export class MeetingClient {
         }
       }
 
-      // Handle remote incoming streams
+      // 1. Handle incoming peer media streams
       this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
-        const targetUserId = this.peerIdToUserId.get(peerId) || peerId;
-        const participant = this.participants.get(targetUserId) || this.participants.get(peerId);
+        let participant = this.participants.get(peerId);
         if (participant) {
           participant.stream = stream;
         } else {
-          // If profile message hasn't arrived yet, save stream under peerId
-          this.participants.set(peerId, {
+          participant = {
             id: peerId,
             name: 'Member',
             isHost: false,
@@ -219,17 +138,19 @@ export class MeetingClient {
             isVideoOff: false,
             isScreenSharing: false,
             handRaised: false,
-            stream: stream,
-          });
+            stream,
+          };
+          this.participants.set(peerId, participant);
+          this.events.onUserJoined(participant);
         }
-        this.events.onRemoteStream(targetUserId, stream);
+        this.events.onRemoteStream(peerId, stream);
       };
 
-      // When a peer connects to our room at WebRTC layer
+      // 2. Handle peer connection
       this.room.onPeerJoin = (peerId: string) => {
-        // Immediately ensure the peer is counted & rendered without waiting for JSON action
-        if (!this.peerIdToUserId.has(peerId) && !this.participants.has(peerId)) {
-          const tempParticipant: Participant = {
+        let participant = this.participants.get(peerId);
+        if (!participant) {
+          participant = {
             id: peerId,
             name: 'Member',
             isHost: false,
@@ -239,35 +160,23 @@ export class MeetingClient {
             isScreenSharing: false,
             handRaised: false,
           };
-          this.participants.set(peerId, tempParticipant);
-          this.events.onUserJoined(tempParticipant);
+          this.participants.set(peerId, participant);
+          this.events.onUserJoined(participant);
         }
 
-        // Broadcast profile immediately and again after a short delay
+        // Send our profile to the newly joined peer
         this.broadcastMyProfile(peerId);
-        setTimeout(() => this.broadcastMyProfile(peerId), 400);
       };
 
-      // Handle received peer profile
-      this.profileAction.onMessage = (profile: ParticipantProfile, context: { peerId: string }) => {
-        if (!profile || !profile.userId || profile.userId === this.userId) return;
-        const peerId = context.peerId;
+      // 3. Handle peer profile data
+      this.profileAction.onMessage = (profile: ParticipantProfile, peerId: string) => {
+        if (!profile || !peerId || peerId === selfId) return;
 
-        this.peerIdToUserId.set(peerId, profile.userId);
-        this.userIdToPeerId.set(profile.userId, peerId);
-
-        // Check for existing stream saved under either profile.userId or peerId
-        const existingByUserId = this.participants.get(profile.userId);
-        const existingByPeerId = this.participants.get(peerId);
-        const activeStream = existingByUserId?.stream || existingByPeerId?.stream;
-
-        // Clean up temporary peerId entry if it was created prior to profile arrival
-        if (existingByPeerId && peerId !== profile.userId) {
-          this.participants.delete(peerId);
-        }
+        const existing = this.participants.get(peerId);
+        const stream = existing?.stream;
 
         const participant: Participant = {
-          id: profile.userId,
+          id: peerId,
           name: profile.name || 'Member',
           isHost: !!profile.isHost,
           isLocal: false,
@@ -275,17 +184,16 @@ export class MeetingClient {
           isVideoOff: !!profile.isVideoOff,
           isScreenSharing: !!profile.isScreenSharing,
           handRaised: !!profile.handRaised,
-          stream: activeStream,
+          stream,
         };
 
-        this.participants.set(profile.userId, participant);
+        this.participants.set(peerId, participant);
 
-        if (!existingByUserId) {
+        if (!existing) {
           this.events.onUserJoined(participant);
-          this.broadcastMyProfile(peerId);
         } else {
           this.events.onUserStatusChanged({
-            userId: profile.userId,
+            userId: peerId,
             isMuted: participant.isMuted,
             isVideoOff: participant.isVideoOff,
             isScreenSharing: participant.isScreenSharing,
@@ -293,43 +201,27 @@ export class MeetingClient {
           });
         }
 
-        if (activeStream) {
-          this.events.onRemoteStream(profile.userId, activeStream);
-        }
-
-        // Process mesh gossip peer list so ALL members in the session are immediately discovered
-        if (Array.isArray(profile.knownPeers)) {
-          for (const known of profile.knownPeers) {
-            if (known.id && known.id !== this.userId && !this.participants.has(known.id)) {
-              const meshMember: Participant = {
-                id: known.id,
-                name: known.name || 'Member',
-                isHost: !!known.isHost,
-                isLocal: false,
-                isMuted: !!known.isMuted,
-                isVideoOff: !!known.isVideoOff,
-                isScreenSharing: !!known.isScreenSharing,
-                handRaised: !!known.handRaised,
-              };
-              this.participants.set(known.id, meshMember);
-              this.events.onUserJoined(meshMember);
-            }
-          }
+        if (stream) {
+          this.events.onRemoteStream(peerId, stream);
         }
       };
 
-      // Periodic heartbeat to guarantee peer profile exchange across all connected peers
+      // 4. Handle peer disconnect
+      this.room.onPeerLeave = (peerId: string) => {
+        const existing = this.participants.get(peerId);
+        this.participants.delete(peerId);
+        this.events.onUserLeft(peerId, existing?.name);
+      };
+
+      // 5. Periodic reconciliation
       this.syncTimer = window.setInterval(() => {
         if (!this.room || this.isClosed) return;
         try {
-          // Check all connected WebRTC peers from Trystero
           const peers = this.room.getPeers();
           for (const peerId of Object.keys(peers)) {
-            const mappedUserId = this.peerIdToUserId.get(peerId);
-            const targetId = mappedUserId || peerId;
-            if (targetId !== this.userId && !this.participants.has(targetId)) {
-              const tempParticipant: Participant = {
-                id: targetId,
+            if (!this.participants.has(peerId)) {
+              const p: Participant = {
+                id: peerId,
                 name: 'Member',
                 isHost: false,
                 isLocal: false,
@@ -338,57 +230,46 @@ export class MeetingClient {
                 isScreenSharing: false,
                 handRaised: false,
               };
-              this.participants.set(targetId, tempParticipant);
-              this.events.onUserJoined(tempParticipant);
+              this.participants.set(peerId, p);
+              this.events.onUserJoined(p);
             }
           }
-
           this.broadcastMyProfile();
-          this.broadcastLocalPresence();
         } catch (e) {
           // ignore
         }
-      }, 1500);
+      }, 2000);
 
-      // Handle peer leaving
-      this.room.onPeerLeave = (peerId: string) => {
-        const targetUserId = this.peerIdToUserId.get(peerId) || peerId;
-        const existing = this.participants.get(targetUserId);
-        this.participants.delete(targetUserId);
-        this.peerIdToUserId.delete(peerId);
-        this.userIdToPeerId.delete(targetUserId);
-        this.events.onUserLeft(targetUserId, existing?.name);
-      };
-
-      // Handle incoming chat
+      // 6. Handle chat
       this.chatAction.onMessage = (message: ChatMessage) => {
         if (message && message.senderId !== this.userId) {
           this.events.onChatMessage(message);
         }
       };
 
-      // Handle incoming reactions
+      // 7. Handle reactions
       this.reactionAction.onMessage = (reaction: ReactionItem) => {
         if (reaction && reaction.senderId !== this.userId) {
           this.events.onReaction(reaction);
         }
       };
 
-      // Handle peer status updates
-      this.statusAction.onMessage = (status: StatusPayload) => {
-        if (status && status.userId) {
-          const participant = this.participants.get(status.userId);
+      // 8. Handle status changes
+      this.statusAction.onMessage = (status: StatusPayload, peerId: string) => {
+        const targetId = peerId || status?.userId;
+        if (status && targetId) {
+          const participant = this.participants.get(targetId);
           if (participant) {
             if (status.isMuted !== undefined) participant.isMuted = status.isMuted;
             if (status.isVideoOff !== undefined) participant.isVideoOff = status.isVideoOff;
             if (status.isScreenSharing !== undefined) participant.isScreenSharing = status.isScreenSharing;
             if (status.handRaised !== undefined) participant.handRaised = status.handRaised;
           }
-          this.events.onUserStatusChanged(status);
+          this.events.onUserStatusChanged({ ...status, userId: targetId });
         }
       };
 
-      // Handle moderation
+      // 9. Handle moderation
       this.moderationAction.onMessage = (payload: ModerationPayload) => {
         switch (payload.type) {
           case 'force-mute':
@@ -410,7 +291,7 @@ export class MeetingClient {
         }
       };
 
-      // Notify caller that room joined
+      // Notify room joined
       this.events.onRoomJoined({
         roomId: this.roomId,
         isHost: this.isHost,
@@ -420,61 +301,25 @@ export class MeetingClient {
       });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('Failed to initialize serverless WebRTC room:', err);
+      console.error('Failed to initialize WebRTC room:', err);
       this.events.onError(`Connection error: ${errorMessage}`);
-    }
-  }
-
-  private broadcastLocalPresence() {
-    if (!this.localChannel) return;
-    try {
-      this.localChannel.postMessage({
-        type: 'presence',
-        senderId: this.userId,
-        user: {
-          id: this.userId,
-          name: this.userName,
-          isHost: this.isHost,
-          isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
-          isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
-          isScreenSharing: false,
-          handRaised: false,
-        },
-      });
-    } catch (e) {
-      // ignore
     }
   }
 
   private broadcastMyProfile(targetPeerId?: string) {
     if (!this.profileAction) return;
 
-    // Collect all other active participants known by this client for mesh gossip
-    const knownPeers = Array.from(this.participants.values())
-      .filter((p) => p.id !== this.userId)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        isHost: p.isHost,
-        isMuted: p.isMuted,
-        isVideoOff: p.isVideoOff,
-        isScreenSharing: p.isScreenSharing,
-        handRaised: p.handRaised,
-      }));
-
     const profile: ParticipantProfile = {
-      userId: this.userId,
       name: this.userName,
       isHost: this.isHost,
       isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
       isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
       isScreenSharing: false,
       handRaised: false,
-      knownPeers,
     };
 
     const options = targetPeerId ? { target: targetPeerId } : undefined;
-    this.profileAction.send(profile, options).catch(console.warn);
+    this.profileAction.send(profile, options).catch(() => {});
   }
 
   public setLocalStream(stream: MediaStream | null) {
@@ -583,19 +428,6 @@ export class MeetingClient {
       clearInterval(this.syncTimer);
       this.syncTimer = null;
     }
-    if (this.localChannel) {
-      try {
-        this.localChannel.postMessage({
-          type: 'leave',
-          senderId: this.userId,
-          userId: this.userId,
-        });
-        this.localChannel.close();
-      } catch (e) {
-        // ignore
-      }
-      this.localChannel = null;
-    }
     if (this.room) {
       try {
         this.room.leave();
@@ -605,7 +437,5 @@ export class MeetingClient {
       this.room = null;
     }
     this.participants.clear();
-    this.peerIdToUserId.clear();
-    this.userIdToPeerId.clear();
   }
 }

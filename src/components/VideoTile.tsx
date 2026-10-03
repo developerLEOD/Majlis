@@ -83,13 +83,29 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       }`}
     >
       {/* Remote audio player */}
-      {!isLocal && <audio ref={audioRef} autoPlay playsInline />}
+      {!isLocal && (
+        <audio
+          ref={(el) => {
+            audioRef.current = el;
+            if (el && participant.stream && el.srcObject !== participant.stream) {
+              el.srcObject = participant.stream;
+              el.play().catch(() => {});
+            }
+          }}
+          autoPlay
+          playsInline
+        />
+      )}
 
       {/* Video Element */}
       <video
         ref={(el) => {
           videoRef.current = el;
           if (videoRefCallback) videoRefCallback(el);
+          if (el && participant.stream && el.srcObject !== participant.stream) {
+            el.srcObject = participant.stream;
+            el.play().catch(() => {});
+          }
         }}
         autoPlay
         playsInline

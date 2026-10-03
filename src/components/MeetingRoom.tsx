@@ -296,7 +296,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     return () => {
       client.leave();
     };
-  }, [roomId, userId, userName, initialIsHost]);
+  }, [roomId, userId]);
 
   const showNotification = (text: string) => {
     setSystemBanner(text);
