@@ -43,6 +43,7 @@ export class FirebaseMeetingSync {
           hostId: data.hostId || this.userId,
           locked: !!data.locked,
           isRecording: !!data.isRecording,
+          ended: false,
           updatedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
         },
@@ -53,14 +54,52 @@ export class FirebaseMeetingSync {
     }
   }
 
+  // When facilitator ends session for all, delete/mark ended
+  public async endRoomSession() {
+    const path = `rooms/${this.roomId}`;
+    try {
+      // 1. Mark ended first so any listeners fire sessionEnded immediately
+      await setDoc(
+        doc(db, 'rooms', this.roomId),
+        {
+          ended: true,
+          endedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // 2. Delete participants
+      const participantsSnap = await getDocs(collection(db, 'rooms', this.roomId, 'participants'));
+      for (const d of participantsSnap.docs) {
+        deleteDoc(d.ref).catch(() => {});
+      }
+
+      // 3. Delete room document completely so it's removed from directory
+      setTimeout(async () => {
+        try {
+          await deleteDoc(doc(db, 'rooms', this.roomId));
+        } catch (e) {}
+      }, 500);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  }
+
   // Listen to room metadata changes in real-time
-  public subscribeToRoom(onUpdate: (data: any) => void): () => void {
+  public subscribeToRoom(onUpdate: (data: any | null) => void): () => void {
     const path = `rooms/${this.roomId}`;
     const unsub = onSnapshot(
       doc(db, 'rooms', this.roomId),
       (snap) => {
         if (snap.exists()) {
-          onUpdate(snap.data());
+          const data = snap.data();
+          if (data?.ended) {
+            onUpdate(null);
+          } else {
+            onUpdate(data);
+          }
+        } else {
+          onUpdate(null);
         }
       },
       (err) => {
@@ -155,7 +194,7 @@ export class FirebaseMeetingSync {
         onUpdate(list);
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        handleFirestoreError(err, OperationType.LIST, path);
       }
     );
     this.unsubscribers.push(unsub);
@@ -195,14 +234,13 @@ export class FirebaseMeetingSync {
             try {
               const parsed = JSON.parse(data.signalData);
               onSignal(data.senderId, parsed);
-              // Clean up signal after consumption
               deleteDoc(change.doc.ref).catch(() => {});
             } catch (e) {}
           }
         });
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        handleFirestoreError(err, OperationType.LIST, path);
       }
     );
     this.unsubscribers.push(unsub);
@@ -250,7 +288,7 @@ export class FirebaseMeetingSync {
         });
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        handleFirestoreError(err, OperationType.LIST, path);
       }
     );
     this.unsubscribers.push(unsub);
@@ -290,7 +328,6 @@ export class FirebaseMeetingSync {
                 senderName: d.senderName,
                 emoji: d.emoji,
               });
-              // Clean up reaction doc after a short delay
               setTimeout(() => {
                 deleteDoc(change.doc.ref).catch(() => {});
               }, 4000);
@@ -299,7 +336,7 @@ export class FirebaseMeetingSync {
         });
       },
       (err) => {
-        handleFirestoreError(err, OperationType.GET, path);
+        handleFirestoreError(err, OperationType.LIST, path);
       }
     );
     this.unsubscribers.push(unsub);
@@ -324,7 +361,7 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
       const list: MajlisSession[] = [];
       snapshot.forEach((docSnap) => {
         const d = docSnap.data();
-        if (d.roomId && d.title) {
+        if (d.roomId && d.title && !d.ended) {
           list.push({
             id: `live_${d.roomId}`,
             roomId: d.roomId,

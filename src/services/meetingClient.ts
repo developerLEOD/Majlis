@@ -119,6 +119,13 @@ export class MeetingClient {
 
       // Listen to room metadata changes from Firebase
       this.firebaseSync.subscribeToRoom((roomData) => {
+        if (!roomData || roomData.ended) {
+          if (!this.isHost && this.events.onSessionEnded) {
+            this.events.onSessionEnded('The facilitator has concluded this Majlis session.');
+          }
+          return;
+        }
+
         if (roomData.title && !roomData.title.startsWith('Majlis (')) {
           this.sessionTitle = roomData.title;
           saveRoomTitleLocally(this.roomId, roomData.title);
@@ -258,6 +265,14 @@ export class MeetingClient {
                 const isInitiator = this.userId > msg.userId;
                 await this.createPeerConnection(msg.userId, isInitiator);
               }
+              break;
+            }
+
+            case 'session-ended': {
+              if (this.events.onSessionEnded) {
+                this.events.onSessionEnded(msg.message || 'The facilitator has concluded this Majlis session.');
+              }
+              this.leave();
               break;
             }
 
@@ -856,9 +871,25 @@ export class MeetingClient {
 
   public hostEndSession() {
     if (!this.isHost) return;
+
+    // 1. Notify via WebSocket
     this.sendWsMessage({
       type: 'host-end-session',
     });
+
+    // 2. Notify via BroadcastChannel
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'session-ended',
+          _senderId: this.userId,
+          message: 'The facilitator has concluded this Majlis session.',
+        });
+      } catch (e) {}
+    }
+
+    // 3. Delete room and participants from Firestore so it disappears from Ongoing list immediately
+    this.firebaseSync?.endRoomSession().catch(() => {});
   }
 
   private closePeerConnection(peerId: string) {

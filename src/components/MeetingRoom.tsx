@@ -274,8 +274,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onKicked: (reason) => {
-        alert(reason || 'Removed from Majlis');
-        handleFinalExit();
+        showNotification(reason || 'Removed from Majlis');
+        setTimeout(() => {
+          handleFinalExit();
+        }, 400);
       },
 
       onLockChanged: (locked) => {
@@ -288,8 +290,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onSessionEnded: (reason) => {
-        alert(reason || 'The facilitator has concluded this Majlis session.');
-        handleFinalExit();
+        showNotification(reason || 'The facilitator has concluded this Majlis session.');
+        setTimeout(() => {
+          handleFinalExit();
+        }, 400);
       },
 
       onUserStatusChanged: (data) => {

@@ -42,7 +42,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.activeMajalis) && data.activeMajalis.length > 0) {
+        if (Array.isArray(data.activeMajalis)) {
           persistAndBroadcast(data.activeMajalis);
         }
       }
@@ -72,9 +72,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     let cloudUnsub: (() => void) | null = null;
     try {
       cloudUnsub = subscribeToCloudActiveRooms((cloudRooms) => {
-        if (cloudRooms && cloudRooms.length > 0) {
-          persistAndBroadcast(cloudRooms);
-        }
+        persistAndBroadcast(cloudRooms || []);
       });
     } catch (e) {
       console.warn('Cloud rooms subscription notice:', e);
