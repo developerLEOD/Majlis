@@ -1,7 +1,14 @@
+import { joinRoom, type Room } from 'trystero';
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
 
 export interface MeetingClientEvents {
-  onRoomJoined: (data: { roomId: string; isHost: boolean; locked: boolean; isRecording: boolean; participants: Participant[] }) => void;
+  onRoomJoined: (data: {
+    roomId: string;
+    isHost: boolean;
+    locked: boolean;
+    isRecording: boolean;
+    participants: Participant[];
+  }) => void;
   onUserJoined: (user: Participant) => void;
   onUserLeft: (userId: string, name?: string) => void;
   onRemoteStream: (userId: string, stream: MediaStream) => void;
@@ -11,26 +18,62 @@ export interface MeetingClientEvents {
   onKicked: (reason: string) => void;
   onLockChanged: (locked: boolean) => void;
   onRecordingNotice: (isRecording: boolean, recordedBy: string) => void;
-  onUserStatusChanged: (data: { userId: string; isMuted?: boolean; isVideoOff?: boolean; isScreenSharing?: boolean; handRaised?: boolean }) => void;
+  onUserStatusChanged: (data: {
+    userId: string;
+    isMuted?: boolean;
+    isVideoOff?: boolean;
+    isScreenSharing?: boolean;
+    handRaised?: boolean;
+  }) => void;
   onError: (message: string) => void;
 }
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ],
-};
+interface ParticipantProfile {
+  [key: string]: unknown;
+  userId: string;
+  name: string;
+  isHost: boolean;
+  isMuted: boolean;
+  isVideoOff: boolean;
+  isScreenSharing: boolean;
+  handRaised: boolean;
+}
+
+interface StatusPayload {
+  [key: string]: unknown;
+  userId: string;
+  isMuted?: boolean;
+  isVideoOff?: boolean;
+  isScreenSharing?: boolean;
+  handRaised?: boolean;
+}
+
+interface ModerationPayload {
+  [key: string]: unknown;
+  type: 'force-mute' | 'kick' | 'lock-changed' | 'recording-notice';
+  targetId?: string;
+  locked?: boolean;
+  isRecording?: boolean;
+  recordedBy?: string;
+  reason?: string;
+}
 
 export class MeetingClient {
-  private ws: WebSocket | null = null;
-  private peerConnections = new Map<string, RTCPeerConnection>();
-  private iceCandidateQueues = new Map<string, RTCIceCandidateInit[]>();
+  private room: Room | null = null;
   private localStream: MediaStream | null = null;
   private events: MeetingClientEvents;
-  private heartbeatTimer: number | null = null;
   private isClosed = false;
+  private isLocked = false;
+
+  private profileAction: any = null;
+  private chatAction: any = null;
+  private reactionAction: any = null;
+  private statusAction: any = null;
+  private moderationAction: any = null;
+
+  private participants = new Map<string, Participant>();
+  private peerIdToUserId = new Map<string, string>();
+  private userIdToPeerId = new Map<string, string>();
 
   public roomId: string = '';
   public userId: string = '';
@@ -41,368 +84,314 @@ export class MeetingClient {
     this.events = events;
   }
 
-  public connect(roomId: string, userId: string, userName: string, isHost: boolean, localStream: MediaStream | null) {
-    this.roomId = roomId;
+  public connect(
+    roomId: string,
+    userId: string,
+    userName: string,
+    isHost: boolean,
+    localStream: MediaStream | null
+  ) {
+    this.roomId = roomId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '') || 'majlis-main';
     this.userId = userId;
     this.userName = userName;
     this.isHost = isHost;
     this.localStream = localStream;
     this.isClosed = false;
+    this.isLocked = false;
+    this.participants.clear();
+    this.peerIdToUserId.clear();
+    this.userIdToPeerId.clear();
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}`;
+    try {
+      // Connect to serverless WebRTC room (Works anywhere: Vercel, Netlify, localhost)
+      this.room = joinRoom(
+        {
+          appId: 'the-wisdom-lounge-majlis',
+        },
+        this.roomId
+      );
 
-    this.ws = new WebSocket(wsUrl);
+      // Register typed actions
+      this.profileAction = this.room.makeAction('profile');
+      this.chatAction = this.room.makeAction('chat');
+      this.reactionAction = this.room.makeAction('reaction');
+      this.statusAction = this.room.makeAction('status');
+      this.moderationAction = this.room.makeAction('moderation');
 
-    let hasConnected = false;
-
-    this.ws.onopen = () => {
-      hasConnected = true;
-      const isMuted = !localStream?.getAudioTracks().some((t) => t.enabled);
-      const isVideoOff = !localStream?.getVideoTracks().some((t) => t.enabled);
-
-      this.sendMessage({
-        type: 'join',
-        roomId,
-        userId,
-        userName,
-        isHost,
-        isMuted,
-        isVideoOff,
-      });
-
-      // Heartbeat
-      this.heartbeatTimer = window.setInterval(() => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          this.sendMessage({ type: 'ping' });
+      // Add local stream if present
+      if (this.localStream) {
+        try {
+          this.room.addStream(this.localStream);
+        } catch (e) {
+          console.warn('Error adding initial local stream:', e);
         }
-      }, 20000);
-    };
-
-    this.ws.onmessage = async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        await this.handleMessage(data);
-      } catch (err) {
-        console.error('Failed to parse WS message:', err);
       }
-    };
 
-    this.ws.onerror = (err) => {
-      console.warn('WebSocket encountered error:', err);
-      if (!hasConnected) {
-        this.events.onError(
-          'Unable to connect to real-time signaling server. If hosted on a serverless platform (like Vercel), persistent WebSockets are not supported natively. Consider hosting on Render, Railway, Cloud Run, or Fly.io.'
-        );
-      }
-    };
+      // Handle remote incoming streams
+      this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
+        const targetUserId = this.peerIdToUserId.get(peerId) || peerId;
+        const participant = this.participants.get(targetUserId);
+        if (participant) {
+          participant.stream = stream;
+        }
+        this.events.onRemoteStream(targetUserId, stream);
+      };
 
-    this.ws.onclose = () => {
-      if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-      if (!this.isClosed && hasConnected) {
-        console.log('WS connection closed.');
-      }
+      // When a peer connects to our room
+      this.room.onPeerJoin = (peerId: string) => {
+        // Send our profile to the newly connected peer
+        this.broadcastMyProfile(peerId);
+
+        // Share our media stream with the new peer if active
+        if (this.localStream && this.room) {
+          try {
+            this.room.addStream(this.localStream, { target: peerId });
+          } catch (e) {
+            console.warn('Error sending stream to new peer:', e);
+          }
+        }
+      };
+
+      // Handle received peer profile
+      this.profileAction.onMessage = (profile: ParticipantProfile, context: { peerId: string }) => {
+        if (!profile || !profile.userId) return;
+        const peerId = context.peerId;
+
+        this.peerIdToUserId.set(peerId, profile.userId);
+        this.userIdToPeerId.set(profile.userId, peerId);
+
+        const existing = this.participants.get(profile.userId);
+        const participant: Participant = {
+          id: profile.userId,
+          name: profile.name || 'Member',
+          isHost: !!profile.isHost,
+          isLocal: false,
+          isMuted: !!profile.isMuted,
+          isVideoOff: !!profile.isVideoOff,
+          isScreenSharing: !!profile.isScreenSharing,
+          handRaised: !!profile.handRaised,
+          stream: existing?.stream,
+        };
+
+        this.participants.set(profile.userId, participant);
+
+        if (!existing) {
+          this.events.onUserJoined(participant);
+          // Return our profile back to ensure bidirectional awareness
+          this.broadcastMyProfile(peerId);
+        } else {
+          this.events.onUserStatusChanged({
+            userId: profile.userId,
+            isMuted: participant.isMuted,
+            isVideoOff: participant.isVideoOff,
+            isScreenSharing: participant.isScreenSharing,
+            handRaised: participant.handRaised,
+          });
+        }
+      };
+
+      // Handle peer leaving
+      this.room.onPeerLeave = (peerId: string) => {
+        const targetUserId = this.peerIdToUserId.get(peerId) || peerId;
+        const existing = this.participants.get(targetUserId);
+        this.participants.delete(targetUserId);
+        this.peerIdToUserId.delete(peerId);
+        this.userIdToPeerId.delete(targetUserId);
+        this.events.onUserLeft(targetUserId, existing?.name);
+      };
+
+      // Handle incoming chat
+      this.chatAction.onMessage = (message: ChatMessage) => {
+        if (message && message.senderId !== this.userId) {
+          this.events.onChatMessage(message);
+        }
+      };
+
+      // Handle incoming reactions
+      this.reactionAction.onMessage = (reaction: ReactionItem) => {
+        if (reaction && reaction.senderId !== this.userId) {
+          this.events.onReaction(reaction);
+        }
+      };
+
+      // Handle peer status updates
+      this.statusAction.onMessage = (status: StatusPayload) => {
+        if (status && status.userId) {
+          const participant = this.participants.get(status.userId);
+          if (participant) {
+            if (status.isMuted !== undefined) participant.isMuted = status.isMuted;
+            if (status.isVideoOff !== undefined) participant.isVideoOff = status.isVideoOff;
+            if (status.isScreenSharing !== undefined) participant.isScreenSharing = status.isScreenSharing;
+            if (status.handRaised !== undefined) participant.handRaised = status.handRaised;
+          }
+          this.events.onUserStatusChanged(status);
+        }
+      };
+
+      // Handle moderation
+      this.moderationAction.onMessage = (payload: ModerationPayload) => {
+        switch (payload.type) {
+          case 'force-mute':
+            this.events.onForceMute();
+            break;
+          case 'kick':
+            if (payload.targetId === this.userId) {
+              this.events.onKicked(payload.reason || 'You were removed from the Majlis by the facilitator.');
+              this.leave();
+            }
+            break;
+          case 'lock-changed':
+            this.isLocked = !!payload.locked;
+            this.events.onLockChanged(this.isLocked);
+            break;
+          case 'recording-notice':
+            this.events.onRecordingNotice(!!payload.isRecording, payload.recordedBy || 'Facilitator');
+            break;
+        }
+      };
+
+      // Notify caller that room joined
+      this.events.onRoomJoined({
+        roomId: this.roomId,
+        isHost: this.isHost,
+        locked: this.isLocked,
+        isRecording: false,
+        participants: Array.from(this.participants.values()),
+      });
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('Failed to initialize serverless WebRTC room:', err);
+      this.events.onError(`Connection error: ${errorMessage}`);
+    }
+  }
+
+  private broadcastMyProfile(targetPeerId?: string) {
+    if (!this.profileAction) return;
+    const profile: ParticipantProfile = {
+      userId: this.userId,
+      name: this.userName,
+      isHost: this.isHost,
+      isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+      isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+      isScreenSharing: false,
+      handRaised: false,
     };
+    const options = targetPeerId ? { target: targetPeerId } : undefined;
+    this.profileAction.send(profile, options).catch(console.warn);
   }
 
   public setLocalStream(stream: MediaStream | null) {
     this.localStream = stream;
-    if (!stream) return;
+    if (!this.room || !stream) return;
 
-    // Replace tracks on all active peer connections
-    for (const [peerId, pc] of this.peerConnections.entries()) {
-      const senders = pc.getSenders();
-      const videoTrack = stream.getVideoTracks()[0];
-      const audioTrack = stream.getAudioTracks()[0];
-
-      if (videoTrack) {
-        const videoSender = senders.find((s) => s.track?.kind === 'video');
-        if (videoSender) {
-          videoSender.replaceTrack(videoTrack).catch(console.warn);
-        } else {
-          try {
-            pc.addTrack(videoTrack, stream);
-          } catch (e) {
-            console.warn(`Could not add video track to peer ${peerId}:`, e);
-          }
-        }
-      }
-
-      if (audioTrack) {
-        const audioSender = senders.find((s) => s.track?.kind === 'audio');
-        if (audioSender) {
-          audioSender.replaceTrack(audioTrack).catch(console.warn);
-        } else {
-          try {
-            pc.addTrack(audioTrack, stream);
-          } catch (e) {
-            console.warn(`Could not add audio track to peer ${peerId}:`, e);
-          }
-        }
-      }
-    }
-  }
-
-  private async handleMessage(data: { type: string; [key: string]: unknown }) {
-    switch (data.type) {
-      case 'room-joined': {
-        const participants = (data.participants as Participant[]) || [];
-        this.isHost = !!data.isHost;
-        this.events.onRoomJoined({
-          roomId: data.roomId as string,
-          isHost: this.isHost,
-          locked: !!data.locked,
-          isRecording: !!data.isRecording,
-          participants,
-        });
-
-        // For each existing participant, initiate WebRTC connection
-        for (const p of participants) {
-          await this.initiatePeerConnection(p.id, true);
-        }
-        break;
-      }
-
-      case 'user-joined': {
-        const user = data.user as Participant;
-        this.events.onUserJoined(user);
-        // Will receive offer from the new participant or handle via signalling
-        break;
-      }
-
-      case 'user-left': {
-        const userId = data.userId as string;
-        this.closePeerConnection(userId);
-        this.events.onUserLeft(userId, data.name as string | undefined);
-        break;
-      }
-
-      case 'signal': {
-        const senderId = data.senderId as string;
-        const signalData = data.signalData as {
-          type?: string;
-          sdp?: string;
-          candidate?: RTCIceCandidateInit;
-        };
-
-        let pc = this.peerConnections.get(senderId);
-        if (!pc) {
-          pc = await this.initiatePeerConnection(senderId, false);
-        }
-
-        if (signalData.type === 'offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(signalData as RTCSessionDescriptionInit));
-          // Process queued ICE candidates
-          const queued = this.iceCandidateQueues.get(senderId) || [];
-          for (const cand of queued) {
-            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.warn);
-          }
-          this.iceCandidateQueues.delete(senderId);
-
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.sendMessage({
-            type: 'signal',
-            targetId: senderId,
-            signalData: pc.localDescription,
-          });
-        } else if (signalData.type === 'answer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(signalData as RTCSessionDescriptionInit));
-          // Process queued ICE candidates
-          const queued = this.iceCandidateQueues.get(senderId) || [];
-          for (const cand of queued) {
-            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.warn);
-          }
-          this.iceCandidateQueues.delete(senderId);
-        } else if (signalData.candidate) {
-          if (!pc.remoteDescription) {
-            const list = this.iceCandidateQueues.get(senderId) || [];
-            list.push(signalData.candidate);
-            this.iceCandidateQueues.set(senderId, list);
-          } else {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(signalData.candidate));
-            } catch (e) {
-              console.warn('Error adding ICE candidate:', e);
-            }
-          }
-        }
-        break;
-      }
-
-      case 'chat': {
-        this.events.onChatMessage(data.message as ChatMessage);
-        break;
-      }
-
-      case 'reaction': {
-        this.events.onReaction(data as unknown as ReactionItem);
-        break;
-      }
-
-      case 'force-mute': {
-        this.events.onForceMute();
-        break;
-      }
-
-      case 'kicked': {
-        this.events.onKicked(data.message as string);
-        this.leave();
-        break;
-      }
-
-      case 'room-lock-changed': {
-        this.events.onLockChanged(!!data.locked);
-        break;
-      }
-
-      case 'recording-notice': {
-        this.events.onRecordingNotice(!!data.isRecording, (data.recordedBy as string) || 'Host');
-        break;
-      }
-
-      case 'user-status-changed': {
-        this.events.onUserStatusChanged(data as unknown as { userId: string });
-        break;
-      }
-
-      case 'error': {
-        this.events.onError(data.message as string);
-        break;
-      }
-    }
-  }
-
-  private async initiatePeerConnection(targetUserId: string, isInitiator: boolean): Promise<RTCPeerConnection> {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-    this.peerConnections.set(targetUserId, pc);
-
-    // Add local media tracks
-    if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        try {
-          pc.addTrack(track, this.localStream!);
-        } catch (e) {
-          console.warn('Error adding track to peer:', e);
-        }
-      });
-    }
-
-    // Handle remote tracks
-    pc.ontrack = (event) => {
-      if (event.streams && event.streams[0]) {
-        this.events.onRemoteStream(targetUserId, event.streams[0]);
-      } else {
-        const stream = new MediaStream([event.track]);
-        this.events.onRemoteStream(targetUserId, stream);
-      }
-    };
-
-    // Relay ICE candidates
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.sendMessage({
-          type: 'signal',
-          targetId: targetUserId,
-          signalData: { candidate: event.candidate.toJSON() },
-        });
-      }
-    };
-
-    if (isInitiator) {
-      try {
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true,
-        });
-        await pc.setLocalDescription(offer);
-        this.sendMessage({
-          type: 'signal',
-          targetId: targetUserId,
-          signalData: pc.localDescription,
-        });
-      } catch (err) {
-        console.error('Failed to create offer for peer:', err);
-      }
-    }
-
-    return pc;
-  }
-
-  private closePeerConnection(userId: string) {
-    const pc = this.peerConnections.get(userId);
-    if (pc) {
-      pc.close();
-      this.peerConnections.delete(userId);
+    try {
+      this.room.addStream(stream);
+    } catch (e) {
+      console.warn('Error updating stream tracks in room:', e);
     }
   }
 
   public sendChatMessage(text: string) {
-    this.sendMessage({
-      type: 'chat',
-      text,
-    });
+    if (!text.trim()) return;
+    const message: ChatMessage = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      senderId: this.userId,
+      senderName: this.userName,
+      isHost: this.isHost,
+      text: text.trim(),
+      timestamp: Date.now(),
+    };
+
+    if (this.chatAction) {
+      this.chatAction.send(message as any).catch(console.warn);
+    }
+
+    this.events.onChatMessage(message);
   }
 
   public sendReaction(emoji: string) {
-    this.sendMessage({
-      type: 'reaction',
+    if (!emoji) return;
+    const reaction: ReactionItem = {
+      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      senderId: this.userId,
+      senderName: this.userName,
       emoji,
-    });
+    };
+
+    if (this.reactionAction) {
+      this.reactionAction.send(reaction as any).catch(console.warn);
+    }
+
+    this.events.onReaction(reaction);
   }
 
-  public updateStatus(status: { isMuted?: boolean; isVideoOff?: boolean; isScreenSharing?: boolean; handRaised?: boolean }) {
-    this.sendMessage({
-      type: 'status-update',
+  public updateStatus(status: {
+    isMuted?: boolean;
+    isVideoOff?: boolean;
+    isScreenSharing?: boolean;
+    handRaised?: boolean;
+  }) {
+    const payload: StatusPayload = {
+      userId: this.userId,
       ...status,
-    });
+    };
+
+    if (this.statusAction) {
+      this.statusAction.send(payload).catch(console.warn);
+    }
+
+    this.events.onUserStatusChanged(payload);
   }
 
   public hostMuteAll() {
-    this.sendMessage({
-      type: 'host-mute-all',
-    });
+    if (!this.isHost || !this.moderationAction) return;
+    this.moderationAction.send({ type: 'force-mute' }).catch(console.warn);
   }
 
   public hostKickUser(targetId: string) {
-    this.sendMessage({
-      type: 'host-kick',
+    if (!this.isHost || !this.moderationAction) return;
+    this.moderationAction.send({
+      type: 'kick',
       targetId,
-    });
+      reason: 'The facilitator has dismissed you from this session.',
+    }).catch(console.warn);
+
+    const existing = this.participants.get(targetId);
+    this.participants.delete(targetId);
+    this.events.onUserLeft(targetId, existing?.name);
   }
 
   public hostToggleLock() {
-    this.sendMessage({
-      type: 'host-toggle-lock',
-    });
+    if (!this.isHost || !this.moderationAction) return;
+    this.isLocked = !this.isLocked;
+    this.moderationAction.send({
+      type: 'lock-changed',
+      locked: this.isLocked,
+    }).catch(console.warn);
+    this.events.onLockChanged(this.isLocked);
   }
 
   public notifyRecording(isRecording: boolean) {
-    this.sendMessage({
+    if (!this.moderationAction) return;
+    this.moderationAction.send({
       type: 'recording-notice',
       isRecording,
-    });
-  }
-
-  private sendMessage(msg: object) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
-    }
+      recordedBy: this.userName,
+    }).catch(console.warn);
   }
 
   public leave() {
     this.isClosed = true;
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-
-    for (const pc of this.peerConnections.values()) {
-      pc.close();
+    if (this.room) {
+      try {
+        this.room.leave();
+      } catch (e) {
+        console.warn('Error leaving room:', e);
+      }
+      this.room = null;
     }
-    this.peerConnections.clear();
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
+    this.participants.clear();
+    this.peerIdToUserId.clear();
+    this.userIdToPeerId.clear();
   }
 }
