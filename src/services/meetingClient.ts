@@ -37,6 +37,15 @@ interface ParticipantProfile {
   isVideoOff: boolean;
   isScreenSharing: boolean;
   handRaised: boolean;
+  knownPeers?: Array<{
+    id: string;
+    name: string;
+    isHost: boolean;
+    isMuted: boolean;
+    isVideoOff: boolean;
+    isScreenSharing: boolean;
+    handRaised: boolean;
+  }>;
 }
 
 interface StatusPayload {
@@ -57,6 +66,15 @@ interface ModerationPayload {
   recordedBy?: string;
   reason?: string;
 }
+
+// 5 top-tier high-availability global relays ensuring ALL clients connect to the exact same nodes
+const DEDICATED_RELAYS = [
+  'wss://nos.lol',
+  'wss://relay.damus.io',
+  'wss://purplerelay.com',
+  'wss://relay.snort.social',
+  'wss://relay.primal.net',
+];
 
 export class MeetingClient {
   private room: Room | null = null;
@@ -104,22 +122,26 @@ export class MeetingClient {
     this.userIdToPeerId.clear();
 
     try {
-      // Connect to serverless WebRTC room (Works anywhere: Vercel, Netlify, localhost)
+      // Connect to serverless WebRTC room with dedicated, deterministic relays
       this.room = joinRoom(
         {
           appId: 'the-wisdom-lounge-majlis',
+          relayConfig: {
+            urls: DEDICATED_RELAYS,
+            redundancy: DEDICATED_RELAYS.length,
+          },
         },
         this.roomId
       );
 
-      // Register typed actions
+      // Register typed action channels
       this.profileAction = this.room.makeAction('profile');
       this.chatAction = this.room.makeAction('chat');
       this.reactionAction = this.room.makeAction('reaction');
       this.statusAction = this.room.makeAction('status');
       this.moderationAction = this.room.makeAction('moderation');
 
-      // Add local stream if present
+      // Add local stream once initially - Trystero automatically distributes to current & new peers
       if (this.localStream) {
         try {
           this.room.addStream(this.localStream);
@@ -156,20 +178,11 @@ export class MeetingClient {
         // Broadcast profile immediately and again after a short delay
         this.broadcastMyProfile(peerId);
         setTimeout(() => this.broadcastMyProfile(peerId), 500);
-
-        // Share our media stream with the new peer if active
-        if (this.localStream && this.room) {
-          try {
-            this.room.addStream(this.localStream, { target: peerId });
-          } catch (e) {
-            console.warn('Error sending stream to new peer:', e);
-          }
-        }
       };
 
       // Handle received peer profile
       this.profileAction.onMessage = (profile: ParticipantProfile, context: { peerId: string }) => {
-        if (!profile || !profile.userId) return;
+        if (!profile || !profile.userId || profile.userId === this.userId) return;
         const peerId = context.peerId;
 
         this.peerIdToUserId.set(peerId, profile.userId);
@@ -215,23 +228,33 @@ export class MeetingClient {
         if (activeStream) {
           this.events.onRemoteStream(profile.userId, activeStream);
         }
+
+        // Process mesh gossip peer list so ALL members in the session are immediately discovered
+        if (Array.isArray(profile.knownPeers)) {
+          for (const known of profile.knownPeers) {
+            if (known.id && known.id !== this.userId && !this.participants.has(known.id)) {
+              const meshMember: Participant = {
+                id: known.id,
+                name: known.name || 'Member',
+                isHost: !!known.isHost,
+                isLocal: false,
+                isMuted: !!known.isMuted,
+                isVideoOff: !!known.isVideoOff,
+                isScreenSharing: !!known.isScreenSharing,
+                handRaised: !!known.handRaised,
+              };
+              this.participants.set(known.id, meshMember);
+              this.events.onUserJoined(meshMember);
+            }
+          }
+        }
       };
 
-      // Periodic heartbeat to guarantee peer profile and stream exchange across all connected peers
+      // Periodic heartbeat to guarantee peer profile exchange across all connected peers
       this.syncTimer = window.setInterval(() => {
         if (!this.room || this.isClosed) return;
         try {
-          const peers = this.room.getPeers();
-          for (const peerId of Object.keys(peers)) {
-            this.broadcastMyProfile(peerId);
-            if (this.localStream) {
-              try {
-                this.room.addStream(this.localStream, { target: peerId });
-              } catch (e) {
-                // Stream may already be added
-              }
-            }
-          }
+          this.broadcastMyProfile();
         } catch (e) {
           // ignore
         }
@@ -314,6 +337,20 @@ export class MeetingClient {
 
   private broadcastMyProfile(targetPeerId?: string) {
     if (!this.profileAction) return;
+
+    // Collect all other active participants known by this client for mesh gossip
+    const knownPeers = Array.from(this.participants.values())
+      .filter((p) => p.id !== this.userId)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        isHost: p.isHost,
+        isMuted: p.isMuted,
+        isVideoOff: p.isVideoOff,
+        isScreenSharing: p.isScreenSharing,
+        handRaised: p.handRaised,
+      }));
+
     const profile: ParticipantProfile = {
       userId: this.userId,
       name: this.userName,
@@ -322,7 +359,9 @@ export class MeetingClient {
       isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
       isScreenSharing: false,
       handRaised: false,
+      knownPeers,
     };
+
     const options = targetPeerId ? { target: targetPeerId } : undefined;
     this.profileAction.send(profile, options).catch(console.warn);
   }

@@ -182,6 +182,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onUserJoined: (user) => {
+        if (user.id === userId) return;
         setParticipants((prev) => {
           const index = prev.findIndex((p) => p.id === user.id);
           if (index >= 0) {
@@ -200,12 +201,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onUserLeft: (leftUserId, leftName) => {
+        if (leftUserId === userId) return;
         setParticipants((prev) => prev.filter((p) => p.id !== leftUserId));
         videoElementsRef.current.delete(leftUserId);
         showNotification(`${leftName || 'A member'} left`);
       },
 
       onRemoteStream: (remoteUserId, stream) => {
+        if (remoteUserId === userId) return;
         setParticipants((prev) => {
           const index = prev.findIndex((p) => p.id === remoteUserId);
           if (index >= 0) {
