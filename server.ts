@@ -316,6 +316,21 @@ wss.on('connection', (ws: WebSocket) => {
           });
           break;
         }
+
+        case 'host-end-session': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const sender = room.participants.get(currentUserId);
+          if (!sender?.isHost) return;
+
+          broadcastToRoom(currentRoomId, currentUserId, {
+            type: 'session-ended',
+            message: 'The facilitator has concluded this Majlis session.',
+          });
+          rooms.delete(currentRoomId);
+          break;
+        }
       }
     } catch (err) {
       console.error('Error handling ws message:', err);

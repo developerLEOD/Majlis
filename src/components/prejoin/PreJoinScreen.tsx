@@ -93,6 +93,13 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
     });
   };
 
+  const handleCancel = () => {
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+    }
+    onCancel();
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F2EB] text-[#241710] flex flex-col items-center justify-center p-4 sm:p-6 select-none">
       <div className="w-full max-w-md bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl shadow-sm p-6 space-y-5">
@@ -185,7 +192,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           <div className="flex items-center justify-between text-xs">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               className="text-[#8E7E73] hover:text-[#3C230B] font-medium"
             >
               Cancel

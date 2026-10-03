@@ -173,8 +173,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         setParticipants((prev) => {
           const list = [...prev];
           for (const p of data.participants) {
-            if (!list.some((existing) => existing.id === p.id)) {
-              list.push({ ...p, isLocal: false });
+            if (String(p.id) !== userId && !list.some((existing) => String(existing.id) === String(p.id))) {
+              list.push({ ...p, id: String(p.id), isLocal: false });
             }
           }
           return list;
@@ -272,6 +272,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onRecordingNotice: (recording, by) => {
         setRemoteRecordingNotice(recording ? { isRecording: true, by } : null);
+      },
+
+      onSessionEnded: (reason) => {
+        alert(reason || 'The facilitator has concluded this Majlis session.');
+        handleFinalExit();
       },
 
       onUserStatusChanged: (data) => {
@@ -525,6 +530,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     setShowLeaveConfirmDialog(false);
     if (recorder) {
       recorder.stop().catch(console.warn);
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    }
+    if (isHost) {
+      clientRef.current?.hostEndSession();
     }
     clientRef.current?.leave();
     onEndOrLeaveMeeting();
