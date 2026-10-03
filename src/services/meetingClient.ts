@@ -98,20 +98,114 @@ export class MeetingClient {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         this.broadcastChannel = new BroadcastChannel(`infinitymeet_room_${this.roomId}`);
-        this.broadcastChannel.onmessage = (e) => {
-          if (e.data?.type === 'room-info' && e.data?.title) {
-            this.sessionTitle = e.data.title;
-            this.events.onRoomInfo?.({ title: e.data.title, hostName: e.data.hostName });
+        this.broadcastChannel.onmessage = async (e) => {
+          if (!e.data || e.data._senderId === this.userId) return;
+
+          const msg = e.data;
+          switch (msg.type) {
+            case 'join': {
+              // A peer announced join via broadcast channel
+              this.events.onUserJoined({
+                id: msg.userId,
+                name: msg.userName,
+                isHost: msg.isHost,
+                isLocal: false,
+                isMuted: !!msg.isMuted,
+                isVideoOff: !!msg.isVideoOff,
+                isScreenSharing: false,
+                handRaised: false,
+              });
+
+              // Send back our user info
+              this.broadcastChannel?.postMessage({
+                type: 'announce-presence',
+                _senderId: this.userId,
+                userId: this.userId,
+                userName: this.userName,
+                isHost: this.isHost,
+                title: this.sessionTitle,
+                isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+                isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+              });
+
+              // Create offer
+              await this.createPeerConnection(msg.userId, true);
+              break;
+            }
+
+            case 'announce-presence': {
+              this.events.onUserJoined({
+                id: msg.userId,
+                name: msg.userName,
+                isHost: msg.isHost,
+                isLocal: false,
+                isMuted: !!msg.isMuted,
+                isVideoOff: !!msg.isVideoOff,
+                isScreenSharing: false,
+                handRaised: false,
+              });
+              if (msg.title) {
+                this.sessionTitle = msg.title;
+                this.events.onRoomInfo?.({ title: msg.title });
+              }
+              break;
+            }
+
+            case 'signal': {
+              if (msg.targetId === this.userId && msg.signalData) {
+                await this.handleSignalingData(msg.senderId, msg.signalData);
+              }
+              break;
+            }
+
+            case 'chat': {
+              if (msg.message) {
+                this.events.onChatMessage(msg.message);
+              }
+              break;
+            }
+
+            case 'reaction': {
+              this.events.onReaction({
+                id: msg.id,
+                senderId: msg.senderId,
+                senderName: msg.senderName,
+                emoji: msg.emoji,
+              });
+              break;
+            }
+
+            case 'status-update': {
+              this.events.onUserStatusChanged({
+                userId: msg.userId,
+                isMuted: msg.isMuted,
+                isVideoOff: msg.isVideoOff,
+                isScreenSharing: msg.isScreenSharing,
+                handRaised: msg.handRaised,
+              });
+              break;
+            }
+
+            case 'user-left': {
+              this.closePeerConnection(msg.userId);
+              this.events.onUserLeft(msg.userId, msg.name);
+              break;
+            }
           }
         };
 
-        if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
-          this.broadcastChannel.postMessage({
-            type: 'room-info',
-            title: this.sessionTitle,
-            hostName: this.userName,
-          });
-        }
+        // Announce join over BroadcastChannel for instant local P2P mesh
+        this.broadcastChannel.postMessage({
+          type: 'join',
+          _senderId: this.userId,
+          roomId: this.roomId,
+          userId: this.userId,
+          userName: this.userName,
+          isHost: this.isHost,
+          title: this.sessionTitle,
+          isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+          isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+        });
       } catch (e) {
         // ignore
       }
@@ -156,7 +250,7 @@ export class MeetingClient {
       };
 
       this.ws.onerror = (err) => {
-        console.warn('WebSocket warning:', err);
+        console.warn('WebSocket status:', err);
       };
 
       this.ws.onclose = () => {
@@ -165,13 +259,26 @@ export class MeetingClient {
         }
       };
     } catch (err) {
-      console.warn('WebSocket connection error:', err);
+      console.warn('WebSocket connection warning:', err);
     }
   }
 
-  private sendWsMessage(msg: object) {
+  private sendWsMessage(msg: any) {
+    const payload = {
+      ...msg,
+      _senderId: this.userId,
+    };
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(JSON.stringify(payload));
+    }
+
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage(payload);
+      } catch (e) {
+        // ignore
+      }
     }
   }
 
@@ -218,7 +325,7 @@ export class MeetingClient {
           });
         }
 
-        // As the newly joined participant, initiate WebRTC offer to all existing participants in the room
+        // Initiate WebRTC offer to all existing participants in the room
         for (const p of remoteParticipants) {
           await this.createPeerConnection(p.id, true);
         }
@@ -414,6 +521,7 @@ export class MeetingClient {
       if (event.candidate) {
         this.sendWsMessage({
           type: 'signal',
+          senderId: this.userId,
           targetId: peerId,
           signalData: {
             candidate: event.candidate,
@@ -441,6 +549,7 @@ export class MeetingClient {
 
         this.sendWsMessage({
           type: 'signal',
+          senderId: this.userId,
           targetId: peerId,
           signalData: {
             sdp: pc.localDescription,
@@ -478,6 +587,7 @@ export class MeetingClient {
 
         this.sendWsMessage({
           type: 'signal',
+          senderId: this.userId,
           targetId: senderId,
           signalData: {
             sdp: pc.localDescription,
@@ -547,14 +657,24 @@ export class MeetingClient {
     if (!text.trim()) return;
     this.sendWsMessage({
       type: 'chat',
-      text: text.trim(),
+      message: {
+        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        senderId: this.userId,
+        senderName: this.userName,
+        isHost: this.isHost,
+        text: text.trim(),
+        timestamp: Date.now(),
+      },
     });
   }
 
   public sendReaction(emoji: string) {
     this.sendWsMessage({
       type: 'reaction',
+      senderId: this.userId,
+      senderName: this.userName,
       emoji,
+      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
     });
   }
 
@@ -566,6 +686,7 @@ export class MeetingClient {
   }) {
     this.sendWsMessage({
       type: 'status-update',
+      userId: this.userId,
       ...status,
     });
   }
@@ -634,18 +755,24 @@ export class MeetingClient {
   public leave() {
     this.isClosed = true;
 
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
-
     if (this.broadcastChannel) {
       try {
+        this.broadcastChannel.postMessage({
+          type: 'user-left',
+          _senderId: this.userId,
+          userId: this.userId,
+          name: this.userName,
+        });
         this.broadcastChannel.close();
       } catch (e) {
         // ignore
       }
       this.broadcastChannel = null;
+    }
+
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
 
     for (const peerId of this.peerConnections.keys()) {
