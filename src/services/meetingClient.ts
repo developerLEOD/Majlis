@@ -55,8 +55,10 @@ export class MeetingClient {
 
     this.ws = new WebSocket(wsUrl);
 
+    let hasConnected = false;
+
     this.ws.onopen = () => {
-      // Send join event
+      hasConnected = true;
       const isMuted = !localStream?.getAudioTracks().some((t) => t.enabled);
       const isVideoOff = !localStream?.getVideoTracks().some((t) => t.enabled);
 
@@ -89,11 +91,16 @@ export class MeetingClient {
 
     this.ws.onerror = (err) => {
       console.warn('WebSocket encountered error:', err);
+      if (!hasConnected) {
+        this.events.onError(
+          'Unable to connect to real-time signaling server. If hosted on a serverless platform (like Vercel), persistent WebSockets are not supported natively. Consider hosting on Render, Railway, Cloud Run, or Fly.io.'
+        );
+      }
     };
 
     this.ws.onclose = () => {
       if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-      if (!this.isClosed) {
+      if (!this.isClosed && hasConnected) {
         console.log('WS connection closed.');
       }
     };
