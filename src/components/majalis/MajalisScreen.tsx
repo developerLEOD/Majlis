@@ -114,30 +114,34 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
           </h3>
         </div>
 
-        <div className="space-y-2.5">
-          {upcomingSessions.map((session) => (
-            <div
-              key={session.id}
-              className="bg-[#FFFCF5] border border-[#E6DFD5] hover:border-[#D9D0C3] rounded-xl p-4 flex items-center justify-between gap-4 text-xs transition"
-            >
-              <div>
-                <h4 className="font-semibold text-[#241710]">
-                  {session.title}
-                </h4>
-                <p className="text-[11px] text-[#8E7E73] mt-0.5">
-                  {session.scheduledAt} • Facilitator: {session.hostName}
-                </p>
-              </div>
-
-              <button
-                onClick={() => onJoinMajlis(session.roomId, session.title)}
-                className="px-4 py-2 bg-[#EFECE4] hover:bg-[#E6DFD5] text-[#3C230B] font-semibold rounded-lg transition shrink-0"
+        {upcomingSessions.length === 0 ? (
+          <p className="text-xs text-[#8E7E73]">No scheduled upcoming sessions yet.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {upcomingSessions.map((session) => (
+              <div
+                key={session.id}
+                className="bg-[#FFFCF5] border border-[#E6DFD5] hover:border-[#D9D0C3] rounded-xl p-4 flex items-center justify-between gap-4 text-xs transition"
               >
-                Join Circle
-              </button>
-            </div>
-          ))}
-        </div>
+                <div>
+                  <h4 className="font-semibold text-[#241710]">
+                    {session.title}
+                  </h4>
+                  <p className="text-[11px] text-[#8E7E73] mt-0.5">
+                    {session.scheduledAt} • Facilitator: {session.hostName}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => onJoinMajlis(session.roomId, session.title)}
+                  className="px-4 py-2 bg-[#EFECE4] hover:bg-[#E6DFD5] text-[#3C230B] font-semibold rounded-lg transition shrink-0"
+                >
+                  Join Circle
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

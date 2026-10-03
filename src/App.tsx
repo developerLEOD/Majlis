@@ -16,33 +16,6 @@ import { MajlisSession, NavTab } from './types/meeting';
 import { fetchAppConfig, getRoomCodeFromCurrentLocation } from './utils/urlHelper';
 import { useActiveMajalis } from './hooks/useActiveMajalis';
 
-const UPCOMING_MAJALIS: MajlisSession[] = [
-  {
-    id: 's-1',
-    roomId: 'ihya-ilm',
-    title: 'Kitab al-Ilm: The Book of Sacred Knowledge',
-    scheduledAt: 'Today • 8:00 PM',
-    status: 'upcoming',
-    hostName: 'Ustadh Taha',
-  },
-  {
-    id: 's-2',
-    roomId: 'shamail',
-    title: 'Al-Shama’il al-Muhammadiyya: Prophetic Grace',
-    scheduledAt: 'Tomorrow • 7:30 PM',
-    status: 'upcoming',
-    hostName: 'Ustadha Fatima',
-  },
-  {
-    id: 's-3',
-    roomId: 'tazkiya-heart',
-    title: 'Purification of the Heart & Spiritual Wayfaring',
-    scheduledAt: 'Friday • 6:00 PM',
-    status: 'upcoming',
-    hostName: 'Shaykh Abdullah',
-  },
-];
-
 export default function App() {
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [userName, setUserName] = useState<string>(() => {
@@ -51,7 +24,7 @@ export default function App() {
   const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
   const [mirrorVideo, setMirrorVideo] = useState(true);
 
-  const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>(UPCOMING_MAJALIS);
+  const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>([]);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
 
   // Pre-join Target

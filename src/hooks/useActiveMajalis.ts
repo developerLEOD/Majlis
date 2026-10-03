@@ -1,21 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MajlisSession } from '../types/meeting';
 
-const DEFAULT_ACTIVE_MAJALIS: MajlisSession[] = [
-  {
-    id: 'live_quran-tafsir',
-    roomId: 'quran-tafsir',
-    title: 'The Exegesis of the Noble Quran (Tafsir)',
-    hostName: 'Shaykh Abdullah',
-    scheduledAt: 'Happening Now',
-    status: 'live',
-    participantCount: 1,
-    startedAt: Date.now() - 1000 * 60 * 15,
-  },
-];
-
 export function useActiveMajalis(isInsideMeeting: boolean) {
-  const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>(DEFAULT_ACTIVE_MAJALIS);
+  const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>([]);
   const [loading, setLoading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -24,7 +11,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.activeMajalis) && data.activeMajalis.length > 0) {
+        if (Array.isArray(data.activeMajalis)) {
           setActiveMajalis(data.activeMajalis);
         }
       }

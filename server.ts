@@ -32,36 +32,25 @@ interface Room {
   isRecording: boolean;
   participants: Map<string, Participant>;
   createdAt: number;
-  isPermanent?: boolean;
 }
 
+// Store ONLY real, active rooms created by users
 const rooms = new Map<string, Room>();
 
-// Seed permanent featured live session
-rooms.set('quran-tafsir', {
-  id: 'quran-tafsir',
-  title: 'The Exegesis of the Noble Quran (Tafsir)',
-  hostId: 'shaykh-abdullah',
-  hostName: 'Shaykh Abdullah',
-  locked: false,
-  isRecording: false,
-  participants: new Map(),
-  createdAt: Date.now() - 1000 * 60 * 15,
-  isPermanent: true,
-});
-
 function getActiveRoomsList() {
-  return Array.from(rooms.values()).map((r) => ({
-    id: `live_${r.id}`,
-    roomId: r.id,
-    title: r.title || 'Live Majlis',
-    hostName: r.hostName || 'Facilitator',
-    scheduledAt: 'Happening Now',
-    status: 'live' as const,
-    participantCount: Math.max(r.participants.size, r.isPermanent ? 1 : r.participants.size),
-    startedAt: r.createdAt,
-    locked: r.locked,
-  }));
+  return Array.from(rooms.values())
+    .filter((r) => r.participants.size > 0 || Date.now() - r.createdAt < 1000 * 60 * 10)
+    .map((r) => ({
+      id: `live_${r.id}`,
+      roomId: r.id,
+      title: r.title || 'Live Majlis',
+      hostName: r.hostName || 'Facilitator',
+      scheduledAt: 'Happening Now',
+      status: 'live' as const,
+      participantCount: r.participants.size,
+      startedAt: r.createdAt,
+      locked: r.locked,
+    }));
 }
 
 function broadcastActiveRooms() {
@@ -390,11 +379,7 @@ wss.on('connection', (ws: WebSocket) => {
             type: 'session-ended',
             message: 'The facilitator has concluded this Majlis session.',
           });
-          if (!room.isPermanent) {
-            rooms.delete(currentRoomId);
-          } else {
-            room.participants.clear();
-          }
+          rooms.delete(currentRoomId);
           broadcastActiveRooms();
           break;
         }
@@ -438,7 +423,7 @@ wss.on('connection', (ws: WebSocket) => {
           }
         }
 
-        if (room.participants.size === 0 && !room.isPermanent) {
+        if (room.participants.size === 0) {
           rooms.delete(currentRoomId);
         }
 
