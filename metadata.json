@@ -1,0 +1,12 @@
+{
+  "name": "InfinityMeet - Limitless Video Calls & Local Recording",
+  "description": "A clean, simple Zoom alternative with no meeting time limits, crystal-clear WebRTC video, and local in-browser session recording on the moderator's device.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

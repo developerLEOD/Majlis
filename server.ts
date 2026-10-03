@@ -1,0 +1,454 @@
+import express from 'express';
+import http from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { WebSocketServer, WebSocket } from 'ws';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
+
+interface Participant {
+  id: string;
+  name: string;
+  isHost: boolean;
+  socket: WebSocket;
+  isMuted: boolean;
+  isVideoOff: boolean;
+  isScreenSharing: boolean;
+  handRaised: boolean;
+  joinedAt: number;
+}
+
+interface Room {
+  id: string;
+  hostId: string;
+  locked: boolean;
+  isRecording: boolean;
+  participants: Map<string, Participant>;
+  createdAt: number;
+}
+
+const rooms = new Map<string, Room>();
+
+// WebSocket connection handling
+wss.on('connection', (ws: WebSocket) => {
+  let currentRoomId: string | null = null;
+  let currentUserId: string | null = null;
+  let isAlive = true;
+
+  ws.on('pong', () => {
+    isAlive = true;
+  });
+
+  ws.on('message', (data: string) => {
+    try {
+      const message = JSON.parse(data.toString());
+
+      switch (message.type) {
+        case 'ping': {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'pong' }));
+          }
+          break;
+        }
+
+        case 'join': {
+          const { roomId, userId, userName, isHost } = message;
+          currentRoomId = roomId;
+          currentUserId = userId;
+
+          let room = rooms.get(roomId);
+          if (!room) {
+            room = {
+              id: roomId,
+              hostId: userId,
+              locked: false,
+              isRecording: false,
+              participants: new Map(),
+              createdAt: Date.now(),
+            };
+            rooms.set(roomId, room);
+          } else if (room.locked && room.hostId !== userId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'This meeting is locked by the moderator.',
+            }));
+            return;
+          }
+
+          // If room has no active host or user requested host when creating
+          const becomesHost = isHost || room.hostId === userId || room.participants.size === 0;
+          if (becomesHost) {
+            room.hostId = userId;
+          }
+
+          const participant: Participant = {
+            id: userId,
+            name: userName || 'Guest',
+            isHost: becomesHost,
+            socket: ws,
+            isMuted: !!message.isMuted,
+            isVideoOff: !!message.isVideoOff,
+            isScreenSharing: false,
+            handRaised: false,
+            joinedAt: Date.now(),
+          };
+
+          room.participants.set(userId, participant);
+
+          // Return list of all current participants to the new user
+          const existingParticipants = Array.from(room.participants.values())
+            .filter((p) => p.id !== userId)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              isHost: p.isHost,
+              isMuted: p.isMuted,
+              isVideoOff: p.isVideoOff,
+              isScreenSharing: p.isScreenSharing,
+              handRaised: p.handRaised,
+            }));
+
+          ws.send(JSON.stringify({
+            type: 'room-joined',
+            roomId,
+            userId,
+            isHost: participant.isHost,
+            locked: room.locked,
+            isRecording: room.isRecording,
+            participants: existingParticipants,
+          }));
+
+          // Notify everyone else that this user joined
+          broadcastToRoom(roomId, userId, {
+            type: 'user-joined',
+            user: {
+              id: participant.id,
+              name: participant.name,
+              isHost: participant.isHost,
+              isMuted: participant.isMuted,
+              isVideoOff: participant.isVideoOff,
+              isScreenSharing: participant.isScreenSharing,
+              handRaised: participant.handRaised,
+            },
+          });
+          break;
+        }
+
+        case 'signal': {
+          // WebRTC offer / answer / ICE candidate relay
+          const { targetId, signalData } = message;
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+
+          const target = room.participants.get(targetId);
+          if (target && target.socket.readyState === WebSocket.OPEN) {
+            target.socket.send(JSON.stringify({
+              type: 'signal',
+              senderId: currentUserId,
+              signalData,
+            }));
+          }
+          break;
+        }
+
+        case 'chat': {
+          const { text } = message;
+          if (!currentRoomId || !currentUserId || !text?.trim()) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+
+          const sender = room.participants.get(currentUserId);
+          if (!sender) return;
+
+          const chatPayload = {
+            type: 'chat',
+            message: {
+              id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+              senderId: sender.id,
+              senderName: sender.name,
+              isHost: sender.isHost,
+              text: text.trim(),
+              timestamp: Date.now(),
+            },
+          };
+
+          // Broadcast to everyone in room including sender
+          for (const participant of room.participants.values()) {
+            if (participant.socket.readyState === WebSocket.OPEN) {
+              participant.socket.send(JSON.stringify(chatPayload));
+            }
+          }
+          break;
+        }
+
+        case 'reaction': {
+          const { emoji } = message;
+          if (!currentRoomId || !currentUserId || !emoji) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const sender = room.participants.get(currentUserId);
+          if (!sender) return;
+
+          const reactionPayload = {
+            type: 'reaction',
+            senderId: sender.id,
+            senderName: sender.name,
+            emoji,
+            id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          };
+
+          for (const participant of room.participants.values()) {
+            if (participant.socket.readyState === WebSocket.OPEN) {
+              participant.socket.send(JSON.stringify(reactionPayload));
+            }
+          }
+          break;
+        }
+
+        case 'status-update': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const sender = room.participants.get(currentUserId);
+          if (!sender) return;
+
+          if (message.isMuted !== undefined) sender.isMuted = message.isMuted;
+          if (message.isVideoOff !== undefined) sender.isVideoOff = message.isVideoOff;
+          if (message.isScreenSharing !== undefined) sender.isScreenSharing = message.isScreenSharing;
+          if (message.handRaised !== undefined) sender.handRaised = message.handRaised;
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'user-status-changed',
+            userId: sender.id,
+            isMuted: sender.isMuted,
+            isVideoOff: sender.isVideoOff,
+            isScreenSharing: sender.isScreenSharing,
+            handRaised: sender.handRaised,
+          });
+          break;
+        }
+
+        case 'host-mute-all': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          for (const [pId, p] of room.participants.entries()) {
+            if (pId !== currentUserId) {
+              p.isMuted = true;
+              if (p.socket.readyState === WebSocket.OPEN) {
+                p.socket.send(JSON.stringify({ type: 'force-mute' }));
+              }
+            }
+          }
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'system-announcement',
+            text: 'Host has muted all participants',
+          });
+          break;
+        }
+
+        case 'host-kick': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({
+                type: 'kicked',
+                message: 'You have been removed from the meeting by the moderator.',
+              }));
+              target.socket.close();
+            }
+            room.participants.delete(targetId);
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-left',
+              userId: targetId,
+              name: target.name,
+              reason: 'removed by moderator',
+            });
+          }
+          break;
+        }
+
+        case 'host-toggle-lock': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          room.locked = !room.locked;
+          broadcastToRoom(currentRoomId, null, {
+            type: 'room-lock-changed',
+            locked: room.locked,
+          });
+          break;
+        }
+
+        case 'recording-notice': {
+          const { isRecording } = message;
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const sender = room.participants.get(currentUserId);
+          if (!sender?.isHost) return;
+
+          room.isRecording = !!isRecording;
+          broadcastToRoom(currentRoomId, null, {
+            type: 'recording-notice',
+            isRecording: room.isRecording,
+            recordedBy: sender.name,
+          });
+          break;
+        }
+      }
+    } catch (err) {
+      console.error('Error handling ws message:', err);
+    }
+  });
+
+  const cleanup = () => {
+    if (currentRoomId && currentUserId) {
+      const room = rooms.get(currentRoomId);
+      if (room) {
+        const leavingUser = room.participants.get(currentUserId);
+        room.participants.delete(currentUserId);
+
+        broadcastToRoom(currentRoomId, null, {
+          type: 'user-left',
+          userId: currentUserId,
+          name: leavingUser?.name || 'A participant',
+        });
+
+        // If host leaves and there are participants left, assign next host
+        if (room.hostId === currentUserId && room.participants.size > 0) {
+          const nextHost = room.participants.values().next().value;
+          if (nextHost) {
+            nextHost.isHost = true;
+            room.hostId = nextHost.id;
+            if (nextHost.socket.readyState === WebSocket.OPEN) {
+              nextHost.socket.send(JSON.stringify({
+                type: 'promoted-to-host',
+                message: 'You are now the meeting host.',
+              }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'new-host',
+              hostId: nextHost.id,
+              hostName: nextHost.name,
+            });
+          }
+        }
+
+        if (room.participants.size === 0) {
+          rooms.delete(currentRoomId);
+        }
+      }
+    }
+  };
+
+  ws.on('close', cleanup);
+  ws.on('error', cleanup);
+});
+
+// Periodic heartbeat check
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((ws: WebSocket) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(heartbeatInterval);
+});
+
+function broadcastToRoom(roomId: string, excludeUserId: string | null, payload: object) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const msg = JSON.stringify(payload);
+  for (const [userId, participant] of room.participants.entries()) {
+    if (excludeUserId && userId === excludeUserId) continue;
+    if (participant.socket.readyState === WebSocket.OPEN) {
+      participant.socket.send(msg);
+    }
+  }
+}
+
+// REST health check and room check API
+app.use(express.json());
+
+app.get('/api/config', (req, res) => {
+  const host = req.get('host');
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = forwardedProto || req.protocol || 'http';
+  const requestUrl = `${protocol}://${host}`;
+
+  res.json({
+    appUrl: process.env.APP_URL || requestUrl,
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    activeRooms: rooms.size,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.get('/api/room/:roomId', (req, res) => {
+  const room = rooms.get(req.params.roomId);
+  if (!room) {
+    res.json({ exists: false });
+    return;
+  }
+  res.json({
+    exists: true,
+    participantCount: room.participants.size,
+    locked: room.locked,
+    isRecording: room.isRecording,
+  });
+});
+
+// Vite middleware in dev or static files in production
+const isProduction = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT) || 3000;
+
+async function startServer() {
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
+  }
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();
