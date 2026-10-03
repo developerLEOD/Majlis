@@ -835,7 +835,9 @@ export class MeetingClient {
       const videoTrack = newStream.getVideoTracks()[0];
 
       if (audioTrack) {
-        const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
+        const audioSender = senders.find(
+          (s) => (s.track && s.track.kind === 'audio') || (!s.track && senders.indexOf(s) === 0)
+        );
         if (audioSender) {
           audioSender.replaceTrack(audioTrack).catch(console.warn);
         } else {
@@ -846,7 +848,9 @@ export class MeetingClient {
       }
 
       if (videoTrack) {
-        const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
+        const videoSender = senders.find(
+          (s) => (s.track && s.track.kind === 'video') || (!s.track && senders.length > 0)
+        );
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch(console.warn);
         } else {

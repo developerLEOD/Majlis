@@ -115,8 +115,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   // References
   const localStreamRef = useRef<MediaStream | null>(initialStream);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const wasVideoOffRef = useRef<boolean>(initialVideoOff);
   const clientRef = useRef<MeetingClient | null>(null);
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // Auto-spotlight stage when a participant shares screen
+  useEffect(() => {
+    const screenSharer = participants.find((p) => p.isScreenSharing);
+    if (screenSharer) {
+      setPinnedUserId((curr) => curr || screenSharer.id);
+    }
+  }, [participants]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -473,22 +482,35 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         screenStreamRef.current = null;
       }
       setIsScreenSharing(false);
+      const restoredVideoOff = wasVideoOffRef.current;
+      setIsVideoOff(restoredVideoOff);
 
       if (localStreamRef.current) {
         clientRef.current?.setLocalStream(localStreamRef.current);
         setParticipants((prev) =>
-          prev.map((p) => (p.isLocal ? { ...p, stream: localStreamRef.current || undefined, isScreenSharing: false } : p))
+          prev.map((p) =>
+            p.isLocal
+              ? { ...p, stream: localStreamRef.current || undefined, isScreenSharing: false, isVideoOff: restoredVideoOff }
+              : p
+          )
         );
       }
-      clientRef.current?.updateStatus({ isScreenSharing: false });
+      clientRef.current?.updateStatus({ isScreenSharing: false, isVideoOff: restoredVideoOff });
+      if (pinnedUserId === userId) {
+        setPinnedUserId(null);
+      }
+      showNotification('Screen sharing stopped');
     } else {
       try {
+        wasVideoOffRef.current = isVideoOff;
+
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          video: { cursor: 'always' } as any,
           audio: true,
         });
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
+        setIsVideoOff(false);
 
         const combinedStream = new MediaStream();
         screenStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
@@ -499,13 +521,42 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         clientRef.current?.setLocalStream(combinedStream);
 
         setParticipants((prev) =>
-          prev.map((p) => (p.isLocal ? { ...p, stream: combinedStream, isScreenSharing: true } : p))
+          prev.map((p) =>
+            p.isLocal
+              ? { ...p, stream: combinedStream, isScreenSharing: true, isVideoOff: false }
+              : p
+          )
         );
-        clientRef.current?.updateStatus({ isScreenSharing: true });
+        clientRef.current?.updateStatus({ isScreenSharing: true, isVideoOff: false });
+        setPinnedUserId(userId);
+        showNotification('You are sharing your screen');
 
-        screenStream.getVideoTracks()[0].onended = () => {
-          toggleScreenShare();
-        };
+        const videoTrack = screenStream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.onended = () => {
+            if (screenStreamRef.current) {
+              screenStreamRef.current.getTracks().forEach((t) => t.stop());
+              screenStreamRef.current = null;
+            }
+            setIsScreenSharing(false);
+            const restoredVideoOff = wasVideoOffRef.current;
+            setIsVideoOff(restoredVideoOff);
+
+            if (localStreamRef.current) {
+              clientRef.current?.setLocalStream(localStreamRef.current);
+              setParticipants((prev) =>
+                prev.map((p) =>
+                  p.isLocal
+                    ? { ...p, stream: localStreamRef.current || undefined, isScreenSharing: false, isVideoOff: restoredVideoOff }
+                    : p
+                )
+              );
+            }
+            clientRef.current?.updateStatus({ isScreenSharing: false, isVideoOff: restoredVideoOff });
+            setPinnedUserId(null);
+            showNotification('Screen sharing ended');
+          };
+        }
       } catch (err) {
         console.warn('Screen share cancelled:', err);
       }

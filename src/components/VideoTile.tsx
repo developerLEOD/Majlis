@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Crown, Hand, Maximize2, Mic, MicOff, Minimize2, VideoOff } from 'lucide-react';
+import { Crown, Hand, Maximize2, Mic, MicOff, Minimize2, MonitorUp, VideoOff } from 'lucide-react';
 import { Participant } from '../types/meeting';
 import { createAudioMeter } from '../utils/media';
 
@@ -25,26 +25,8 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasVideoTrack, setHasVideoTrack] = useState(true);
 
-  // Bind video stream
+  // Bind video stream and check tracks
   useEffect(() => {
-    if (videoRef.current && participant.stream) {
-      if (videoRef.current.srcObject !== participant.stream) {
-        videoRef.current.srcObject = participant.stream;
-      }
-      if (videoRefCallback) {
-        videoRefCallback(videoRef.current);
-      }
-      if (!participant.isVideoOff) {
-        videoRef.current.play().catch(() => {});
-      }
-    }
-
-    // Remote audio playback
-    if (!isLocal && audioRef.current && participant.stream) {
-      audioRef.current.srcObject = participant.stream;
-      audioRef.current.play().catch(() => {});
-    }
-
     const checkTracks = () => {
       if (!participant.stream) {
         setHasVideoTrack(false);
@@ -55,7 +37,30 @@ export const VideoTile: React.FC<VideoTileProps> = ({
     };
 
     checkTracks();
-  }, [participant.stream, isLocal, videoRefCallback, participant.isVideoOff]);
+
+    if (videoRef.current && participant.stream) {
+      if (videoRef.current.srcObject !== participant.stream) {
+        videoRef.current.srcObject = participant.stream;
+      }
+      if (videoRefCallback) {
+        videoRefCallback(videoRef.current);
+      }
+      videoRef.current.play().catch(() => {});
+    }
+
+    // Remote audio playback
+    if (!isLocal && audioRef.current && participant.stream) {
+      if (audioRef.current.srcObject !== participant.stream) {
+        audioRef.current.srcObject = participant.stream;
+      }
+      audioRef.current.play().catch(() => {});
+    }
+
+    if (participant.stream) {
+      participant.stream.onaddtrack = checkTracks;
+      participant.stream.onremovetrack = checkTracks;
+    }
+  }, [participant.stream, isLocal, videoRefCallback, participant.isVideoOff, participant.isScreenSharing]);
 
   // Audio speaking detection
   useEffect(() => {
@@ -78,6 +83,13 @@ export const VideoTile: React.FC<VideoTileProps> = ({
     .join('')
     .substring(0, 2)
     .toUpperCase() || 'U';
+
+  const isVideoHidden = participant.isScreenSharing
+    ? !hasVideoTrack
+    : (participant.isVideoOff || !hasVideoTrack);
+
+  const objectFitClass = participant.isScreenSharing ? 'object-contain bg-black' : 'object-cover';
+  const mirrorClass = mirror && isLocal && !participant.isScreenSharing ? 'scale-x-[-1]' : '';
 
   return (
     <div
@@ -115,13 +127,13 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         autoPlay
         playsInline
         muted={isLocal} // Always mute local video element to avoid feedback loop
-        className={`w-full h-full object-cover transition-opacity duration-300 ${
-          participant.isVideoOff || !hasVideoTrack ? 'opacity-0 pointer-events-none' : 'opacity-100'
-        } ${mirror && isLocal ? 'scale-x-[-1]' : ''}`}
+        className={`w-full h-full ${objectFitClass} transition-opacity duration-300 ${
+          isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        } ${mirrorClass}`}
       />
 
-      {/* Avatar Fallback when Camera is Off */}
-      {(participant.isVideoOff || !hasVideoTrack) && (
+      {/* Avatar Fallback when Camera is Off and Not Screen Sharing */}
+      {isVideoHidden && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1A1410]">
           <div className="relative">
             <div
@@ -155,6 +167,13 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         </div>
       )}
 
+      {/* Screen Sharing Active Indicator Badge */}
+      {participant.isScreenSharing && (
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#3C230B] text-[#FFFCF5] border border-[#D4AF37]/50 text-xs font-bold shadow-lg">
+          <MonitorUp className="w-3.5 h-3.5 text-[#D4AF37] animate-pulse" /> Live Screen Presentation
+        </div>
+      )}
+
       {/* Pin / Maximize Button */}
       {onTogglePin && (
         <button
@@ -179,8 +198,8 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             </span>
           )}
           {participant.isScreenSharing && (
-            <span className="text-[10px] text-[#E0C2A6] bg-[#3C230B] px-1.5 py-0.5 rounded border border-[#E0C2A6]/30 font-medium">
-              Screen
+            <span className="text-[10px] text-[#E0C2A6] bg-[#3C230B] px-1.5 py-0.5 rounded border border-[#E0C2A6]/30 font-medium flex items-center gap-1">
+              <MonitorUp className="w-3 h-3 text-[#D4AF37]" /> Sharing Screen
             </span>
           )}
         </div>
