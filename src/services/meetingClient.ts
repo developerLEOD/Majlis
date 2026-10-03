@@ -60,6 +60,7 @@ export class MeetingClient {
   private pingInterval: number | null = null;
   private broadcastChannel: BroadcastChannel | null = null;
   private firebaseSync: FirebaseMeetingSync | null = null;
+  private knownParticipants = new Map<string, Participant>();
 
   public roomId: string = '';
   public userId: string = '';
@@ -130,36 +131,41 @@ export class MeetingClient {
         });
       });
 
-      // Track known remote participant IDs to synchronize leaves and joins accurately
-      const knownCloudPeerIds = new Set<string>();
-
+      // Listen to participants from Firebase with two-way join/leave detection
       this.firebaseSync.subscribeToParticipants((participants) => {
         const remoteParticipants = participants.filter((p) => p.id !== this.userId);
         const currentPeerIds = new Set(remoteParticipants.map((p) => p.id));
 
         // 1. Detect and clean up members who left the meeting
-        for (const peerId of knownCloudPeerIds) {
+        for (const [peerId, cachedP] of Array.from(this.knownParticipants.entries())) {
           if (!currentPeerIds.has(peerId)) {
+            this.knownParticipants.delete(peerId);
             this.closePeerConnection(peerId);
-            this.events.onUserLeft(peerId);
+            this.events.onUserLeft(peerId, cachedP.name);
           }
         }
-        knownCloudPeerIds.clear();
-        currentPeerIds.forEach((id) => knownCloudPeerIds.add(id));
 
-        // 2. Add or update active participants & status (mute/video/hand/screen)
+        // 2. Add or update active participants
         for (const p of remoteParticipants) {
-          this.events.onUserJoined(p);
-          this.events.onUserStatusChanged({
-            userId: p.id,
-            isMuted: p.isMuted,
-            isVideoOff: p.isVideoOff,
-            isScreenSharing: p.isScreenSharing,
-            handRaised: p.handRaised,
-          });
+          const isNew = !this.knownParticipants.has(p.id);
+          this.knownParticipants.set(p.id, p);
 
+          if (isNew) {
+            this.events.onUserJoined(p);
+          } else {
+            this.events.onUserStatusChanged({
+              userId: p.id,
+              isMuted: p.isMuted,
+              isVideoOff: p.isVideoOff,
+              isScreenSharing: p.isScreenSharing,
+              handRaised: p.handRaised,
+            });
+          }
+
+          // Deterministic WebRTC connection: higher ID initiates connection
           if (!this.peerConnections.has(p.id)) {
-            this.createPeerConnection(p.id, this.isHost);
+            const isInitiator = this.userId > p.id;
+            this.createPeerConnection(p.id, isInitiator);
           }
         }
       });
@@ -182,7 +188,7 @@ export class MeetingClient {
       console.warn('Firebase sync initialization warning:', e);
     }
 
-    // 2. Set up BroadcastChannel for instant cross-tab / local domain synchronization
+    // 2. Set up BroadcastChannel for instant cross-tab synchronization
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         this.broadcastChannel = new BroadcastChannel(`infinitymeet_room_${this.roomId}`);
@@ -192,7 +198,7 @@ export class MeetingClient {
           const msg = e.data;
           switch (msg.type) {
             case 'join': {
-              this.events.onUserJoined({
+              const participant: Participant = {
                 id: msg.userId,
                 name: msg.userName,
                 isHost: msg.isHost,
@@ -201,7 +207,13 @@ export class MeetingClient {
                 isVideoOff: !!msg.isVideoOff,
                 isScreenSharing: false,
                 handRaised: false,
-              });
+              };
+
+              const isNew = !this.knownParticipants.has(msg.userId);
+              this.knownParticipants.set(msg.userId, participant);
+              if (isNew) {
+                this.events.onUserJoined(participant);
+              }
 
               this.broadcastChannel?.postMessage({
                 type: 'announce-presence',
@@ -214,12 +226,15 @@ export class MeetingClient {
                 isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
               });
 
-              await this.createPeerConnection(msg.userId, true);
+              if (!this.peerConnections.has(msg.userId)) {
+                const isInitiator = this.userId > msg.userId;
+                await this.createPeerConnection(msg.userId, isInitiator);
+              }
               break;
             }
 
             case 'announce-presence': {
-              this.events.onUserJoined({
+              const participant: Participant = {
                 id: msg.userId,
                 name: msg.userName,
                 isHost: msg.isHost,
@@ -228,10 +243,20 @@ export class MeetingClient {
                 isVideoOff: !!msg.isVideoOff,
                 isScreenSharing: false,
                 handRaised: false,
-              });
+              };
+
+              const isNew = !this.knownParticipants.has(msg.userId);
+              this.knownParticipants.set(msg.userId, participant);
+              if (isNew) {
+                this.events.onUserJoined(participant);
+              }
               if (msg.title) {
                 this.sessionTitle = msg.title;
                 this.events.onRoomInfo?.({ title: msg.title });
+              }
+              if (!this.peerConnections.has(msg.userId)) {
+                const isInitiator = this.userId > msg.userId;
+                await this.createPeerConnection(msg.userId, isInitiator);
               }
               break;
             }
@@ -272,6 +297,7 @@ export class MeetingClient {
             }
 
             case 'user-left': {
+              this.knownParticipants.delete(msg.userId);
               this.closePeerConnection(msg.userId);
               this.events.onUserLeft(msg.userId, msg.name);
               break;
@@ -409,7 +435,9 @@ export class MeetingClient {
         }
 
         for (const p of remoteParticipants) {
-          await this.createPeerConnection(p.id, true);
+          this.knownParticipants.set(p.id, p);
+          const isInitiator = this.userId > p.id;
+          await this.createPeerConnection(p.id, isInitiator);
         }
         break;
       }
@@ -445,7 +473,16 @@ export class MeetingClient {
           handRaised: user.handRaised,
         };
 
-        this.events.onUserJoined(participant);
+        const isNew = !this.knownParticipants.has(user.id);
+        this.knownParticipants.set(user.id, participant);
+        if (isNew) {
+          this.events.onUserJoined(participant);
+        }
+
+        if (!this.peerConnections.has(user.id)) {
+          const isInitiator = this.userId > user.id;
+          this.createPeerConnection(user.id, isInitiator);
+        }
         break;
       }
 
@@ -453,6 +490,7 @@ export class MeetingClient {
         const leftId = message.userId;
         if (!leftId || leftId === this.userId) return;
 
+        this.knownParticipants.delete(leftId);
         this.closePeerConnection(leftId);
         this.events.onUserLeft(leftId, message.name);
         break;
@@ -609,6 +647,9 @@ export class MeetingClient {
     pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         this.events.onRemoteStream(peerId, event.streams[0]);
+      } else if (event.track) {
+        const stream = new MediaStream([event.track]);
+        this.events.onRemoteStream(peerId, stream);
       }
     };
 
@@ -714,7 +755,9 @@ export class MeetingClient {
         if (audioSender) {
           audioSender.replaceTrack(audioTrack).catch(console.warn);
         } else {
-          pc.addTrack(audioTrack, newStream);
+          try {
+            pc.addTrack(audioTrack, newStream);
+          } catch (e) {}
         }
       }
 
@@ -723,7 +766,9 @@ export class MeetingClient {
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch(console.warn);
         } else {
-          pc.addTrack(videoTrack, newStream);
+          try {
+            pc.addTrack(videoTrack, newStream);
+          } catch (e) {}
         }
       }
     }
@@ -790,6 +835,7 @@ export class MeetingClient {
       targetId,
     });
 
+    this.knownParticipants.delete(targetId);
     this.closePeerConnection(targetId);
     this.events.onUserLeft(targetId);
   }
@@ -876,6 +922,7 @@ export class MeetingClient {
     this.peerConnections.clear();
     this.dataChannels.clear();
     this.queuedCandidates.clear();
+    this.knownParticipants.clear();
 
     if (this.ws) {
       try {

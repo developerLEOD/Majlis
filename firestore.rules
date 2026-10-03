@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -19,47 +19,39 @@ service cloud.firestore {
     }
 
     match /rooms/{roomId} {
-      allow get: if isValidId(roomId);
-      allow list: if true;
-      allow create: if isValidId(roomId)
+      allow read: if true;
+      allow create, update: if isValidId(roomId)
         && incoming().roomId is string && incoming().roomId.size() <= 128
-        && incoming().title is string && incoming().title.size() <= 200
-        && incoming().hostName is string && incoming().hostName.size() <= 128;
-      allow update: if isValidId(roomId);
+        && incoming().title is string && incoming().title.size() <= 200;
       allow delete: if isValidId(roomId);
 
       match /participants/{participantId} {
-        allow get: if isValidId(roomId) && isValidId(participantId);
-        allow list: if isValidId(roomId);
-        allow create, update: if isValidId(roomId) && isValidId(participantId)
+        allow read: if true;
+        allow create, update: if isValidId(participantId)
           && incoming().name is string && incoming().name.size() <= 128;
-        allow delete: if isValidId(roomId) && isValidId(participantId);
+        allow delete: if isValidId(participantId);
       }
 
       match /signals/{signalId} {
-        allow get: if isValidId(roomId) && isValidId(signalId);
-        allow list: if isValidId(roomId);
-        allow create: if isValidId(roomId) && isValidId(signalId)
+        allow read: if true;
+        allow create: if isValidId(signalId)
           && incoming().senderId is string && incoming().senderId.size() <= 128
           && incoming().targetId is string && incoming().targetId.size() <= 128;
-        allow delete: if isValidId(roomId) && isValidId(signalId);
+        allow delete: if isValidId(signalId);
       }
 
       match /messages/{messageId} {
-        allow get: if isValidId(roomId) && isValidId(messageId);
-        allow list: if isValidId(roomId);
-        allow create: if isValidId(roomId) && isValidId(messageId)
-          && incoming().text is string && incoming().text.size() <= 2000
-          && incoming().senderName is string && incoming().senderName.size() <= 128;
-        allow delete: if isValidId(roomId) && isValidId(messageId);
+        allow read: if true;
+        allow create: if isValidId(messageId)
+          && incoming().text is string && incoming().text.size() <= 2000;
+        allow delete: if isValidId(messageId);
       }
 
       match /reactions/{reactionId} {
-        allow get: if isValidId(roomId) && isValidId(reactionId);
-        allow list: if isValidId(roomId);
-        allow create: if isValidId(roomId) && isValidId(reactionId)
+        allow read: if true;
+        allow create: if isValidId(reactionId)
           && incoming().emoji is string && incoming().emoji.size() <= 16;
-        allow delete: if isValidId(roomId) && isValidId(reactionId);
+        allow delete: if isValidId(reactionId);
       }
     }
   }
