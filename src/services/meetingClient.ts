@@ -57,6 +57,14 @@ interface ModerationPayload {
   reason?: string;
 }
 
+const getPeerId = (context: unknown): string => {
+  if (typeof context === 'string') return context;
+  if (context && typeof context === 'object' && 'peerId' in context && typeof (context as any).peerId === 'string') {
+    return (context as any).peerId;
+  }
+  return '';
+};
+
 export class MeetingClient {
   private room: Room | null = null;
   private localStream: MediaStream | null = null;
@@ -99,7 +107,6 @@ export class MeetingClient {
     this.participants.clear();
 
     try {
-      // Connect using Trystero's default Nostr discovery engine
       this.room = joinRoom(
         {
           appId: 'the-wisdom-lounge-majlis',
@@ -114,7 +121,7 @@ export class MeetingClient {
       this.statusAction = this.room.makeAction('status');
       this.moderationAction = this.room.makeAction('moderation');
 
-      // Add local media stream
+      // Add local stream
       if (this.localStream) {
         try {
           this.room.addStream(this.localStream);
@@ -125,12 +132,15 @@ export class MeetingClient {
 
       // 1. Handle incoming peer media streams
       this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
-        let participant = this.participants.get(peerId);
+        const idStr = String(peerId);
+        if (!idStr || idStr === selfId) return;
+
+        let participant = this.participants.get(idStr);
         if (participant) {
           participant.stream = stream;
         } else {
           participant = {
-            id: peerId,
+            id: idStr,
             name: 'Member',
             isHost: false,
             isLocal: false,
@@ -140,18 +150,21 @@ export class MeetingClient {
             handRaised: false,
             stream,
           };
-          this.participants.set(peerId, participant);
+          this.participants.set(idStr, participant);
           this.events.onUserJoined(participant);
         }
-        this.events.onRemoteStream(peerId, stream);
+        this.events.onRemoteStream(idStr, stream);
       };
 
       // 2. Handle peer connection
       this.room.onPeerJoin = (peerId: string) => {
-        let participant = this.participants.get(peerId);
+        const idStr = String(peerId);
+        if (!idStr || idStr === selfId) return;
+
+        let participant = this.participants.get(idStr);
         if (!participant) {
           participant = {
-            id: peerId,
+            id: idStr,
             name: 'Member',
             isHost: false,
             isLocal: false,
@@ -160,23 +173,24 @@ export class MeetingClient {
             isScreenSharing: false,
             handRaised: false,
           };
-          this.participants.set(peerId, participant);
+          this.participants.set(idStr, participant);
           this.events.onUserJoined(participant);
         }
 
         // Send our profile to the newly joined peer
-        this.broadcastMyProfile(peerId);
+        this.broadcastMyProfile(idStr);
       };
 
-      // 3. Handle peer profile data
-      this.profileAction.onMessage = (profile: ParticipantProfile, peerId: string) => {
-        if (!profile || !peerId || peerId === selfId) return;
+      // 3. Handle peer profile message
+      this.profileAction.onMessage = (profile: ParticipantProfile, context: unknown) => {
+        const idStr = getPeerId(context);
+        if (!profile || !idStr || idStr === selfId) return;
 
-        const existing = this.participants.get(peerId);
+        const existing = this.participants.get(idStr);
         const stream = existing?.stream;
 
         const participant: Participant = {
-          id: peerId,
+          id: idStr,
           name: profile.name || 'Member',
           isHost: !!profile.isHost,
           isLocal: false,
@@ -187,13 +201,15 @@ export class MeetingClient {
           stream,
         };
 
-        this.participants.set(peerId, participant);
+        this.participants.set(idStr, participant);
 
         if (!existing) {
           this.events.onUserJoined(participant);
+          // Return our profile to the sender if this is the first contact
+          this.broadcastMyProfile(idStr);
         } else {
           this.events.onUserStatusChanged({
-            userId: peerId,
+            userId: idStr,
             isMuted: participant.isMuted,
             isVideoOff: participant.isVideoOff,
             isScreenSharing: participant.isScreenSharing,
@@ -202,70 +218,56 @@ export class MeetingClient {
         }
 
         if (stream) {
-          this.events.onRemoteStream(peerId, stream);
+          this.events.onRemoteStream(idStr, stream);
         }
       };
 
       // 4. Handle peer disconnect
       this.room.onPeerLeave = (peerId: string) => {
-        const existing = this.participants.get(peerId);
-        this.participants.delete(peerId);
-        this.events.onUserLeft(peerId, existing?.name);
+        const idStr = String(peerId);
+        const existing = this.participants.get(idStr);
+        this.participants.delete(idStr);
+        this.events.onUserLeft(idStr, existing?.name);
       };
 
-      // 5. Periodic reconciliation
+      // 5. Periodic heartbeat - only sends profile to known connected peers
       this.syncTimer = window.setInterval(() => {
         if (!this.room || this.isClosed) return;
         try {
-          const peers = this.room.getPeers();
-          for (const peerId of Object.keys(peers)) {
-            if (!this.participants.has(peerId)) {
-              const p: Participant = {
-                id: peerId,
-                name: 'Member',
-                isHost: false,
-                isLocal: false,
-                isMuted: false,
-                isVideoOff: false,
-                isScreenSharing: false,
-                handRaised: false,
-              };
-              this.participants.set(peerId, p);
-              this.events.onUserJoined(p);
-            }
-          }
           this.broadcastMyProfile();
         } catch (e) {
           // ignore
         }
-      }, 2000);
+      }, 3000);
 
       // 6. Handle chat
-      this.chatAction.onMessage = (message: ChatMessage) => {
-        if (message && message.senderId !== this.userId) {
+      this.chatAction.onMessage = (message: ChatMessage, context: unknown) => {
+        const idStr = getPeerId(context);
+        if (message && idStr !== selfId && message.senderId !== this.userId) {
           this.events.onChatMessage(message);
         }
       };
 
       // 7. Handle reactions
-      this.reactionAction.onMessage = (reaction: ReactionItem) => {
-        if (reaction && reaction.senderId !== this.userId) {
+      this.reactionAction.onMessage = (reaction: ReactionItem, context: unknown) => {
+        const idStr = getPeerId(context);
+        if (reaction && idStr !== selfId && reaction.senderId !== this.userId) {
           this.events.onReaction(reaction);
         }
       };
 
       // 8. Handle status changes
-      this.statusAction.onMessage = (status: StatusPayload, peerId: string) => {
-        const targetId = peerId || status?.userId;
-        if (status && targetId) {
-          const participant = this.participants.get(targetId);
+      this.statusAction.onMessage = (status: StatusPayload, context: unknown) => {
+        const idStr = getPeerId(context) || status?.userId;
+        if (status && idStr && idStr !== selfId) {
+          const participant = this.participants.get(idStr);
           if (participant) {
             if (status.isMuted !== undefined) participant.isMuted = status.isMuted;
             if (status.isVideoOff !== undefined) participant.isVideoOff = status.isVideoOff;
             if (status.isScreenSharing !== undefined) participant.isScreenSharing = status.isScreenSharing;
             if (status.handRaised !== undefined) participant.handRaised = status.handRaised;
           }
-          this.events.onUserStatusChanged({ ...status, userId: targetId });
+          this.events.onUserStatusChanged({ ...status, userId: idStr });
         }
       };
 
@@ -276,7 +278,7 @@ export class MeetingClient {
             this.events.onForceMute();
             break;
           case 'kick':
-            if (payload.targetId === this.userId) {
+            if (payload.targetId === this.userId || payload.targetId === selfId) {
               this.events.onKicked(payload.reason || 'You were removed from the Majlis by the facilitator.');
               this.leave();
             }

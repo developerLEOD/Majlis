@@ -182,45 +182,49 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onUserJoined: (user) => {
-        if (user.id === userId) return;
+        const idStr = String(user.id);
+        if (!idStr || idStr === userId) return;
         setParticipants((prev) => {
-          const index = prev.findIndex((p) => p.id === user.id);
+          const index = prev.findIndex((p) => String(p.id) === idStr);
           if (index >= 0) {
             const list = [...prev];
+            const prevP = list[index];
             list[index] = {
-              ...list[index],
+              ...prevP,
               ...user,
+              id: idStr,
               isLocal: false,
-              stream: user.stream || list[index].stream,
+              stream: user.stream || prevP.stream,
             };
             return list;
           }
-          return [...prev, { ...user, isLocal: false }];
+          return [...prev, { ...user, id: idStr, isLocal: false }];
         });
-        showNotification(`${user.name} joined`);
+        showNotification(`${user.name || 'A seeker'} joined`);
       },
 
       onUserLeft: (leftUserId, leftName) => {
-        if (leftUserId === userId) return;
-        setParticipants((prev) => prev.filter((p) => p.id !== leftUserId));
-        videoElementsRef.current.delete(leftUserId);
+        const idStr = String(leftUserId);
+        if (!idStr || idStr === userId) return;
+        setParticipants((prev) => prev.filter((p) => String(p.id) !== idStr));
+        videoElementsRef.current.delete(idStr);
         showNotification(`${leftName || 'A member'} left`);
       },
 
       onRemoteStream: (remoteUserId, stream) => {
-        if (remoteUserId === userId) return;
+        const idStr = String(remoteUserId);
+        if (!idStr || idStr === userId) return;
         setParticipants((prev) => {
-          const index = prev.findIndex((p) => p.id === remoteUserId);
+          const index = prev.findIndex((p) => String(p.id) === idStr);
           if (index >= 0) {
             const list = [...prev];
-            list[index] = { ...list[index], stream };
+            list[index] = { ...list[index], id: idStr, stream };
             return list;
           }
-          // If remote participant profile hasn't been added yet, add with stream immediately
           return [
             ...prev,
             {
-              id: remoteUserId,
+              id: idStr,
               name: 'Member',
               isHost: false,
               isLocal: false,
@@ -271,9 +275,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onUserStatusChanged: (data) => {
+        const targetId = String(data.userId);
         setParticipants((prev) =>
           prev.map((p) => {
-            if (p.id !== data.userId) return p;
+            if (String(p.id) !== targetId) return p;
             return {
               ...p,
               isMuted: data.isMuted !== undefined ? data.isMuted : p.isMuted,
