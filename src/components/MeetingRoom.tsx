@@ -328,35 +328,91 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }, 4000);
   };
 
-  const toggleAudio = () => {
+  const toggleAudio = async () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
 
     if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !nextMuted;
-      });
+      const audioTracks = localStreamRef.current.getAudioTracks();
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track) => {
+          track.enabled = !nextMuted;
+        });
+      } else if (!nextMuted) {
+        try {
+          const newAudioStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true },
+            video: false,
+          });
+          const newTrack = newAudioStream.getAudioTracks()[0];
+          if (newTrack) {
+            localStreamRef.current.addTrack(newTrack);
+            clientRef.current?.setLocalStream(localStreamRef.current);
+          }
+        } catch (err) {
+          console.warn('Could not acquire audio track:', err);
+        }
+      }
+    } else if (!nextMuted) {
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: !isVideoOff,
+        });
+        localStreamRef.current = newStream;
+        clientRef.current?.setLocalStream(newStream);
+      } catch (err) {
+        console.warn('Could not initialize audio stream:', err);
+      }
     }
 
     setParticipants((prev) =>
-      prev.map((p) => (p.isLocal ? { ...p, isMuted: nextMuted } : p))
+      prev.map((p) => (p.isLocal ? { ...p, isMuted: nextMuted, stream: localStreamRef.current || undefined } : p))
     );
 
     clientRef.current?.updateStatus({ isMuted: nextMuted });
   };
 
-  const toggleVideo = () => {
+  const toggleVideo = async () => {
     const nextVideoOff = !isVideoOff;
     setIsVideoOff(nextVideoOff);
 
     if (localStreamRef.current) {
-      localStreamRef.current.getVideoTracks().forEach((track) => {
-        track.enabled = !nextVideoOff;
-      });
+      const videoTracks = localStreamRef.current.getVideoTracks();
+      if (videoTracks.length > 0) {
+        videoTracks.forEach((track) => {
+          track.enabled = !nextVideoOff;
+        });
+      } else if (!nextVideoOff) {
+        try {
+          const newVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false,
+          });
+          const newTrack = newVideoStream.getVideoTracks()[0];
+          if (newTrack) {
+            localStreamRef.current.addTrack(newTrack);
+            clientRef.current?.setLocalStream(localStreamRef.current);
+          }
+        } catch (err) {
+          console.warn('Could not acquire video track:', err);
+        }
+      }
+    } else if (!nextVideoOff) {
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: !isMuted,
+        });
+        localStreamRef.current = newStream;
+        clientRef.current?.setLocalStream(newStream);
+      } catch (err) {
+        console.warn('Could not initialize video stream:', err);
+      }
     }
 
     setParticipants((prev) =>
-      prev.map((p) => (p.isLocal ? { ...p, isVideoOff: nextVideoOff } : p))
+      prev.map((p) => (p.isLocal ? { ...p, isVideoOff: nextVideoOff, stream: localStreamRef.current || undefined } : p))
     );
 
     clientRef.current?.updateStatus({ isVideoOff: nextVideoOff });

@@ -130,15 +130,36 @@ export class MeetingClient {
         });
       });
 
-      // Listen to participants from Firebase
+      // Track known remote participant IDs to synchronize leaves and joins accurately
+      const knownCloudPeerIds = new Set<string>();
+
       this.firebaseSync.subscribeToParticipants((participants) => {
-        for (const p of participants) {
-          if (p.id !== this.userId) {
-            this.events.onUserJoined(p);
-            // If we don't have a peer connection yet, create one
-            if (!this.peerConnections.has(p.id)) {
-              this.createPeerConnection(p.id, this.isHost);
-            }
+        const remoteParticipants = participants.filter((p) => p.id !== this.userId);
+        const currentPeerIds = new Set(remoteParticipants.map((p) => p.id));
+
+        // 1. Detect and clean up members who left the meeting
+        for (const peerId of knownCloudPeerIds) {
+          if (!currentPeerIds.has(peerId)) {
+            this.closePeerConnection(peerId);
+            this.events.onUserLeft(peerId);
+          }
+        }
+        knownCloudPeerIds.clear();
+        currentPeerIds.forEach((id) => knownCloudPeerIds.add(id));
+
+        // 2. Add or update active participants & status (mute/video/hand/screen)
+        for (const p of remoteParticipants) {
+          this.events.onUserJoined(p);
+          this.events.onUserStatusChanged({
+            userId: p.id,
+            isMuted: p.isMuted,
+            isVideoOff: p.isVideoOff,
+            isScreenSharing: p.isScreenSharing,
+            handRaised: p.handRaised,
+          });
+
+          if (!this.peerConnections.has(p.id)) {
+            this.createPeerConnection(p.id, this.isHost);
           }
         }
       });
@@ -581,7 +602,6 @@ export class MeetingClient {
           targetId: peerId,
           signalData,
         });
-        // Also send through Firebase Cloud
         this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
       }
     };
@@ -610,7 +630,6 @@ export class MeetingClient {
           targetId: peerId,
           signalData,
         });
-        // Also send through Firebase Cloud
         this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
       } catch (err) {
         console.error('Error creating offer for peer:', peerId, err);
@@ -694,6 +713,8 @@ export class MeetingClient {
         const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
         if (audioSender) {
           audioSender.replaceTrack(audioTrack).catch(console.warn);
+        } else {
+          pc.addTrack(audioTrack, newStream);
         }
       }
 
@@ -701,6 +722,8 @@ export class MeetingClient {
         const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch(console.warn);
+        } else {
+          pc.addTrack(videoTrack, newStream);
         }
       }
     }
@@ -813,12 +836,21 @@ export class MeetingClient {
   public leave() {
     this.isClosed = true;
 
+    // Remove our record from Firebase Firestore immediately
     if (this.firebaseSync) {
       try {
         this.firebaseSync.destroy();
       } catch (e) {}
       this.firebaseSync = null;
     }
+
+    // Send leave message via WebSocket and BroadcastChannel
+    this.sendWsMessage({
+      type: 'leave',
+      roomId: this.roomId,
+      userId: this.userId,
+      name: this.userName,
+    });
 
     if (this.broadcastChannel) {
       try {

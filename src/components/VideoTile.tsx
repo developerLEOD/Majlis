@@ -28,9 +28,14 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   // Bind video stream
   useEffect(() => {
     if (videoRef.current && participant.stream) {
-      videoRef.current.srcObject = participant.stream;
+      if (videoRef.current.srcObject !== participant.stream) {
+        videoRef.current.srcObject = participant.stream;
+      }
       if (videoRefCallback) {
         videoRefCallback(videoRef.current);
+      }
+      if (!participant.isVideoOff) {
+        videoRef.current.play().catch(() => {});
       }
     }
 
