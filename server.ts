@@ -303,8 +303,162 @@ wss.on('connection', (ws: WebSocket) => {
 
           broadcastToRoom(currentRoomId, null, {
             type: 'system-announcement',
-            text: 'Host has muted all participants',
+            text: 'Facilitator has muted all participants',
           });
+          break;
+        }
+
+        case 'host-mute-user': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.isMuted = true;
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({ type: 'force-mute' }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              isMuted: true,
+            });
+          }
+          break;
+        }
+
+        case 'host-lower-all-hands': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          for (const p of room.participants.values()) {
+            p.handRaised = false;
+          }
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'hands-lowered',
+            message: 'Facilitator lowered all hands',
+          });
+          break;
+        }
+
+        case 'host-lower-hand': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.handRaised = false;
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              handRaised: false,
+            });
+          }
+          break;
+        }
+
+        case 'host-spotlight': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'spotlight-changed',
+            targetId: targetId || null,
+          });
+          break;
+        }
+
+        case 'host-toggle-chat': {
+          const { enabled } = message;
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'chat-permission-changed',
+            enabled: !!enabled,
+          });
+          break;
+        }
+
+        case 'host-toggle-screenshare': {
+          const { enabled } = message;
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'screenshare-permission-changed',
+            enabled: !!enabled,
+          });
+          break;
+        }
+
+        case 'host-announcement': {
+          const { text } = message;
+          if (!currentRoomId || !currentUserId || !text?.trim()) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'system-announcement',
+            text: text.trim(),
+            senderName: host.name,
+          });
+          break;
+        }
+
+        case 'host-transfer': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            host.isHost = false;
+            target.isHost = true;
+            room.hostId = target.id;
+            room.hostName = target.name;
+
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({
+                type: 'promoted-to-host',
+                message: 'You have been appointed as the facilitator.',
+              }));
+            }
+
+            broadcastToRoom(currentRoomId, null, {
+              type: 'new-host',
+              hostId: target.id,
+              hostName: target.name,
+            });
+            broadcastActiveRooms();
+          }
           break;
         }
 

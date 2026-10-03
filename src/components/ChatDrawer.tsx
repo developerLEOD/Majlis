@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Crown, MessageSquare, Send, Sparkles, X } from 'lucide-react';
+import { Crown, Lock, MessageSquare, Send, Sparkles, X } from 'lucide-react';
 import { ChatMessage } from '../types/meeting';
 
 interface ChatDrawerProps {
   messages: ChatMessage[];
   currentUserId: string;
+  isHost?: boolean;
+  chatEnabled?: boolean;
   onSendMessage: (text: string) => void;
   onClose: () => void;
 }
@@ -12,6 +14,8 @@ interface ChatDrawerProps {
 export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   messages,
   currentUserId,
+  isHost = false,
+  chatEnabled = true,
   onSendMessage,
   onClose,
 }) => {
@@ -25,6 +29,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
+    if (!chatEnabled && !isHost) return;
     onSendMessage(inputText.trim());
     setInputText('');
   };
@@ -33,6 +38,8 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
     const d = new Date(ts);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  const canPost = chatEnabled || isHost;
 
   return (
     <div className="w-80 sm:w-96 h-full bg-[#1A1410] border-l border-[#3C230B]/60 flex flex-col z-30 shadow-2xl animate-in slide-in-from-right duration-200 select-none">
@@ -54,6 +61,14 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Notice if chat paused by host */}
+      {!chatEnabled && (
+        <div className="px-4 py-2 bg-amber-950/50 border-b border-amber-900/40 text-[11px] text-amber-300 flex items-center gap-2">
+          <Lock className="w-3.5 h-3.5 shrink-0" />
+          <span>Discussion paused by facilitator {isHost && '(You can still post)'}</span>
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -103,30 +118,33 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
       </div>
 
       {/* Quick adab & contemplation reactions */}
-      <div className="px-4 py-2 bg-[#140F0C] border-t border-[#3C230B]/40 flex items-center gap-2">
-        {['🤲', '💡', '📖', '👍', '👏', '✨'].map((emoji) => (
-          <button
-            key={emoji}
-            onClick={() => setInputText((prev) => prev + emoji)}
-            className="hover:scale-125 transition-transform text-sm p-1"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
+      {canPost && (
+        <div className="px-4 py-2 bg-[#140F0C] border-t border-[#3C230B]/40 flex items-center gap-2">
+          {['🤲', '💡', '📖', '👍', '👏', '✨'].map((emoji) => (
+            <button
+              key={emoji}
+              onClick={() => setInputText((prev) => prev + emoji)}
+              className="hover:scale-125 transition-transform text-sm p-1"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Input Box */}
       <form onSubmit={handleSubmit} className="p-3 border-t border-[#3C230B]/60 bg-[#140F0C] flex gap-2">
         <input
           type="text"
           value={inputText}
+          disabled={!canPost}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Share a reflection or question..."
-          className="flex-1 bg-[#1E1712] border border-[#3C230B] rounded-xl px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37] transition"
+          placeholder={canPost ? 'Share a reflection or question...' : 'Chat is disabled by facilitator'}
+          className="flex-1 bg-[#1E1712] disabled:opacity-50 border border-[#3C230B] rounded-xl px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37] transition"
         />
         <button
           type="submit"
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || !canPost}
           className="p-2.5 bg-[#3C230B] disabled:opacity-40 hover:bg-[#2B1706] text-[#E0C2A6] rounded-xl transition shadow-xs"
         >
           <Send className="w-3.5 h-3.5" />

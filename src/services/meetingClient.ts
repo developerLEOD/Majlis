@@ -28,6 +28,12 @@ export interface MeetingClientEvents {
   onLockChanged: (locked: boolean) => void;
   onRecordingNotice: (isRecording: boolean, recordedBy: string) => void;
   onSessionEnded?: (reason: string) => void;
+  onSpotlightChanged?: (targetId: string | null) => void;
+  onChatPermissionChanged?: (enabled: boolean) => void;
+  onScreenSharePermissionChanged?: (enabled: boolean) => void;
+  onHandsLowered?: () => void;
+  onPromotedToHost?: (message: string) => void;
+  onAnnouncement?: (text: string, senderName?: string) => void;
   onUserStatusChanged: (data: {
     userId: string;
     isMuted?: boolean;
@@ -276,6 +282,31 @@ export class MeetingClient {
               break;
             }
 
+            case 'spotlight-changed': {
+              this.events.onSpotlightChanged?.(msg.targetId || null);
+              break;
+            }
+
+            case 'chat-permission-changed': {
+              this.events.onChatPermissionChanged?.(!!msg.enabled);
+              break;
+            }
+
+            case 'screenshare-permission-changed': {
+              this.events.onScreenSharePermissionChanged?.(!!msg.enabled);
+              break;
+            }
+
+            case 'hands-lowered': {
+              this.events.onHandsLowered?.();
+              break;
+            }
+
+            case 'system-announcement': {
+              this.events.onAnnouncement?.(msg.text, msg.senderName);
+              break;
+            }
+
             case 'signal': {
               if (msg.targetId === this.userId && msg.signalData) {
                 await this.handleSignalingData(msg.senderId, msg.signalData);
@@ -508,6 +539,44 @@ export class MeetingClient {
         this.knownParticipants.delete(leftId);
         this.closePeerConnection(leftId);
         this.events.onUserLeft(leftId, message.name);
+        break;
+      }
+
+      case 'spotlight-changed': {
+        this.events.onSpotlightChanged?.(message.targetId || null);
+        break;
+      }
+
+      case 'chat-permission-changed': {
+        this.events.onChatPermissionChanged?.(!!message.enabled);
+        break;
+      }
+
+      case 'screenshare-permission-changed': {
+        this.events.onScreenSharePermissionChanged?.(!!message.enabled);
+        break;
+      }
+
+      case 'hands-lowered': {
+        this.events.onHandsLowered?.();
+        break;
+      }
+
+      case 'promoted-to-host': {
+        this.isHost = true;
+        this.events.onPromotedToHost?.(message.message || 'You are now the facilitator.');
+        break;
+      }
+
+      case 'new-host': {
+        if (message.hostId === this.userId) {
+          this.isHost = true;
+        }
+        break;
+      }
+
+      case 'system-announcement': {
+        this.events.onAnnouncement?.(message.text, message.senderName);
         break;
       }
 
@@ -836,10 +905,74 @@ export class MeetingClient {
     this.firebaseSync?.updateParticipantStatus(status).catch(() => {});
   }
 
+  // Facilitator Controls
   public hostMuteAll() {
     if (!this.isHost) return;
     this.sendWsMessage({
       type: 'host-mute-all',
+    });
+  }
+
+  public hostMuteUser(targetId: string) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-mute-user',
+      targetId,
+    });
+  }
+
+  public hostLowerAllHands() {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-lower-all-hands',
+    });
+  }
+
+  public hostLowerHand(targetId: string) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-lower-hand',
+      targetId,
+    });
+  }
+
+  public hostSpotlight(targetId: string | null) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-spotlight',
+      targetId,
+    });
+  }
+
+  public hostSetChatPermission(enabled: boolean) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-toggle-chat',
+      enabled,
+    });
+  }
+
+  public hostSetScreenSharePermission(enabled: boolean) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-toggle-screenshare',
+      enabled,
+    });
+  }
+
+  public hostBroadcastAnnouncement(text: string) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-announcement',
+      text,
+    });
+  }
+
+  public hostTransfer(targetId: string) {
+    if (!this.isHost) return;
+    this.sendWsMessage({
+      type: 'host-transfer',
+      targetId,
     });
   }
 

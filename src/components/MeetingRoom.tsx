@@ -1,50 +1,45 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Camera,
   Check,
-  ChevronUp,
+  ChevronDown,
   Copy,
   Crown,
-  Disc,
   Hand,
   Info,
   LayoutGrid,
   Lock,
   Maximize2,
-  MessageSquare,
   Mic,
   MicOff,
   Minimize2,
   MonitorUp,
-  Pause,
-  PhoneOff,
-  Play,
-  Settings as SettingsIcon,
-  Shield,
+  MoreHorizontal,
+  MoreVertical,
+  Plus,
+  Radio,
+  Settings,
+  Sliders,
   Smile,
   Square,
-  Unlock,
   Users,
   Video,
   VideoOff,
+  Volume2,
   X,
+  MessageSquare,
+  Sparkles,
 } from 'lucide-react';
-import {
-  ChatMessage,
-  MeetingLayout,
-  Participant,
-  ReactionItem,
-  RecordingResult,
-} from '../types/meeting';
-import { LocalMeetingRecorder } from '../services/localRecorder';
+import { ChatMessage, MajlisSession, MeetingLayout, Participant, ReactionItem, RecordingResult } from '../types/meeting';
 import { MeetingClient } from '../services/meetingClient';
+import { LocalMeetingRecorder } from '../services/localRecorder';
 import { VideoTile } from './VideoTile';
 import { ChatDrawer } from './ChatDrawer';
 import { ParticipantsDrawer } from './ParticipantsDrawer';
-import { RecordingModal } from './RecordingModal';
+import { ReactionPicker } from './ReactionPicker';
 import { InviteModal } from './InviteModal';
 import { SettingsModal } from './SettingsModal';
-import { ReactionPicker } from './ReactionPicker';
+import { RecordingModal } from './RecordingModal';
+import { FacilitatorHubModal } from './FacilitatorHubModal';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -83,6 +78,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [handRaised, setHandRaised] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [chatEnabled, setChatEnabled] = useState(true);
+  const [screenShareEnabled, setScreenShareEnabled] = useState(true);
 
   // Layout & UI
   const [layout, setLayout] = useState<MeetingLayout>('grid');
@@ -94,6 +91,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showFacilitatorHub, setShowFacilitatorHub] = useState(false);
   const [showLeaveConfirmDialog, setShowLeaveConfirmDialog] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -111,6 +109,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [remoteRecordingNotice, setRemoteRecordingNotice] = useState<{ isRecording: boolean; by: string } | null>(null);
   const [lastFinishedRecording, setLastFinishedRecording] = useState<RecordingResult | null>(null);
   const [systemBanner, setSystemBanner] = useState<string | null>(null);
+  const [stageAnnouncement, setStageAnnouncement] = useState<{ text: string; senderName?: string } | null>(null);
   const [currentTitle, setCurrentTitle] = useState<string>(sessionTitle || `Majlis (${roomId})`);
 
   // References
@@ -144,11 +143,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  };
-
   useEffect(() => {
     const localParticipant: Participant = {
       id: userId,
@@ -177,8 +171,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         setParticipants((prev) => {
           const list = [...prev];
           for (const p of data.participants) {
-            if (String(p.id) !== userId && !list.some((existing) => String(existing.id) === String(p.id))) {
-              list.push({ ...p, id: String(p.id), isLocal: false });
+            const pId = String(p.id);
+            if (pId !== userId) {
+              const existingIdx = list.findIndex((e) => String(e.id) === pId);
+              if (existingIdx >= 0) {
+                list[existingIdx] = { ...list[existingIdx], ...p, isLocal: false };
+              } else {
+                list.push({ ...p, id: pId, isLocal: false });
+              }
             }
           }
           return list;
@@ -221,6 +221,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         if (!idStr || idStr === userId) return;
         setParticipants((prev) => prev.filter((p) => String(p.id) !== idStr));
         videoElementsRef.current.delete(idStr);
+        setPinnedUserId((current) => (current === idStr ? null : current));
         showNotification(`${leftName || 'A member'} left`);
       },
 
@@ -270,7 +271,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         if (localStreamRef.current) {
           localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = false));
         }
-        showNotification('Muted by host');
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isMuted: true } : p))
+        );
+        showNotification('Microphone muted by facilitator');
       },
 
       onKicked: (reason) => {
@@ -282,7 +286,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onLockChanged: (locked) => {
         setIsLocked(locked);
-        showNotification(locked ? 'Majlis locked' : 'Majlis unlocked');
+        showNotification(locked ? 'Majlis locked by facilitator' : 'Majlis unlocked');
       },
 
       onRecordingNotice: (recording, by) => {
@@ -294,6 +298,41 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         setTimeout(() => {
           handleFinalExit();
         }, 400);
+      },
+
+      onSpotlightChanged: (targetId) => {
+        setPinnedUserId(targetId || null);
+        if (targetId) {
+          const p = participants.find((x) => x.id === targetId);
+          showNotification(`Stage spotlighted: ${p?.name || 'Attendee'}`);
+        } else {
+          showNotification('Spotlight cleared');
+        }
+      },
+
+      onChatPermissionChanged: (enabled) => {
+        setChatEnabled(enabled);
+        showNotification(enabled ? 'Discussion chat enabled' : 'Discussion chat paused by facilitator');
+      },
+
+      onScreenSharePermissionChanged: (enabled) => {
+        setScreenShareEnabled(enabled);
+        showNotification(enabled ? 'Attendee screen sharing enabled' : 'Screen sharing restricted to facilitator');
+      },
+
+      onHandsLowered: () => {
+        setHandRaised(false);
+        setParticipants((prev) => prev.map((p) => ({ ...p, handRaised: false })));
+        showNotification('Facilitator lowered all hands');
+      },
+
+      onPromotedToHost: (msg) => {
+        setIsHost(true);
+        showNotification(msg || 'You are now the facilitator of this Majlis.');
+      },
+
+      onAnnouncement: (text, sender) => {
+        setStageAnnouncement({ text, senderName: sender });
       },
 
       onUserStatusChanged: (data) => {
@@ -423,6 +462,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   };
 
   const toggleScreenShare = async () => {
+    if (!isHost && !screenShareEnabled && !isScreenSharing) {
+      showNotification('Attendee screen sharing is paused by the facilitator.');
+      return;
+    }
+
     if (isScreenSharing) {
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -516,11 +560,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             isMuted: p.isMuted,
           }));
         },
-        onTick: (duration, size) => {
+        onTick: (duration: number, size: number) => {
           setRecordingDuration(duration);
           setRecordingSizeBytes(size);
         },
-        onStatusChange: (status) => {
+        onStatusChange: (status: 'recording' | 'paused' | 'stopped') => {
           setRecordingStatus(status);
         },
       });
@@ -529,16 +573,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       setRecorder(rec);
       setRecordingStatus('recording');
       clientRef.current?.notifyRecording(true);
-      showNotification('Recording session locally');
+      showNotification('Recording started');
     } catch (err) {
-      console.error('Failed to start recording:', err);
+      console.error('Error starting recording:', err);
+      alert('Unable to start recording. Ensure permissions are granted.');
     }
-  };
-
-  const pauseResumeRecording = () => {
-    if (!recorder) return;
-    if (recordingStatus === 'recording') recorder.pause();
-    else if (recordingStatus === 'paused') recorder.resume();
   };
 
   const stopRecording = async () => {
@@ -555,26 +594,81 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }
   };
 
-  const sendEmojiReaction = (emoji: string) => {
-    clientRef.current?.sendReaction(emoji);
-    setShowReactionPicker(false);
-  };
-
   const sendChatMessage = (text: string) => {
     clientRef.current?.sendChatMessage(text);
   };
 
+  // Facilitator Moderation Handlers
   const handleMuteAll = () => {
     clientRef.current?.hostMuteAll();
-    showNotification('Muted all participants');
+    showNotification('Muted all attendee microphones');
+  };
+
+  const handleMuteUser = (targetUserId: string) => {
+    clientRef.current?.hostMuteUser(targetUserId);
+    showNotification('Microphone muted for attendee');
+  };
+
+  const handleLowerHand = (targetUserId: string) => {
+    clientRef.current?.hostLowerHand(targetUserId);
+  };
+
+  const handleLowerAllHands = () => {
+    clientRef.current?.hostLowerAllHands();
+    setHandRaised(false);
+    setParticipants((prev) => prev.map((p) => ({ ...p, handRaised: false })));
+    showNotification('Lowered all hands');
+  };
+
+  const handleSpotlightUser = (targetUserId: string | null) => {
+    setPinnedUserId(targetUserId);
+    clientRef.current?.hostSpotlight(targetUserId);
   };
 
   const handleToggleLock = () => {
     clientRef.current?.hostToggleLock();
   };
 
+  const handleToggleChatPermission = (enabled: boolean) => {
+    setChatEnabled(enabled);
+    clientRef.current?.hostSetChatPermission(enabled);
+  };
+
+  const handleToggleScreenSharePermission = (enabled: boolean) => {
+    setScreenShareEnabled(enabled);
+    clientRef.current?.hostSetScreenSharePermission(enabled);
+  };
+
+  const handleBroadcastAnnouncement = (text: string) => {
+    clientRef.current?.hostBroadcastAnnouncement(text);
+    setStageAnnouncement({ text, senderName: userName });
+    showNotification('Announcement broadcast to all seekers');
+  };
+
+  const handleTransferHost = (targetUserId: string) => {
+    clientRef.current?.hostTransfer(targetUserId);
+    setIsHost(false);
+    showNotification('Facilitator role transferred');
+  };
+
   const handleKickUser = (targetUserId: string) => {
     clientRef.current?.hostKickUser(targetUserId);
+    showNotification('Attendee removed from Majlis');
+  };
+
+  const handleEndMeetingForAll = () => {
+    if (recorder) {
+      recorder.stop().catch(console.warn);
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    clientRef.current?.hostEndSession();
+    clientRef.current?.leave();
+    onEndOrLeaveMeeting();
   };
 
   const copyMeetingLink = async () => {
@@ -586,16 +680,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       setTimeout(() => setCopiedLink(false), 2000);
     } else {
       setShowInviteModal(true);
-    }
-  };
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
     }
   };
 
@@ -626,13 +710,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     <div className="relative w-screen h-screen bg-[#140F0C] text-[#FFFCF5] flex flex-col overflow-hidden select-none font-sans">
       {/* Toast Notification */}
       {systemBanner && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#2B1706]/95 border border-[#D4AF37]/30 text-[#E0C2A6] text-xs font-medium rounded-full shadow-lg backdrop-blur-md flex items-center gap-2">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#2B1706]/95 border border-[#D4AF37]/30 text-[#E0C2A6] text-xs font-medium rounded-full shadow-lg backdrop-blur-md flex items-center gap-2 animate-in fade-in">
           <Info className="w-3.5 h-3.5 text-[#D4AF37]" />
           <span>{systemBanner}</span>
         </div>
       )}
 
-      {/* Floating Reactions */}
+      {/* Floating Animated Reactions */}
       <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
         {activeReactions.map((reaction) => (
           <div
@@ -687,14 +771,26 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           )}
 
           {isLocked && (
-            <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/40 rounded">
-              Locked
+            <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/40 rounded flex items-center gap-1">
+              <Lock className="w-3 h-3" /> Locked
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-xs">
-          {/* Participant Count in Header */}
+        <div className="flex items-center gap-2.5 text-xs">
+          {/* Facilitator Hub Quick Badge */}
+          {isHost && (
+            <button
+              onClick={() => setShowFacilitatorHub(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 border border-[#D4AF37]/50 rounded-lg text-[#D4AF37] font-semibold transition shadow-xs"
+              title="Open Facilitator Control Center"
+            >
+              <Crown className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Facilitator Hub</span>
+            </button>
+          )}
+
+          {/* Participant Count */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1410] hover:bg-[#241710] border border-[#3C230B] rounded-lg text-[#E0C2A6] text-xs font-mono transition"
@@ -702,7 +798,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           >
             <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
             <span className="font-bold text-[#FFFCF5]">{participants.length}</span>
-            <span className="hidden sm:inline text-[11px] text-[#A8988B]">in room</span>
+            <span className="hidden sm:inline text-[11px] text-[#A8988B]">attendees</span>
           </button>
 
           {/* Duration & Status */}
@@ -724,18 +820,40 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             <button
               onClick={() => { setLayout('grid'); setPinnedUserId(null); }}
               className={`p-1 rounded transition ${layout === 'grid' && !pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
+              title="Grid View"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => { setLayout('speaker'); if (participants.length > 0 && !pinnedUserId) setPinnedUserId(participants[0].id); }}
               className={`p-1 rounded transition ${layout === 'speaker' || pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
+              title="Speaker Spotlight"
             >
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
       </header>
+
+      {/* STAGE ANNOUNCEMENT BANNER */}
+      {stageAnnouncement && (
+        <div className="bg-gradient-to-r from-[#2B1B0F] via-[#3C230B] to-[#2B1B0F] border-b border-[#D4AF37]/40 px-4 py-2 flex items-center justify-between z-20 animate-in slide-in-from-top duration-200 shadow-md">
+          <div className="flex items-center gap-2.5 text-xs text-[#FFFCF5]">
+            <Radio className="w-4 h-4 text-[#D4AF37] shrink-0 animate-pulse" />
+            <span className="font-bold text-[#D4AF37] uppercase text-[10px] tracking-wider">
+              {stageAnnouncement.senderName ? `${stageAnnouncement.senderName}:` : 'Facilitator Notice:'}
+            </span>
+            <span className="font-medium text-[#FFFCF5]">{stageAnnouncement.text}</span>
+          </div>
+          <button
+            onClick={() => setStageAnnouncement(null)}
+            className="p-1 text-[#D4AF37]/70 hover:text-white rounded transition"
+            title="Dismiss Notice"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* MAIN VIDEO STAGE */}
       <div className="flex-1 flex overflow-hidden relative bg-[#120D0A]">
@@ -834,6 +952,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           <ChatDrawer
             messages={messages}
             currentUserId={userId}
+            isHost={isHost}
+            chatEnabled={chatEnabled}
             onSendMessage={sendChatMessage}
             onClose={() => setActiveDrawer(null)}
           />
@@ -845,9 +965,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             currentUserId={userId}
             isHost={isHost}
             isLocked={isLocked}
+            spotlightUserId={pinnedUserId}
             onMuteAll={handleMuteAll}
             onToggleLock={handleToggleLock}
+            onMuteUser={handleMuteUser}
+            onLowerHand={handleLowerHand}
+            onSpotlightUser={handleSpotlightUser}
+            onTransferHost={handleTransferHost}
             onKickUser={handleKickUser}
+            onOpenFacilitatorHub={() => setShowFacilitatorHub(true)}
             onOpenInvite={() => setShowInviteModal(true)}
             onClose={() => setActiveDrawer(null)}
           />
@@ -890,7 +1016,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                 ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/50'
                 : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
             }`}
-            title="Screen Share"
+            title={!isHost && !screenShareEnabled ? 'Screen share disabled by facilitator' : 'Screen Share'}
           >
             <MonitorUp className="w-4 h-4" />
           </button>
@@ -936,6 +1062,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           >
             <Hand className="w-4 h-4" />
           </button>
+
+          {/* Facilitator Hub Button in Toolbar */}
+          {isHost && (
+            <button
+              onClick={() => setShowFacilitatorHub(true)}
+              className="p-2.5 rounded-xl bg-[#2B1706] hover:bg-[#3C230B] border border-[#D4AF37]/40 text-[#D4AF37] text-xs font-semibold transition flex items-center gap-1.5"
+              title="Facilitator Control Center"
+            >
+              <Crown className="w-4 h-4" />
+              <span className="hidden lg:inline text-xs">Facilitator Hub</span>
+            </button>
+          )}
 
           {/* Local Recording */}
           {isHost && (
@@ -1007,7 +1145,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               {isHost ? 'End Majlis?' : 'Leave Majlis?'}
             </h3>
             <p className="text-xs text-[#68594E]">
-              Are you sure you want to exit the live room?
+              {isHost
+                ? 'Would you like to conclude this Majlis session for all seekers, or leave individually?'
+                : 'Are you sure you want to exit the live room?'}
             </p>
             <div className="space-y-2 pt-2">
               <button
@@ -1025,6 +1165,26 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Facilitator Hub Modal */}
+      {showFacilitatorHub && (
+        <FacilitatorHubModal
+          isLocked={isLocked}
+          chatEnabled={chatEnabled}
+          screenShareEnabled={screenShareEnabled}
+          participantCount={participants.length}
+          spotlightUserId={pinnedUserId}
+          onToggleLock={handleToggleLock}
+          onMuteAll={handleMuteAll}
+          onLowerAllHands={handleLowerAllHands}
+          onToggleChatPermission={handleToggleChatPermission}
+          onToggleScreenSharePermission={handleToggleScreenSharePermission}
+          onClearSpotlight={() => handleSpotlightUser(null)}
+          onBroadcastAnnouncement={handleBroadcastAnnouncement}
+          onEndMeetingForAll={handleEndMeetingForAll}
+          onClose={() => setShowFacilitatorHub(false)}
+        />
       )}
 
       {/* Modals */}

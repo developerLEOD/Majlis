@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useEffect, useState } from 'react';
 import { Sidebar } from './components/navigation/Sidebar';
 import { HomeScreen } from './components/home/HomeScreen';
@@ -12,6 +7,8 @@ import { SettingsView } from './components/settings/SettingsView';
 import { StartMajlisModal } from './components/majalis/StartMajlisModal';
 import { PreJoinScreen } from './components/prejoin/PreJoinScreen';
 import { MeetingRoom } from './components/MeetingRoom';
+import { AuthModal } from './components/auth/AuthModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { MajlisSession, NavTab } from './types/meeting';
 import {
   fetchAppConfig,
@@ -21,7 +18,8 @@ import {
 } from './utils/urlHelper';
 import { useActiveMajalis } from './hooks/useActiveMajalis';
 
-export default function App() {
+function MainAppContent() {
+  const { user, isFacilitator } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [userName, setUserName] = useState<string>(() => {
     return localStorage.getItem('infinitymeet_username') || 'Member';
@@ -31,6 +29,7 @@ export default function App() {
 
   const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>([]);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Pre-join Target
   const [preJoinTarget, setPreJoinTarget] = useState<{
@@ -114,17 +113,20 @@ export default function App() {
     title?: string;
   }) => {
     const title = params.title || preJoinTarget?.title || 'Live Majlis';
-    const chosenName = params.userName.trim() || userName;
+    const chosenName = params.userName.trim() || (user?.email?.split('@')[0]) || userName;
 
     setUserName(chosenName);
     localStorage.setItem('infinitymeet_username', chosenName);
     setPreJoinTarget(null);
 
+    // Strict check: only grant host status if the user's account is an authorized facilitator!
+    const effectiveIsHost = params.isHost && isFacilitator;
+
     setActiveMeeting({
       roomId: params.roomId,
       title,
       userName: chosenName,
-      isHost: params.isHost,
+      isHost: effectiveIsHost,
       stream: params.stream,
       isMuted: params.isMuted,
       isVideoOff: params.isVideoOff,
@@ -160,8 +162,9 @@ export default function App() {
         title: newSession.title,
         hostName: newSession.hostName,
       }),
-    }).catch((e) => console.warn('Room registration notice:', e));
+    }).catch(console.warn);
 
+    // Transition host directly into pre-join screen with host flag enabled
     setPreJoinTarget({
       roomId: newSession.roomId,
       title: newSession.title,
@@ -169,13 +172,13 @@ export default function App() {
     });
   };
 
-  // 1. LIVE MEETING ROOM SCREEN
+  // 1. ACTIVE LIVE MEETING VIEW
   if (activeMeeting) {
     return (
       <MeetingRoom
         roomId={activeMeeting.roomId}
         userId={userId}
-        userName={activeMeeting.userName || userName}
+        userName={activeMeeting.userName}
         sessionTitle={activeMeeting.title}
         isHost={activeMeeting.isHost}
         initialStream={activeMeeting.stream}
@@ -189,17 +192,24 @@ export default function App() {
   // 2. PRE-JOIN / PREPARATION SCREEN
   if (preJoinTarget) {
     return (
-      <PreJoinScreen
-        roomId={preJoinTarget.roomId}
-        sessionTitle={preJoinTarget.title}
-        isHostDefault={preJoinTarget.isHost}
-        defaultUserName={userName}
-        onEnterMeeting={handleEnterLiveMeeting}
-        onCancel={() => {
-          setPreJoinTarget(null);
-          window.history.pushState({}, '', window.location.pathname);
-        }}
-      />
+      <>
+        <PreJoinScreen
+          roomId={preJoinTarget.roomId}
+          sessionTitle={preJoinTarget.title}
+          isHostDefault={preJoinTarget.isHost}
+          defaultUserName={userName}
+          onEnterMeeting={handleEnterLiveMeeting}
+          onCancel={() => {
+            setPreJoinTarget(null);
+            window.history.pushState({}, '', window.location.pathname);
+          }}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
+      </>
     );
   }
 
@@ -210,6 +220,7 @@ export default function App() {
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         userName={userName}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -253,8 +264,22 @@ export default function App() {
           userName={userName}
           onClose={() => setIsStartModalOpen(false)}
           onStartSession={handleStartNewSession}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
         />
       )}
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainAppContent />
+    </AuthProvider>
   );
 }

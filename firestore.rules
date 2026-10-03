@@ -14,6 +14,13 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isAuthorizedFacilitator() {
+      return request.auth != null && (
+        request.auth.token.email.lower() == 'araizhasan00@gmail.com' ||
+        request.auth.token.email.lower() == 'thewisdomlounge1@gmail.com'
+      );
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

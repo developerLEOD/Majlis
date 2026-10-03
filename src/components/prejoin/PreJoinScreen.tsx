@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { Camera, Crown, Key, Lock, Mic, MicOff, Shield, Video, VideoOff } from 'lucide-react';
 import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
+import { useAuth } from '../../context/AuthContext';
 
 interface PreJoinScreenProps {
   roomId: string;
@@ -17,6 +18,7 @@ interface PreJoinScreenProps {
     title?: string;
   }) => void;
   onCancel: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
@@ -26,14 +28,17 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   defaultUserName,
   onEnterMeeting,
   onCancel,
+  onOpenAuthModal,
 }) => {
-  const [userName, setUserName] = useState(defaultUserName || '');
+  const { user, isFacilitator } = useAuth();
+  const [userName, setUserName] = useState(defaultUserName || user?.displayName || '');
   const [displayTitle, setDisplayTitle] = useState(sessionTitle || `Majlis (${roomId})`);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [micVolume, setMicVolume] = useState(0);
-  const [isHost, setIsHost] = useState(isHostDefault);
+  const [isHost, setIsHost] = useState(isHostDefault && isFacilitator);
+  const [showHostNotice, setShowHostNotice] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -97,15 +102,25 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
     return cleanup;
   }, [stream, isMicOn]);
 
+  const handleToggleHostMode = () => {
+    if (!isFacilitator) {
+      setShowHostNotice(true);
+      setIsHost(false);
+    } else {
+      setIsHost(!isHost);
+      setShowHostNotice(false);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = userName.trim() || 'Member';
+    const finalName = userName.trim() || (isHost ? 'Facilitator' : 'Seeker');
     localStorage.setItem('infinitymeet_username', finalName);
 
     onEnterMeeting({
       roomId: roomId.trim().toLowerCase(),
       userName: finalName,
-      isHost,
+      isHost: isHost && isFacilitator,
       stream,
       isMuted: !isMicOn,
       isVideoOff: !isCameraOn,
@@ -193,11 +208,51 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           </button>
         </div>
 
+        {/* Host Mode Role Toggle */}
+        <div className="p-3 bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5">
+              <Crown className={`w-3.5 h-3.5 ${isHost ? 'text-[#D4AF37]' : 'text-[#8E7E73]'}`} />
+              <span className="font-semibold text-[#3C230B]">Enter as Facilitator</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleHostMode}
+              className={`w-9 h-5 rounded-full relative flex items-center transition-colors px-0.5 ${
+                isHost ? 'bg-[#3C230B]' : 'bg-[#D9D0C3]'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white shadow transform transition-transform ${
+                  isHost ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {showHostNotice && !isFacilitator && (
+            <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-lg text-[11px] text-[#3C230B] space-y-1.5">
+              <p>
+                Facilitator role is enabled on recognized moderator accounts.
+              </p>
+              {onOpenAuthModal && (
+                <button
+                  type="button"
+                  onClick={onOpenAuthModal}
+                  className="text-xs font-bold text-[#3C230B] underline flex items-center gap-1"
+                >
+                  <Key className="w-3 h-3 text-[#D4AF37]" /> Sign in with Moderator Account
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 pt-1 border-t border-[#E6DFD5]">
           <div>
             <label className="text-xs font-semibold text-[#3C230B] block mb-1">
-              Your Name
+              Your Display Name
             </label>
             <input
               type="text"
