@@ -83,7 +83,7 @@ export default function App() {
   } | null>(null);
 
   // Live ongoing majalis fetched and synced via WebSocket & REST
-  const { activeMajalis } = useActiveMajalis(!!activeMeeting);
+  const { activeMajalis, addOptimisticMajlis } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
     fetchAppConfig();
@@ -159,6 +159,20 @@ export default function App() {
 
   const handleStartNewSession = (newSession: MajlisSession) => {
     setIsStartModalOpen(false);
+
+    // Optimistically add to active list
+    addOptimisticMajlis(newSession);
+
+    // Register on server
+    fetch('/api/create-majlis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roomId: newSession.roomId,
+        title: newSession.title,
+        hostName: newSession.hostName,
+      }),
+    }).catch((e) => console.warn('Room registration notice:', e));
 
     setPreJoinTarget({
       roomId: newSession.roomId,

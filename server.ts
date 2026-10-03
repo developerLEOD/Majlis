@@ -32,25 +32,40 @@ interface Room {
   isRecording: boolean;
   participants: Map<string, Participant>;
   createdAt: number;
+  isPermanent?: boolean;
 }
 
 const rooms = new Map<string, Room>();
 
-function broadcastActiveRooms() {
-  const activeList = Array.from(rooms.values())
-    .filter((r) => r.participants.size > 0)
-    .map((r) => ({
-      id: `live_${r.id}`,
-      roomId: r.id,
-      title: r.title || 'Live Majlis',
-      hostName: r.hostName || 'Facilitator',
-      scheduledAt: 'Happening Now',
-      status: 'live' as const,
-      participantCount: r.participants.size,
-      startedAt: r.createdAt,
-      locked: r.locked,
-    }));
+// Seed permanent featured live session
+rooms.set('quran-tafsir', {
+  id: 'quran-tafsir',
+  title: 'The Exegesis of the Noble Quran (Tafsir)',
+  hostId: 'shaykh-abdullah',
+  hostName: 'Shaykh Abdullah',
+  locked: false,
+  isRecording: false,
+  participants: new Map(),
+  createdAt: Date.now() - 1000 * 60 * 15,
+  isPermanent: true,
+});
 
+function getActiveRoomsList() {
+  return Array.from(rooms.values()).map((r) => ({
+    id: `live_${r.id}`,
+    roomId: r.id,
+    title: r.title || 'Live Majlis',
+    hostName: r.hostName || 'Facilitator',
+    scheduledAt: 'Happening Now',
+    status: 'live' as const,
+    participantCount: Math.max(r.participants.size, r.isPermanent ? 1 : r.participants.size),
+    startedAt: r.createdAt,
+    locked: r.locked,
+  }));
+}
+
+function broadcastActiveRooms() {
+  const activeList = getActiveRoomsList();
   const payload = JSON.stringify({
     type: 'active-majalis-update',
     activeMajalis: activeList,
@@ -86,20 +101,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'get-active-majalis': {
-          const activeList = Array.from(rooms.values())
-            .filter((r) => r.participants.size > 0)
-            .map((r) => ({
-              id: `live_${r.id}`,
-              roomId: r.id,
-              title: r.title || 'Live Majlis',
-              hostName: r.hostName || 'Facilitator',
-              scheduledAt: 'Happening Now',
-              status: 'live' as const,
-              participantCount: r.participants.size,
-              startedAt: r.createdAt,
-              locked: r.locked,
-            }));
-
+          const activeList = getActiveRoomsList();
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({
               type: 'active-majalis-update',
@@ -388,7 +390,11 @@ wss.on('connection', (ws: WebSocket) => {
             type: 'session-ended',
             message: 'The facilitator has concluded this Majlis session.',
           });
-          rooms.delete(currentRoomId);
+          if (!room.isPermanent) {
+            rooms.delete(currentRoomId);
+          } else {
+            room.participants.clear();
+          }
           broadcastActiveRooms();
           break;
         }
@@ -432,7 +438,7 @@ wss.on('connection', (ws: WebSocket) => {
           }
         }
 
-        if (room.participants.size === 0) {
+        if (room.participants.size === 0 && !room.isPermanent) {
           rooms.delete(currentRoomId);
         }
 
@@ -470,7 +476,7 @@ function broadcastToRoom(roomId: string, excludeUserId: string | null, payload: 
   }
 }
 
-// REST health check and room check API
+// REST APIs
 app.use(express.json());
 
 app.get('/api/config', (req, res) => {
@@ -493,20 +499,35 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/active-majalis', (req, res) => {
-  const activeList = Array.from(rooms.values())
-    .filter((r) => r.participants.size > 0)
-    .map((r) => ({
-      id: `live_${r.id}`,
-      roomId: r.id,
-      title: r.title || 'Live Majlis',
-      hostName: r.hostName || 'Facilitator',
-      scheduledAt: 'Happening Now',
-      status: 'live' as const,
-      participantCount: r.participants.size,
-      startedAt: r.createdAt,
-      locked: r.locked,
-    }));
-  res.json({ activeMajalis: activeList });
+  res.json({ activeMajalis: getActiveRoomsList() });
+});
+
+app.post('/api/create-majlis', (req, res) => {
+  const { roomId, title, hostName } = req.body;
+  if (!roomId) {
+    return res.status(400).json({ error: 'roomId is required' });
+  }
+
+  let room = rooms.get(roomId);
+  if (!room) {
+    room = {
+      id: roomId,
+      title: title || 'Live Majlis',
+      hostId: 'host_' + Date.now(),
+      hostName: hostName || 'Facilitator',
+      locked: false,
+      isRecording: false,
+      participants: new Map(),
+      createdAt: Date.now(),
+    };
+    rooms.set(roomId, room);
+  } else {
+    if (title) room.title = title;
+    if (hostName) room.hostName = hostName;
+  }
+
+  broadcastActiveRooms();
+  res.json({ success: true, room: { id: room.id, title: room.title, hostName: room.hostName } });
 });
 
 app.get('/api/room/:roomId', (req, res) => {

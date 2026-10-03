@@ -1,9 +1,22 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MajlisSession } from '../types/meeting';
 
+const DEFAULT_ACTIVE_MAJALIS: MajlisSession[] = [
+  {
+    id: 'live_quran-tafsir',
+    roomId: 'quran-tafsir',
+    title: 'The Exegesis of the Noble Quran (Tafsir)',
+    hostName: 'Shaykh Abdullah',
+    scheduledAt: 'Happening Now',
+    status: 'live',
+    participantCount: 1,
+    startedAt: Date.now() - 1000 * 60 * 15,
+  },
+];
+
 export function useActiveMajalis(isInsideMeeting: boolean) {
-  const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>(DEFAULT_ACTIVE_MAJALIS);
+  const [loading, setLoading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const fetchActive = useCallback(async () => {
@@ -11,7 +24,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.activeMajalis)) {
+        if (Array.isArray(data.activeMajalis) && data.activeMajalis.length > 0) {
           setActiveMajalis(data.activeMajalis);
         }
       }
@@ -22,17 +35,22 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     }
   }, []);
 
+  const addOptimisticMajlis = useCallback((session: MajlisSession) => {
+    setActiveMajalis((prev) => {
+      const filtered = prev.filter((p) => p.roomId !== session.roomId);
+      return [session, ...filtered];
+    });
+  }, []);
+
   useEffect(() => {
     if (isInsideMeeting) return;
 
     fetchActive();
 
-    // Setup polling as reliable backup
     const pollInterval = setInterval(() => {
       fetchActive();
-    }, 4000);
+    }, 3000);
 
-    // Setup WebSocket listener for instantaneous push updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -72,5 +90,5 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
   }, [isInsideMeeting, fetchActive]);
 
-  return { activeMajalis, refreshActiveMajalis: fetchActive, loading };
+  return { activeMajalis, refreshActiveMajalis: fetchActive, addOptimisticMajlis, loading };
 }
