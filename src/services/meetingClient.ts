@@ -93,6 +93,7 @@ export class MeetingClient {
   private peerIdToUserId = new Map<string, string>();
   private userIdToPeerId = new Map<string, string>();
   private syncTimer: number | null = null;
+  private localChannel: BroadcastChannel | null = null;
 
   public roomId: string = '';
   public userId: string = '';
@@ -121,8 +122,59 @@ export class MeetingClient {
     this.peerIdToUserId.clear();
     this.userIdToPeerId.clear();
 
+    // 1. Same-device / multi-tab instant discovery via BroadcastChannel
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        this.localChannel = new BroadcastChannel(`twl_majlis_${this.roomId}`);
+        this.localChannel.onmessage = (event) => {
+          const data = event.data;
+          if (!data || data.senderId === this.userId) return;
+
+          if (data.type === 'presence') {
+            const remoteUser = data.user;
+            if (remoteUser && remoteUser.id && remoteUser.id !== this.userId) {
+              const existing = this.participants.get(remoteUser.id);
+              const participant: Participant = {
+                id: remoteUser.id,
+                name: remoteUser.name || 'Member',
+                isHost: !!remoteUser.isHost,
+                isLocal: false,
+                isMuted: !!remoteUser.isMuted,
+                isVideoOff: !!remoteUser.isVideoOff,
+                isScreenSharing: !!remoteUser.isScreenSharing,
+                handRaised: !!remoteUser.handRaised,
+                stream: existing?.stream,
+              };
+              this.participants.set(remoteUser.id, participant);
+              if (!existing) {
+                this.events.onUserJoined(participant);
+              } else {
+                this.events.onUserStatusChanged({
+                  userId: remoteUser.id,
+                  isMuted: participant.isMuted,
+                  isVideoOff: participant.isVideoOff,
+                  isScreenSharing: participant.isScreenSharing,
+                  handRaised: participant.handRaised,
+                });
+              }
+            }
+          } else if (data.type === 'leave') {
+            if (data.userId && data.userId !== this.userId && this.participants.has(data.userId)) {
+              const existing = this.participants.get(data.userId);
+              this.participants.delete(data.userId);
+              this.events.onUserLeft(data.userId, existing?.name);
+            }
+          }
+        };
+
+        this.broadcastLocalPresence();
+      } catch (e) {
+        console.warn('BroadcastChannel error:', e);
+      }
+    }
+
     try {
-      // Connect to serverless WebRTC room with dedicated, deterministic relays
+      // 2. Connect to serverless WebRTC room with dedicated, deterministic relays
       this.room = joinRoom(
         {
           appId: 'the-wisdom-lounge-majlis',
@@ -173,11 +225,27 @@ export class MeetingClient {
         this.events.onRemoteStream(targetUserId, stream);
       };
 
-      // When a peer connects to our room
+      // When a peer connects to our room at WebRTC layer
       this.room.onPeerJoin = (peerId: string) => {
+        // Immediately ensure the peer is counted & rendered without waiting for JSON action
+        if (!this.peerIdToUserId.has(peerId) && !this.participants.has(peerId)) {
+          const tempParticipant: Participant = {
+            id: peerId,
+            name: 'Member',
+            isHost: false,
+            isLocal: false,
+            isMuted: false,
+            isVideoOff: false,
+            isScreenSharing: false,
+            handRaised: false,
+          };
+          this.participants.set(peerId, tempParticipant);
+          this.events.onUserJoined(tempParticipant);
+        }
+
         // Broadcast profile immediately and again after a short delay
         this.broadcastMyProfile(peerId);
-        setTimeout(() => this.broadcastMyProfile(peerId), 500);
+        setTimeout(() => this.broadcastMyProfile(peerId), 400);
       };
 
       // Handle received peer profile
@@ -254,7 +322,29 @@ export class MeetingClient {
       this.syncTimer = window.setInterval(() => {
         if (!this.room || this.isClosed) return;
         try {
+          // Check all connected WebRTC peers from Trystero
+          const peers = this.room.getPeers();
+          for (const peerId of Object.keys(peers)) {
+            const mappedUserId = this.peerIdToUserId.get(peerId);
+            const targetId = mappedUserId || peerId;
+            if (targetId !== this.userId && !this.participants.has(targetId)) {
+              const tempParticipant: Participant = {
+                id: targetId,
+                name: 'Member',
+                isHost: false,
+                isLocal: false,
+                isMuted: false,
+                isVideoOff: false,
+                isScreenSharing: false,
+                handRaised: false,
+              };
+              this.participants.set(targetId, tempParticipant);
+              this.events.onUserJoined(tempParticipant);
+            }
+          }
+
           this.broadcastMyProfile();
+          this.broadcastLocalPresence();
         } catch (e) {
           // ignore
         }
@@ -332,6 +422,27 @@ export class MeetingClient {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('Failed to initialize serverless WebRTC room:', err);
       this.events.onError(`Connection error: ${errorMessage}`);
+    }
+  }
+
+  private broadcastLocalPresence() {
+    if (!this.localChannel) return;
+    try {
+      this.localChannel.postMessage({
+        type: 'presence',
+        senderId: this.userId,
+        user: {
+          id: this.userId,
+          name: this.userName,
+          isHost: this.isHost,
+          isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+          isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+          isScreenSharing: false,
+          handRaised: false,
+        },
+      });
+    } catch (e) {
+      // ignore
     }
   }
 
@@ -472,11 +583,24 @@ export class MeetingClient {
       clearInterval(this.syncTimer);
       this.syncTimer = null;
     }
+    if (this.localChannel) {
+      try {
+        this.localChannel.postMessage({
+          type: 'leave',
+          senderId: this.userId,
+          userId: this.userId,
+        });
+        this.localChannel.close();
+      } catch (e) {
+        // ignore
+      }
+      this.localChannel = null;
+    }
     if (this.room) {
       try {
         this.room.leave();
       } catch (e) {
-        console.warn('Error leaving room:', e);
+        // ignore
       }
       this.room = null;
     }

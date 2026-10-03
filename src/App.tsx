@@ -77,6 +77,7 @@ export default function App() {
   const [activeMeeting, setActiveMeeting] = useState<{
     roomId: string;
     title: string;
+    userName: string;
     isHost: boolean;
     stream: MediaStream | null;
     isMuted: boolean;
@@ -127,12 +128,16 @@ export default function App() {
     isVideoOff: boolean;
   }) => {
     const title = preJoinTarget?.title || 'Majlis';
+    const chosenName = params.userName.trim() || userName;
 
+    setUserName(chosenName);
+    localStorage.setItem('infinitymeet_username', chosenName);
     setPreJoinTarget(null);
 
     setActiveMeeting({
       roomId: params.roomId,
       title,
+      userName: chosenName,
       isHost: params.isHost,
       stream: params.stream,
       isMuted: params.isMuted,
@@ -168,7 +173,7 @@ export default function App() {
       <MeetingRoom
         roomId={activeMeeting.roomId}
         userId={userId}
-        userName={userName}
+        userName={activeMeeting.userName || userName}
         sessionTitle={activeMeeting.title}
         isHost={activeMeeting.isHost}
         initialStream={activeMeeting.stream}

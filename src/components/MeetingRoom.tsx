@@ -600,6 +600,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          {/* Participant Count in Header */}
+          <button
+            onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1410] hover:bg-[#241710] border border-[#3C230B] rounded-lg text-[#E0C2A6] text-xs font-mono transition"
+            title="View participants in Majlis"
+          >
+            <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
+            <span className="font-bold text-[#FFFCF5]">{participants.length}</span>
+            <span className="hidden sm:inline text-[11px] text-[#A8988B]">in room</span>
+          </button>
+
           {/* Duration & Status */}
           <div className="flex items-center gap-2 text-[#E0C2A6] font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -699,7 +710,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   ? 'grid-cols-1 max-w-4xl h-full'
                   : participants.length === 2
                   ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl h-full'
-                  : participants.length <= 4
+                  : participants.length === 3
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl h-full'
+                  : participants.length === 4
                   ? 'grid-cols-2 grid-rows-2 max-w-6xl h-full'
                   : 'grid-cols-2 sm:grid-cols-3 max-w-7xl h-full'
               }`}
@@ -853,12 +866,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Participants */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className={`p-2.5 rounded-xl border text-xs transition relative ${
-              activeDrawer === 'participants' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B]'
+            className={`p-2.5 rounded-xl border text-xs transition relative flex items-center justify-center ${
+              activeDrawer === 'participants' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50 shadow-sm' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
             }`}
-            title="Participants"
+            title="Participants List"
           >
             <Users className="w-4 h-4" />
+            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-[#D4AF37] text-[#241710] rounded-full text-[10px] font-bold flex items-center justify-center font-mono shadow-xs border border-[#1A1410]">
+              {participants.length}
+            </span>
           </button>
 
           {/* Chat */}

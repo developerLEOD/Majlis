@@ -8,6 +8,7 @@
         "@google/genai": "^2.4.0",
         "@tailwindcss/vite": "^4.3.3",
         "@trystero-p2p/mqtt": "^0.25.4",
+        "@trystero-p2p/torrent": "^0.25.4",
         "@vitejs/plugin-react": "^6.1.1",
         "dotenv": "^17.2.3",
         "express": "^4.21.2",
@@ -189,6 +190,8 @@
     "@trystero-p2p/mqtt": ["@trystero-p2p/mqtt@0.25.4", "", { "dependencies": { "@trystero-p2p/core": "0.25.4", "mqtt": "^5.15.2" } }, "sha512-wy13y2+nd2gY4yPNjQ+8hogy9POkegbBpEWGwUJzs0eETRtI5alL2QM+WMVk8zVOruzzGfPjx/xmot/F8MjODg=="],
 
     "@trystero-p2p/nostr": ["@trystero-p2p/nostr@0.25.4", "", { "dependencies": { "@noble/secp256k1": "^3.1.0", "@trystero-p2p/core": "0.25.4" } }, "sha512-QDox1VVHl0ro/CLfQVUtMS9EQbtJhQM7CCsO4SGv9KrPBT+x3bmOqQ4Y6iugsLzQ6sW+a2cwUTxjDRz/BywqMg=="],
+
+    "@trystero-p2p/torrent": ["@trystero-p2p/torrent@0.25.4", "", { "dependencies": { "@trystero-p2p/core": "0.25.4" } }, "sha512-HjC1V9+70j2fhqK26BzDhjJM5A5toLGLgGgS/jZAq+7ufA8HxUHRE4qPU8kn1Wu0E0K7cMGzpWcMCcbVB7AzZA=="],
 
     "@types/body-parser": ["@types/body-parser@1.19.6", "", { "dependencies": { "@types/connect": "*", "@types/node": "*" } }, "sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g=="],
 
