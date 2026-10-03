@@ -341,7 +341,7 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.GET, path);
+      handleFirestoreError(err, OperationType.LIST, path);
     }
   );
 }

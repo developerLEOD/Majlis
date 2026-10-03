@@ -58,7 +58,7 @@ export const auth = getAuth(app);
 // Validate connection
 async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'rooms', '_test_init'));
+    await getDocFromServer(doc(db, 'rooms', 'test-connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Firestore offline status:', error);
