@@ -518,11 +518,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   };
 
   const copyMeetingLink = async () => {
-    const inviteUrl = buildMeetingInviteUrl(roomId, appUrl);
+    const inviteUrl = buildMeetingInviteUrl(roomId, currentTitle, appUrl);
     const success = await copyTextToClipboard(inviteUrl);
     if (success) {
       setCopiedLink(true);
-      showNotification('Link copied');
+      showNotification('Link copied with session topic');
       setTimeout(() => setCopiedLink(false), 2000);
     } else {
       setShowInviteModal(true);
@@ -972,7 +972,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         <RecordingModal recording={lastFinishedRecording} onClose={() => setLastFinishedRecording(null)} />
       )}
       {showInviteModal && (
-        <InviteModal roomId={roomId} onClose={() => setShowInviteModal(false)} />
+        <InviteModal roomId={roomId} title={currentTitle} onClose={() => setShowInviteModal(false)} />
       )}
       {showSettingsModal && (
         <SettingsModal

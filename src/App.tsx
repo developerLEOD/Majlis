@@ -13,7 +13,12 @@ import { StartMajlisModal } from './components/majalis/StartMajlisModal';
 import { PreJoinScreen } from './components/prejoin/PreJoinScreen';
 import { MeetingRoom } from './components/MeetingRoom';
 import { MajlisSession, NavTab } from './types/meeting';
-import { fetchAppConfig, getRoomCodeFromCurrentLocation } from './utils/urlHelper';
+import {
+  fetchAppConfig,
+  getRoomInfoFromCurrentLocation,
+  saveRoomTitleLocally,
+  getRoomTitleLocally,
+} from './utils/urlHelper';
 import { useActiveMajalis } from './hooks/useActiveMajalis';
 
 export default function App() {
@@ -33,11 +38,12 @@ export default function App() {
     title?: string;
     isHost?: boolean;
   } | null>(() => {
-    const code = getRoomCodeFromCurrentLocation();
-    if (code) {
+    const info = getRoomInfoFromCurrentLocation();
+    if (info && info.roomId) {
+      const localTitle = getRoomTitleLocally(info.roomId);
       return {
-        roomId: code,
-        title: `Majlis (${code})`,
+        roomId: info.roomId,
+        title: info.title || localTitle || `Majlis (${info.roomId})`,
         isHost: false,
       };
     }
@@ -62,12 +68,13 @@ export default function App() {
     fetchAppConfig();
 
     const handleLocationChange = () => {
-      const code = getRoomCodeFromCurrentLocation();
-      if (code && !activeMeeting) {
-        const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === code.toLowerCase());
+      const info = getRoomInfoFromCurrentLocation();
+      if (info && info.roomId && !activeMeeting) {
+        const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === info.roomId.toLowerCase());
+        const localTitle = getRoomTitleLocally(info.roomId);
         setPreJoinTarget({
-          roomId: code,
-          title: existing?.title || `Majlis (${code})`,
+          roomId: info.roomId,
+          title: info.title || existing?.title || localTitle || `Majlis (${info.roomId})`,
           isHost: false,
         });
       }
@@ -88,7 +95,8 @@ export default function App() {
 
   const handleInitiateJoin = (roomId: string, title?: string) => {
     const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === roomId.toLowerCase());
-    const resolvedTitle = title || existing?.title || `Majlis (${roomId})`;
+    const localTitle = getRoomTitleLocally(roomId);
+    const resolvedTitle = title || existing?.title || localTitle || `Majlis (${roomId})`;
     setPreJoinTarget({
       roomId,
       title: resolvedTitle,
@@ -122,7 +130,7 @@ export default function App() {
       isVideoOff: params.isVideoOff,
     });
 
-    const newUrl = `${window.location.pathname}?room=${params.roomId}`;
+    const newUrl = `${window.location.pathname}?room=${params.roomId}&title=${encodeURIComponent(title)}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
 
@@ -136,6 +144,9 @@ export default function App() {
 
   const handleStartNewSession = (newSession: MajlisSession) => {
     setIsStartModalOpen(false);
+
+    // Save locally for Vercel / multi-tab sessions
+    saveRoomTitleLocally(newSession.roomId, newSession.title);
 
     // Optimistically add to active list
     addOptimisticMajlis(newSession);

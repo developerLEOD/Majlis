@@ -1,5 +1,5 @@
 /**
- * URL and link sharing utilities for InfinityMeet
+ * URL, link sharing, and session metadata utilities for InfinityMeet
  */
 
 // Cache for public app URL retrieved from backend
@@ -30,7 +30,6 @@ export function getCachedPublicAppUrl(): string {
  * Robust clipboard copy with fallback that works inside iframes and restricted contexts
  */
 export async function copyTextToClipboard(text: string): Promise<boolean> {
-  // First attempt: Modern Clipboard API
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(text);
@@ -40,12 +39,10 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     }
   }
 
-  // Fallback: document.execCommand('copy') via temporary textarea
   try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.setAttribute('readonly', '');
-    // Ensure invisible and non-scrolling
     textArea.style.position = 'fixed';
     textArea.style.top = '-9999px';
     textArea.style.left = '-9999px';
@@ -66,69 +63,107 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Extracts room code from any URL format:
- * - ?room=abc-def-ghi
- * - ?r=abc-def-ghi
- * - #room=abc-def-ghi
- * - #abc-def-ghi
- * - /room/abc-def-ghi
+ * Extracts room code and optional title from current URL parameters / hash
  */
-export function getRoomCodeFromCurrentLocation(): string {
-  if (typeof window === 'undefined') return '';
+export function getRoomInfoFromCurrentLocation(): { roomId: string; title?: string } | null {
+  if (typeof window === 'undefined') return null;
 
   const clean = (val: string) => val.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
 
-  // 1. Search Query Parameters
+  // 1. Search Query Parameters: ?room=123&title=13
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get('room') || params.get('r');
+  const titleFromQuery = params.get('title') || params.get('t') || params.get('topic');
+
   if (fromQuery) {
-    return clean(fromQuery);
+    return {
+      roomId: clean(fromQuery),
+      title: titleFromQuery ? titleFromQuery.trim() : undefined,
+    };
   }
 
-  // 2. Hash Fragment
+  // 2. Hash Fragment: #room=123&title=13 or #123
   if (window.location.hash) {
     const hashContent = window.location.hash.replace(/^#\/?/, '');
-    if (hashContent.startsWith('room=')) {
-      return clean(hashContent.replace('room=', ''));
+    const hashParams = new URLSearchParams(hashContent);
+    const fromHash = hashParams.get('room') || hashParams.get('r');
+    const titleFromHash = hashParams.get('title') || hashParams.get('t');
+
+    if (fromHash) {
+      return {
+        roomId: clean(fromHash),
+        title: titleFromHash ? titleFromHash.trim() : undefined,
+      };
     }
-    // If hash looks like a room code (3-20 chars alphanumeric with dashes)
+
     if (/^[a-z0-9-]+$/i.test(hashContent) && hashContent.length >= 3) {
-      return clean(hashContent);
+      return { roomId: clean(hashContent) };
     }
   }
 
   // 3. Pathname: /room/abc-def-ghi
   const pathMatch = window.location.pathname.match(/\/room\/([a-z0-9-]+)/i);
   if (pathMatch && pathMatch[1]) {
-    return clean(pathMatch[1]);
+    return { roomId: clean(pathMatch[1]) };
   }
 
-  return '';
+  return null;
+}
+
+export function getRoomCodeFromCurrentLocation(): string {
+  const info = getRoomInfoFromCurrentLocation();
+  return info ? info.roomId : '';
 }
 
 /**
- * Build clean, shareable invite URL
+ * Build clean, shareable invite URL with embedded title for cross-platform synchronization
  */
-export function buildMeetingInviteUrl(roomId: string, forcedBaseUrl?: string): string {
+export function buildMeetingInviteUrl(
+  roomId: string,
+  title?: string,
+  forcedBaseUrl?: string
+): string {
   const cleanRoom = roomId.trim().toLowerCase();
   const baseUrl = forcedBaseUrl || cachedPublicAppUrl;
 
+  const params = new URLSearchParams();
+  params.set('room', cleanRoom);
+  if (title && title.trim() && !title.startsWith('Majlis (') && title !== 'Live Majlis') {
+    params.set('title', title.trim());
+  }
+  const queryString = params.toString();
+
   if (baseUrl && !baseUrl.includes('localhost')) {
     const cleanBase = baseUrl.replace(/\/+$/, '');
-    return `${cleanBase}/?room=${encodeURIComponent(cleanRoom)}`;
+    return `${cleanBase}/?${queryString}`;
   }
 
-  // If current origin is not localhost, use it
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-    if (origin && !origin.includes('localhost')) {
-      const pathname = window.location.pathname.replace(/\/+$/, '');
-      return `${origin}${pathname}/?room=${encodeURIComponent(cleanRoom)}`;
-    }
-
-    // If on localhost, still build proper URL
-    return `${window.location.origin}/?room=${encodeURIComponent(cleanRoom)}`;
+    const pathname = window.location.pathname.replace(/\/+$/, '');
+    return `${origin}${pathname}/?${queryString}`;
   }
 
-  return `/?room=${encodeURIComponent(cleanRoom)}`;
+  return `/?${queryString}`;
+}
+
+/**
+ * Local cache for room titles to sync across Vercel / serverless sessions
+ */
+export function saveRoomTitleLocally(roomId: string, title: string): void {
+  if (typeof window === 'undefined' || !roomId || !title) return;
+  try {
+    localStorage.setItem(`infinitymeet_title_${roomId.toLowerCase()}`, title.trim());
+  } catch (e) {
+    // ignore
+  }
+}
+
+export function getRoomTitleLocally(roomId: string): string | null {
+  if (typeof window === 'undefined' || !roomId) return null;
+  try {
+    return localStorage.getItem(`infinitymeet_title_${roomId.toLowerCase()}`);
+  } catch (e) {
+    return null;
+  }
 }

@@ -1,4 +1,5 @@
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
+import { saveRoomTitleLocally, getRoomTitleLocally } from '../utils/urlHelper';
 
 export interface MeetingClientEvents {
   onRoomJoined: (data: {
@@ -49,17 +50,20 @@ const RTC_CONFIG: RTCConfiguration = {
 export class MeetingClient {
   private ws: WebSocket | null = null;
   private peerConnections = new Map<string, RTCPeerConnection>();
+  private dataChannels = new Map<string, RTCDataChannel>();
   private queuedCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localStream: MediaStream | null = null;
   private events: MeetingClientEvents;
   private isClosed = false;
   private isLocked = false;
   private pingInterval: number | null = null;
+  private broadcastChannel: BroadcastChannel | null = null;
 
   public roomId: string = '';
   public userId: string = '';
   public userName: string = '';
   public isHost: boolean = false;
+  public sessionTitle: string = '';
 
   constructor(events: MeetingClientEvents) {
     this.events = events;
@@ -82,6 +86,37 @@ export class MeetingClient {
     this.localStream = localStream;
     this.isClosed = false;
 
+    // Resolve initial title
+    const localTitle = getRoomTitleLocally(this.roomId);
+    this.sessionTitle = (title && !title.startsWith('Majlis (')) ? title : (localTitle || title || 'Live Majlis');
+
+    if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
+      saveRoomTitleLocally(this.roomId, this.sessionTitle);
+    }
+
+    // Set up BroadcastChannel for instant cross-tab / Vercel domain synchronization
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        this.broadcastChannel = new BroadcastChannel(`infinitymeet_room_${this.roomId}`);
+        this.broadcastChannel.onmessage = (e) => {
+          if (e.data?.type === 'room-info' && e.data?.title) {
+            this.sessionTitle = e.data.title;
+            this.events.onRoomInfo?.({ title: e.data.title, hostName: e.data.hostName });
+          }
+        };
+
+        if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
+          this.broadcastChannel.postMessage({
+            type: 'room-info',
+            title: this.sessionTitle,
+            hostName: this.userName,
+          });
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -98,7 +133,7 @@ export class MeetingClient {
           userId: this.userId,
           userName: this.userName,
           isHost: this.isHost,
-          title: title || (isHost ? `${this.userName}'s Majlis` : 'Live Majlis'),
+          title: this.sessionTitle || (isHost ? `${this.userName}'s Majlis` : 'Live Majlis'),
           isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
           isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
         });
@@ -121,24 +156,22 @@ export class MeetingClient {
       };
 
       this.ws.onerror = (err) => {
-        console.warn('WebSocket connection error:', err);
+        console.warn('WebSocket warning:', err);
       };
 
       this.ws.onclose = () => {
         if (!this.isClosed) {
-          console.log('WebSocket closed. Attempting reconnect in 2s...');
+          console.log('WebSocket closed.');
         }
       };
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('Failed to establish WebSocket signaling connection:', err);
-      this.events.onError(`Connection error: ${errorMessage}`);
+    } catch (err) {
+      console.warn('WebSocket connection error:', err);
     }
   }
 
-  private sendWsMessage(payload: object) {
+  private sendWsMessage(msg: object) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+      this.ws.send(JSON.stringify(msg));
     }
   }
 
@@ -149,6 +182,11 @@ export class MeetingClient {
       case 'room-joined': {
         this.isHost = message.isHost;
         this.isLocked = message.locked;
+
+        if (message.title && !message.title.startsWith('Majlis (')) {
+          this.sessionTitle = message.title;
+          saveRoomTitleLocally(this.roomId, message.title);
+        }
 
         const remoteParticipants: Participant[] = (message.participants || []).map((p: any) => ({
           id: p.id,
@@ -167,7 +205,7 @@ export class MeetingClient {
           locked: this.isLocked,
           isRecording: message.isRecording || false,
           participants: remoteParticipants,
-          title: message.title,
+          title: this.sessionTitle || message.title,
           hostName: message.hostName,
         });
 
@@ -188,6 +226,10 @@ export class MeetingClient {
       }
 
       case 'room-info-update': {
+        if (message.title && !message.title.startsWith('Majlis (')) {
+          this.sessionTitle = message.title;
+          saveRoomTitleLocally(this.roomId, message.title);
+        }
         if (this.events.onRoomInfo) {
           this.events.onRoomInfo({
             title: message.title,
@@ -215,7 +257,6 @@ export class MeetingClient {
         };
 
         this.events.onUserJoined(participant);
-        // The newly joined user will send an offer to us, so we prepare to receive it
         break;
       }
 
@@ -301,6 +342,42 @@ export class MeetingClient {
     }
   }
 
+  private setupDataChannel(peerId: string, dc: RTCDataChannel) {
+    this.dataChannels.set(peerId, dc);
+
+    dc.onopen = () => {
+      // Sync room title directly peer-to-peer over WebRTC
+      if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
+        try {
+          dc.send(JSON.stringify({
+            type: 'sync-room-title',
+            title: this.sessionTitle,
+            hostName: this.userName,
+          }));
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    dc.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'sync-room-title' && data.title) {
+          this.sessionTitle = data.title;
+          saveRoomTitleLocally(this.roomId, data.title);
+          this.events.onRoomInfo?.({ title: data.title, hostName: data.hostName });
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    dc.onclose = () => {
+      this.dataChannels.delete(peerId);
+    };
+  }
+
   private async createPeerConnection(peerId: string, isInitiator: boolean): Promise<RTCPeerConnection> {
     if (this.peerConnections.has(peerId)) {
       return this.peerConnections.get(peerId)!;
@@ -308,6 +385,19 @@ export class MeetingClient {
 
     const pc = new RTCPeerConnection(RTC_CONFIG);
     this.peerConnections.set(peerId, pc);
+
+    if (isInitiator) {
+      try {
+        const dc = pc.createDataChannel('infinitymeet_meta', { ordered: true });
+        this.setupDataChannel(peerId, dc);
+      } catch (e) {
+        console.warn('Error creating data channel:', e);
+      }
+    } else {
+      pc.ondatachannel = (event) => {
+        this.setupDataChannel(peerId, event.channel);
+      };
+    }
 
     // Add local tracks if available
     if (this.localStream) {
@@ -412,14 +502,14 @@ export class MeetingClient {
       }
     } else if (signalData.candidate) {
       const pc = this.peerConnections.get(senderId);
-      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+      if (pc && pc.remoteDescription) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(signalData.candidate));
         } catch (e) {
           console.warn('Error adding ICE candidate:', e);
         }
       } else {
-        // Queue candidate until remote description is set
+        // Queue until remoteDescription is set
         const queued = this.queuedCandidates.get(senderId) || [];
         queued.push(signalData.candidate);
         this.queuedCandidates.set(senderId, queued);
@@ -427,39 +517,29 @@ export class MeetingClient {
     }
   }
 
-  private closePeerConnection(peerId: string) {
-    const pc = this.peerConnections.get(peerId);
-    if (pc) {
-      try {
-        pc.close();
-      } catch (e) {
-        // ignore
-      }
-      this.peerConnections.delete(peerId);
-    }
-    this.queuedCandidates.delete(peerId);
-  }
+  public setLocalStream(newStream: MediaStream) {
+    this.localStream = newStream;
 
-  public setLocalStream(stream: MediaStream | null) {
-    this.localStream = stream;
-    if (!stream) return;
-
-    // Update tracks in all active peer connections
+    // Replace audio and video tracks on existing peer connections
     for (const pc of this.peerConnections.values()) {
       const senders = pc.getSenders();
 
-      stream.getTracks().forEach((track) => {
-        const sender = senders.find((s) => s.track && s.track.kind === track.kind);
-        if (sender) {
-          sender.replaceTrack(track).catch((e) => console.warn('Error replacing track:', e));
-        } else {
-          try {
-            pc.addTrack(track, stream);
-          } catch (e) {
-            console.warn('Error adding track to existing PC:', e);
-          }
+      const audioTrack = newStream.getAudioTracks()[0];
+      const videoTrack = newStream.getVideoTracks()[0];
+
+      if (audioTrack) {
+        const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
+        if (audioSender) {
+          audioSender.replaceTrack(audioTrack).catch(console.warn);
         }
-      });
+      }
+
+      if (videoTrack) {
+        const videoSender = senders.find((s) => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(videoTrack).catch(console.warn);
+        }
+      }
     }
   }
 
@@ -472,7 +552,6 @@ export class MeetingClient {
   }
 
   public sendReaction(emoji: string) {
-    if (!emoji) return;
     this.sendWsMessage({
       type: 'reaction',
       emoji,
@@ -487,11 +566,6 @@ export class MeetingClient {
   }) {
     this.sendWsMessage({
       type: 'status-update',
-      ...status,
-    });
-
-    this.events.onUserStatusChanged({
-      userId: this.userId,
       ...status,
     });
   }
@@ -535,6 +609,28 @@ export class MeetingClient {
     });
   }
 
+  private closePeerConnection(peerId: string) {
+    const pc = this.peerConnections.get(peerId);
+    if (pc) {
+      try {
+        pc.close();
+      } catch (e) {
+        // ignore
+      }
+      this.peerConnections.delete(peerId);
+    }
+
+    const dc = this.dataChannels.get(peerId);
+    if (dc) {
+      try {
+        dc.close();
+      } catch (e) {
+        // ignore
+      }
+      this.dataChannels.delete(peerId);
+    }
+  }
+
   public leave() {
     this.isClosed = true;
 
@@ -543,10 +639,20 @@ export class MeetingClient {
       this.pingInterval = null;
     }
 
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.close();
+      } catch (e) {
+        // ignore
+      }
+      this.broadcastChannel = null;
+    }
+
     for (const peerId of this.peerConnections.keys()) {
       this.closePeerConnection(peerId);
     }
     this.peerConnections.clear();
+    this.dataChannels.clear();
     this.queuedCandidates.clear();
 
     if (this.ws) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Copy, ExternalLink, Link, Share2, Users, X } from 'lucide-react';
+import { Check, Copy, Link, Share2, Users, X } from 'lucide-react';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -9,10 +9,11 @@ import {
 
 interface InviteModalProps {
   roomId: string;
+  title?: string;
   onClose: () => void;
 }
 
-export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => {
+export const InviteModal: React.FC<InviteModalProps> = ({ roomId, title, onClose }) => {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [appUrl, setAppUrl] = useState<string>(getCachedPublicAppUrl());
@@ -30,7 +31,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
     }
   }, []);
 
-  const inviteUrl = buildMeetingInviteUrl(roomId, appUrl);
+  const inviteUrl = buildMeetingInviteUrl(roomId, title, appUrl);
 
   const handleCopyLink = async () => {
     const success = await copyTextToClipboard(inviteUrl);
@@ -52,8 +53,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Majlis — The Wisdom Lounge',
-          text: `Join the live Majlis on The Wisdom Lounge: ${roomId}`,
+          title: title ? `${title} — The Wisdom Lounge` : 'Majlis — The Wisdom Lounge',
+          text: `Join the live Majlis (${title || roomId}) on The Wisdom Lounge`,
           url: inviteUrl,
         });
       } catch {
@@ -77,6 +78,9 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
               <h3 className="text-base font-bold text-[#3C230B] leading-tight">
                 Invite to Majlis
               </h3>
+              {title && (
+                <p className="text-xs text-[#68594E] font-medium truncate max-w-xs mt-0.5">{title}</p>
+              )}
             </div>
           </div>
           <button
