@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "Live Majlis session metadata and state",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "hostId": { "type": "string", "maxLength": 128 },
+        "hostName": { "type": "string", "maxLength": 128 },
+        "locked": { "type": "boolean" },
+        "isRecording": { "type": "boolean" },
+        "participantCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roomId", "title", "hostId", "hostName"]
+    },
+    "Participant": {
+      "title": "Participant",
+      "description": "Active participant in a Majlis session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "isHost": { "type": "boolean" },
+        "isMuted": { "type": "boolean" },
+        "isVideoOff": { "type": "boolean" },
+        "isScreenSharing": { "type": "boolean" },
+        "handRaised": { "type": "boolean" },
+        "joinedAt": { "type": "number" },
+        "lastSeen": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Signal": {
+      "title": "Signal",
+      "description": "WebRTC SDP / ICE signaling packet for P2P connection",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "maxLength": 128 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "signalData": { "type": "string", "maxLength": 10000 },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["senderId", "targetId", "signalData"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Live chat message within a Majlis session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "isHost": { "type": "boolean" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "senderId", "senderName", "text"]
+    },
+    "Reaction": {
+      "title": "Reaction",
+      "description": "Live emoji reaction sent during meeting",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 128 },
+        "emoji": { "type": "string", "maxLength": 16 },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "senderId", "senderName", "emoji"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Stores live active Majlis rooms"
+    },
+    "/rooms/{roomId}/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/Participant" },
+      "description": "Participants currently present in the room"
+    },
+    "/rooms/{roomId}/signals/{signalId}": {
+      "schema": { "$ref": "#/entities/Signal" },
+      "description": "WebRTC signaling messages between peers"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "In-room chat messages"
+    },
+    "/rooms/{roomId}/reactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/Reaction" },
+      "description": "Live floating emoji reactions"
+    }
+  }
+}

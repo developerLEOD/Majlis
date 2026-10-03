@@ -1,5 +1,6 @@
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
 import { saveRoomTitleLocally, getRoomTitleLocally } from '../utils/urlHelper';
+import { FirebaseMeetingSync } from './firebaseMeetingSync';
 
 export interface MeetingClientEvents {
   onRoomJoined: (data: {
@@ -58,6 +59,7 @@ export class MeetingClient {
   private isLocked = false;
   private pingInterval: number | null = null;
   private broadcastChannel: BroadcastChannel | null = null;
+  private firebaseSync: FirebaseMeetingSync | null = null;
 
   public roomId: string = '';
   public userId: string = '';
@@ -94,7 +96,72 @@ export class MeetingClient {
       saveRoomTitleLocally(this.roomId, this.sessionTitle);
     }
 
-    // Set up BroadcastChannel for instant cross-tab / Vercel domain synchronization
+    // 1. Initialize Firebase Cloud Sync
+    try {
+      this.firebaseSync = new FirebaseMeetingSync(this.roomId, this.userId);
+
+      // Register / update room in Firebase Firestore
+      this.firebaseSync.setRoom({
+        title: this.sessionTitle,
+        hostName: this.userName,
+        hostId: this.userId,
+      });
+
+      // Register participant presence in Firestore
+      this.firebaseSync.setParticipant({
+        id: this.userId,
+        name: this.userName,
+        isHost: this.isHost,
+        isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+        isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+      });
+
+      // Listen to room metadata changes from Firebase
+      this.firebaseSync.subscribeToRoom((roomData) => {
+        if (roomData.title && !roomData.title.startsWith('Majlis (')) {
+          this.sessionTitle = roomData.title;
+          saveRoomTitleLocally(this.roomId, roomData.title);
+        }
+        this.events.onRoomInfo?.({
+          title: roomData.title,
+          hostName: roomData.hostName,
+          locked: roomData.locked,
+          isRecording: roomData.isRecording,
+        });
+      });
+
+      // Listen to participants from Firebase
+      this.firebaseSync.subscribeToParticipants((participants) => {
+        for (const p of participants) {
+          if (p.id !== this.userId) {
+            this.events.onUserJoined(p);
+            // If we don't have a peer connection yet, create one
+            if (!this.peerConnections.has(p.id)) {
+              this.createPeerConnection(p.id, this.isHost);
+            }
+          }
+        }
+      });
+
+      // Listen to WebRTC signals via Firebase
+      this.firebaseSync.subscribeToSignals(async (senderId, signalData) => {
+        await this.handleSignalingData(senderId, signalData);
+      });
+
+      // Listen to in-room chat messages via Firebase
+      this.firebaseSync.subscribeToChatMessages((msg) => {
+        this.events.onChatMessage(msg);
+      });
+
+      // Listen to reactions via Firebase
+      this.firebaseSync.subscribeToReactions((react) => {
+        this.events.onReaction(react);
+      });
+    } catch (e) {
+      console.warn('Firebase sync initialization warning:', e);
+    }
+
+    // 2. Set up BroadcastChannel for instant cross-tab / local domain synchronization
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         this.broadcastChannel = new BroadcastChannel(`infinitymeet_room_${this.roomId}`);
@@ -104,7 +171,6 @@ export class MeetingClient {
           const msg = e.data;
           switch (msg.type) {
             case 'join': {
-              // A peer announced join via broadcast channel
               this.events.onUserJoined({
                 id: msg.userId,
                 name: msg.userName,
@@ -116,7 +182,6 @@ export class MeetingClient {
                 handRaised: false,
               });
 
-              // Send back our user info
               this.broadcastChannel?.postMessage({
                 type: 'announce-presence',
                 _senderId: this.userId,
@@ -128,7 +193,6 @@ export class MeetingClient {
                 isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
               });
 
-              // Create offer
               await this.createPeerConnection(msg.userId, true);
               break;
             }
@@ -194,7 +258,6 @@ export class MeetingClient {
           }
         };
 
-        // Announce join over BroadcastChannel for instant local P2P mesh
         this.broadcastChannel.postMessage({
           type: 'join',
           _senderId: this.userId,
@@ -211,6 +274,7 @@ export class MeetingClient {
       }
     }
 
+    // 3. Local WebSocket Server Connection
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -220,7 +284,6 @@ export class MeetingClient {
       this.ws.onopen = () => {
         if (this.isClosed || !this.ws) return;
 
-        // Send join packet to server
         this.sendWsMessage({
           type: 'join',
           roomId: this.roomId,
@@ -232,7 +295,6 @@ export class MeetingClient {
           isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
         });
 
-        // Start ping heartbeat
         this.pingInterval = window.setInterval(() => {
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ type: 'ping' }));
@@ -325,7 +387,6 @@ export class MeetingClient {
           });
         }
 
-        // Initiate WebRTC offer to all existing participants in the room
         for (const p of remoteParticipants) {
           await this.createPeerConnection(p.id, true);
         }
@@ -453,7 +514,6 @@ export class MeetingClient {
     this.dataChannels.set(peerId, dc);
 
     dc.onopen = () => {
-      // Sync room title directly peer-to-peer over WebRTC
       if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
         try {
           dc.send(JSON.stringify({
@@ -461,9 +521,7 @@ export class MeetingClient {
             title: this.sessionTitle,
             hostName: this.userName,
           }));
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
     };
 
@@ -475,9 +533,7 @@ export class MeetingClient {
           saveRoomTitleLocally(this.roomId, data.title);
           this.events.onRoomInfo?.({ title: data.title, hostName: data.hostName });
         }
-      } catch (err) {
-        // ignore
-      }
+      } catch (err) {}
     };
 
     dc.onclose = () => {
@@ -506,7 +562,6 @@ export class MeetingClient {
       };
     }
 
-    // Add local tracks if available
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
         try {
@@ -519,14 +574,15 @@ export class MeetingClient {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
+        const signalData = { candidate: event.candidate };
         this.sendWsMessage({
           type: 'signal',
           senderId: this.userId,
           targetId: peerId,
-          signalData: {
-            candidate: event.candidate,
-          },
+          signalData,
         });
+        // Also send through Firebase Cloud
+        this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
       }
     };
 
@@ -547,14 +603,15 @@ export class MeetingClient {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
+        const signalData = { sdp: pc.localDescription };
         this.sendWsMessage({
           type: 'signal',
           senderId: this.userId,
           targetId: peerId,
-          signalData: {
-            sdp: pc.localDescription,
-          },
+          signalData,
         });
+        // Also send through Firebase Cloud
+        this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
       } catch (err) {
         console.error('Error creating offer for peer:', peerId, err);
       }
@@ -571,7 +628,6 @@ export class MeetingClient {
         const pc = await this.createPeerConnection(senderId, false);
         await pc.setRemoteDescription(sdp);
 
-        // Drain any queued ICE candidates
         const queued = this.queuedCandidates.get(senderId) || [];
         for (const candidate of queued) {
           try {
@@ -585,20 +641,19 @@ export class MeetingClient {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
+        const ansData = { sdp: pc.localDescription };
         this.sendWsMessage({
           type: 'signal',
           senderId: this.userId,
           targetId: senderId,
-          signalData: {
-            sdp: pc.localDescription,
-          },
+          signalData: ansData,
         });
+        this.firebaseSync?.sendSignal(senderId, ansData).catch(() => {});
       } else if (sdp.type === 'answer') {
         const pc = this.peerConnections.get(senderId);
         if (pc) {
           await pc.setRemoteDescription(sdp);
 
-          // Drain any queued ICE candidates
           const queued = this.queuedCandidates.get(senderId) || [];
           for (const candidate of queued) {
             try {
@@ -619,7 +674,6 @@ export class MeetingClient {
           console.warn('Error adding ICE candidate:', e);
         }
       } else {
-        // Queue until remoteDescription is set
         const queued = this.queuedCandidates.get(senderId) || [];
         queued.push(signalData.candidate);
         this.queuedCandidates.set(senderId, queued);
@@ -630,7 +684,6 @@ export class MeetingClient {
   public setLocalStream(newStream: MediaStream) {
     this.localStream = newStream;
 
-    // Replace audio and video tracks on existing peer connections
     for (const pc of this.peerConnections.values()) {
       const senders = pc.getSenders();
 
@@ -655,27 +708,35 @@ export class MeetingClient {
 
   public sendChatMessage(text: string) {
     if (!text.trim()) return;
+    const message: ChatMessage = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      senderId: this.userId,
+      senderName: this.userName,
+      isHost: this.isHost,
+      text: text.trim(),
+      timestamp: Date.now(),
+    };
+
     this.sendWsMessage({
       type: 'chat',
-      message: {
-        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-        senderId: this.userId,
-        senderName: this.userName,
-        isHost: this.isHost,
-        text: text.trim(),
-        timestamp: Date.now(),
-      },
+      message,
     });
+    this.firebaseSync?.sendChatMessage(message).catch(() => {});
   }
 
   public sendReaction(emoji: string) {
-    this.sendWsMessage({
-      type: 'reaction',
+    const reaction: ReactionItem = {
+      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       senderId: this.userId,
       senderName: this.userName,
       emoji,
-      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+    };
+
+    this.sendWsMessage({
+      type: 'reaction',
+      ...reaction,
     });
+    this.firebaseSync?.sendReaction(reaction).catch(() => {});
   }
 
   public updateStatus(status: {
@@ -689,6 +750,7 @@ export class MeetingClient {
       userId: this.userId,
       ...status,
     });
+    this.firebaseSync?.updateParticipantStatus(status).catch(() => {});
   }
 
   public hostMuteAll() {
@@ -735,9 +797,7 @@ export class MeetingClient {
     if (pc) {
       try {
         pc.close();
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       this.peerConnections.delete(peerId);
     }
 
@@ -745,15 +805,20 @@ export class MeetingClient {
     if (dc) {
       try {
         dc.close();
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       this.dataChannels.delete(peerId);
     }
   }
 
   public leave() {
     this.isClosed = true;
+
+    if (this.firebaseSync) {
+      try {
+        this.firebaseSync.destroy();
+      } catch (e) {}
+      this.firebaseSync = null;
+    }
 
     if (this.broadcastChannel) {
       try {
@@ -764,9 +829,7 @@ export class MeetingClient {
           name: this.userName,
         });
         this.broadcastChannel.close();
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       this.broadcastChannel = null;
     }
 
@@ -785,9 +848,7 @@ export class MeetingClient {
     if (this.ws) {
       try {
         this.ws.close();
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       this.ws = null;
     }
   }

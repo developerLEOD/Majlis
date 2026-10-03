@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MajlisSession } from '../types/meeting';
+import { subscribeToCloudActiveRooms } from '../services/firebaseMeetingSync';
 
 const STORAGE_ACTIVE_ROOMS_KEY = 'infinitymeet_active_rooms_cache';
 
@@ -10,7 +11,6 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          // Filter out expired (older than 2 hours)
           return parsed.filter((s: MajlisSession) => !s.startedAt || Date.now() - s.startedAt < 7200000);
         }
       }
@@ -42,26 +42,8 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.activeMajalis)) {
-          if (data.activeMajalis.length > 0) {
-            persistAndBroadcast(data.activeMajalis);
-          } else {
-            // Check if local cache has any recent active sessions (within last 30 minutes)
-            try {
-              const raw = localStorage.getItem(STORAGE_ACTIVE_ROOMS_KEY);
-              if (raw) {
-                const local = JSON.parse(raw);
-                if (Array.isArray(local) && local.length > 0) {
-                  const recent = local.filter((s: any) => s.startedAt && Date.now() - s.startedAt < 1800000);
-                  if (recent.length > 0) {
-                    setActiveMajalis(recent);
-                    return;
-                  }
-                }
-              }
-            } catch (e) {}
-            setActiveMajalis([]);
-          }
+        if (Array.isArray(data.activeMajalis) && data.activeMajalis.length > 0) {
+          persistAndBroadcast(data.activeMajalis);
         }
       }
     } catch (e) {
@@ -86,7 +68,19 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   }, []);
 
   useEffect(() => {
-    // 1. Cross-tab Broadcast Channel
+    // 1. Firebase Cloud Firestore Real-time listener for active meetings
+    let cloudUnsub: (() => void) | null = null;
+    try {
+      cloudUnsub = subscribeToCloudActiveRooms((cloudRooms) => {
+        if (cloudRooms && cloudRooms.length > 0) {
+          persistAndBroadcast(cloudRooms);
+        }
+      });
+    } catch (e) {
+      console.warn('Cloud rooms subscription notice:', e);
+    }
+
+    // 2. Cross-tab Broadcast Channel
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       try {
         const bc = new BroadcastChannel('infinitymeet_active_majalis');
@@ -101,7 +95,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       }
     }
 
-    // 2. Storage event listener for cross-tab sync
+    // 3. Storage event listener for cross-tab sync
     const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_ACTIVE_ROOMS_KEY && e.newValue) {
         try {
@@ -114,13 +108,13 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
     window.addEventListener('storage', handleStorage);
 
-    // 3. Fetch initial list and start polling
+    // 4. REST Polling fallback
     fetchActive();
     const pollInterval = setInterval(() => {
       fetchActive();
-    }, 3000);
+    }, 4000);
 
-    // 4. WebSocket connection for instant push updates
+    // 5. WebSocket connection for instant local push updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -150,6 +144,9 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     return () => {
       clearInterval(pollInterval);
       window.removeEventListener('storage', handleStorage);
+      if (cloudUnsub) {
+        cloudUnsub();
+      }
       if (wsRef.current) {
         try {
           wsRef.current.close();
