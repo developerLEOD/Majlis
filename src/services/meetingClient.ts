@@ -62,7 +62,8 @@ export class MeetingClient {
     userId: string,
     userName: string,
     isHost: boolean,
-    localStream: MediaStream | null
+    localStream: MediaStream | null,
+    title?: string
   ) {
     this.leave(); // Clean up any previous session
 
@@ -89,6 +90,7 @@ export class MeetingClient {
           userId: this.userId,
           userName: this.userName,
           isHost: this.isHost,
+          title: title || (isHost ? `${this.userName}'s Majlis` : 'Live Majlis'),
           isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
           isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
         });

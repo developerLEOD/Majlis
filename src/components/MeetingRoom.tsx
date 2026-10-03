@@ -301,7 +301,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     });
 
     clientRef.current = client;
-    client.connect(roomId, userId, userName, initialIsHost, initialStream);
+    client.connect(roomId, userId, userName, initialIsHost, initialStream, sessionTitle);
 
     return () => {
       client.leave();

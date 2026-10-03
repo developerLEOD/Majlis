@@ -45,6 +45,9 @@ export interface MajlisSession {
   scheduledAt: string;
   status: 'live' | 'upcoming' | 'completed';
   hostName: string;
+  participantCount?: number;
+  startedAt?: number;
+  locked?: boolean;
 }
 
 export type NavTab = 'home' | 'majalis' | 'profile' | 'settings';

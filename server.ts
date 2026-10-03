@@ -25,7 +25,9 @@ interface Participant {
 
 interface Room {
   id: string;
+  title: string;
   hostId: string;
+  hostName: string;
   locked: boolean;
   isRecording: boolean;
   participants: Map<string, Participant>;
@@ -33,6 +35,33 @@ interface Room {
 }
 
 const rooms = new Map<string, Room>();
+
+function broadcastActiveRooms() {
+  const activeList = Array.from(rooms.values())
+    .filter((r) => r.participants.size > 0)
+    .map((r) => ({
+      id: `live_${r.id}`,
+      roomId: r.id,
+      title: r.title || 'Live Majlis',
+      hostName: r.hostName || 'Facilitator',
+      scheduledAt: 'Happening Now',
+      status: 'live' as const,
+      participantCount: r.participants.size,
+      startedAt: r.createdAt,
+      locked: r.locked,
+    }));
+
+  const payload = JSON.stringify({
+    type: 'active-majalis-update',
+    activeMajalis: activeList,
+  });
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
 
 // WebSocket connection handling
 wss.on('connection', (ws: WebSocket) => {
@@ -56,8 +85,32 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'get-active-majalis': {
+          const activeList = Array.from(rooms.values())
+            .filter((r) => r.participants.size > 0)
+            .map((r) => ({
+              id: `live_${r.id}`,
+              roomId: r.id,
+              title: r.title || 'Live Majlis',
+              hostName: r.hostName || 'Facilitator',
+              scheduledAt: 'Happening Now',
+              status: 'live' as const,
+              participantCount: r.participants.size,
+              startedAt: r.createdAt,
+              locked: r.locked,
+            }));
+
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'active-majalis-update',
+              activeMajalis: activeList,
+            }));
+          }
+          break;
+        }
+
         case 'join': {
-          const { roomId, userId, userName, isHost } = message;
+          const { roomId, userId, userName, isHost, title } = message;
           currentRoomId = roomId;
           currentUserId = userId;
 
@@ -65,7 +118,9 @@ wss.on('connection', (ws: WebSocket) => {
           if (!room) {
             room = {
               id: roomId,
+              title: title || (isHost ? `${userName}'s Majlis` : 'Live Majlis'),
               hostId: userId,
+              hostName: userName || 'Facilitator',
               locked: false,
               isRecording: false,
               participants: new Map(),
@@ -80,10 +135,12 @@ wss.on('connection', (ws: WebSocket) => {
             return;
           }
 
-          // If room has no active host or user requested host when creating
+          // If user joins with host status or room has no host
           const becomesHost = isHost || room.hostId === userId || room.participants.size === 0;
           if (becomesHost) {
             room.hostId = userId;
+            if (userName) room.hostName = userName;
+            if (title) room.title = title;
           }
 
           const participant: Participant = {
@@ -136,11 +193,13 @@ wss.on('connection', (ws: WebSocket) => {
               handRaised: participant.handRaised,
             },
           });
+
+          // Broadcast active rooms update to lobby/home screens
+          broadcastActiveRooms();
           break;
         }
 
         case 'signal': {
-          // WebRTC offer / answer / ICE candidate relay
           const { targetId, signalData } = message;
           if (!currentRoomId || !currentUserId) return;
           const room = rooms.get(currentRoomId);
@@ -178,7 +237,6 @@ wss.on('connection', (ws: WebSocket) => {
             },
           };
 
-          // Broadcast to everyone in room including sender
           for (const participant of room.participants.values()) {
             if (participant.socket.readyState === WebSocket.OPEN) {
               participant.socket.send(JSON.stringify(chatPayload));
@@ -281,6 +339,7 @@ wss.on('connection', (ws: WebSocket) => {
               name: target.name,
               reason: 'removed by moderator',
             });
+            broadcastActiveRooms();
           }
           break;
         }
@@ -297,6 +356,7 @@ wss.on('connection', (ws: WebSocket) => {
             type: 'room-lock-changed',
             locked: room.locked,
           });
+          broadcastActiveRooms();
           break;
         }
 
@@ -329,6 +389,7 @@ wss.on('connection', (ws: WebSocket) => {
             message: 'The facilitator has concluded this Majlis session.',
           });
           rooms.delete(currentRoomId);
+          broadcastActiveRooms();
           break;
         }
       }
@@ -356,6 +417,7 @@ wss.on('connection', (ws: WebSocket) => {
           if (nextHost) {
             nextHost.isHost = true;
             room.hostId = nextHost.id;
+            room.hostName = nextHost.name;
             if (nextHost.socket.readyState === WebSocket.OPEN) {
               nextHost.socket.send(JSON.stringify({
                 type: 'promoted-to-host',
@@ -373,6 +435,8 @@ wss.on('connection', (ws: WebSocket) => {
         if (room.participants.size === 0) {
           rooms.delete(currentRoomId);
         }
+
+        broadcastActiveRooms();
       }
     }
   };
@@ -428,6 +492,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/active-majalis', (req, res) => {
+  const activeList = Array.from(rooms.values())
+    .filter((r) => r.participants.size > 0)
+    .map((r) => ({
+      id: `live_${r.id}`,
+      roomId: r.id,
+      title: r.title || 'Live Majlis',
+      hostName: r.hostName || 'Facilitator',
+      scheduledAt: 'Happening Now',
+      status: 'live' as const,
+      participantCount: r.participants.size,
+      startedAt: r.createdAt,
+      locked: r.locked,
+    }));
+  res.json({ activeMajalis: activeList });
+});
+
 app.get('/api/room/:roomId', (req, res) => {
   const room = rooms.get(req.params.roomId);
   if (!room) {
@@ -436,6 +517,8 @@ app.get('/api/room/:roomId', (req, res) => {
   }
   res.json({
     exists: true,
+    title: room.title,
+    hostName: room.hostName,
     participantCount: room.participants.size,
     locked: room.locked,
     isRecording: room.isRecording,

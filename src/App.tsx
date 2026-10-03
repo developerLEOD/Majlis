@@ -12,36 +12,34 @@ import { SettingsView } from './components/settings/SettingsView';
 import { StartMajlisModal } from './components/majalis/StartMajlisModal';
 import { PreJoinScreen } from './components/prejoin/PreJoinScreen';
 import { MeetingRoom } from './components/MeetingRoom';
-import {
-  MajlisSession,
-  NavTab,
-} from './types/meeting';
+import { MajlisSession, NavTab } from './types/meeting';
 import { fetchAppConfig, getRoomCodeFromCurrentLocation } from './utils/urlHelper';
+import { useActiveMajalis } from './hooks/useActiveMajalis';
 
-const INITIAL_MAJALIS: MajlisSession[] = [
+const UPCOMING_MAJALIS: MajlisSession[] = [
   {
     id: 's-1',
-    roomId: 'quran-tafsir',
-    title: 'The Exegesis of the Noble Quran',
-    scheduledAt: 'Happening Now',
-    status: 'live',
-    hostName: 'Shaykh Abdullah',
-  },
-  {
-    id: 's-2',
     roomId: 'ihya-ilm',
-    title: 'Kitab al-Ilm: The Book of Knowledge',
+    title: 'Kitab al-Ilm: The Book of Sacred Knowledge',
     scheduledAt: 'Today • 8:00 PM',
     status: 'upcoming',
     hostName: 'Ustadh Taha',
   },
   {
-    id: 's-3',
+    id: 's-2',
     roomId: 'shamail',
-    title: 'Al-Shama’il al-Muhammadiyya',
+    title: 'Al-Shama’il al-Muhammadiyya: Prophetic Grace',
     scheduledAt: 'Tomorrow • 7:30 PM',
     status: 'upcoming',
     hostName: 'Ustadha Fatima',
+  },
+  {
+    id: 's-3',
+    roomId: 'tazkiya-heart',
+    title: 'Purification of the Heart & Spiritual Wayfaring',
+    scheduledAt: 'Friday • 6:00 PM',
+    status: 'upcoming',
+    hostName: 'Shaykh Abdullah',
   },
 ];
 
@@ -53,7 +51,7 @@ export default function App() {
   const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
   const [mirrorVideo, setMirrorVideo] = useState(true);
 
-  const [sessions, setSessions] = useState<MajlisSession[]>(INITIAL_MAJALIS);
+  const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>(UPCOMING_MAJALIS);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
 
   // Pre-join Target
@@ -83,6 +81,9 @@ export default function App() {
     isMuted: boolean;
     isVideoOff: boolean;
   } | null>(null);
+
+  // Live ongoing majalis fetched and synced via WebSocket & REST
+  const { activeMajalis } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
     fetchAppConfig();
@@ -127,7 +128,7 @@ export default function App() {
     isMuted: boolean;
     isVideoOff: boolean;
   }) => {
-    const title = preJoinTarget?.title || 'Majlis';
+    const title = preJoinTarget?.title || 'Live Majlis';
     const chosenName = params.userName.trim() || userName;
 
     setUserName(chosenName);
@@ -157,7 +158,6 @@ export default function App() {
   };
 
   const handleStartNewSession = (newSession: MajlisSession) => {
-    setSessions((prev) => [newSession, ...prev]);
     setIsStartModalOpen(false);
 
     setPreJoinTarget({
@@ -213,7 +213,8 @@ export default function App() {
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         {currentTab === 'home' && (
           <HomeScreen
-            sessions={sessions}
+            activeMajalis={activeMajalis}
+            upcomingSessions={upcomingSessions}
             onStartMajlis={() => setIsStartModalOpen(true)}
             onJoinMajlis={handleInitiateJoin}
           />
@@ -221,7 +222,8 @@ export default function App() {
 
         {currentTab === 'majalis' && (
           <MajalisScreen
-            sessions={sessions}
+            activeMajalis={activeMajalis}
+            upcomingSessions={upcomingSessions}
             onJoinMajlis={handleInitiateJoin}
             onStartMajlis={() => setIsStartModalOpen(true)}
           />
