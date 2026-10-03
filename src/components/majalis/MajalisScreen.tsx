@@ -7,6 +7,7 @@ interface MajalisScreenProps {
   upcomingSessions: MajlisSession[];
   onJoinMajlis: (roomId: string, title?: string) => void;
   onStartMajlis: () => void;
+  onClearActive?: () => void;
 }
 
 export const MajalisScreen: React.FC<MajalisScreenProps> = ({
@@ -14,6 +15,7 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
   upcomingSessions,
   onJoinMajlis,
   onStartMajlis,
+  onClearActive,
 }) => {
   return (
     <div className="flex-1 overflow-y-auto bg-[#F5F2EB] p-6 lg:p-12 select-none space-y-8">
@@ -40,14 +42,24 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
 
       {/* 🟢 Ongoing Majalis Section */}
       <div className="space-y-4 max-w-4xl">
-        <div className="flex items-center gap-2.5">
-          <div className="relative flex items-center justify-center">
-            <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute opacity-75" />
-            <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full relative" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex items-center justify-center">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping absolute opacity-75" />
+              <span className="w-2.5 h-2.5 bg-emerald-600 rounded-full relative" />
+            </div>
+            <h3 className="text-sm font-bold text-[#3C230B] uppercase tracking-wider">
+              Ongoing Majalis ({activeMajalis.length} Live Now)
+            </h3>
           </div>
-          <h3 className="text-sm font-bold text-[#3C230B] uppercase tracking-wider">
-            Ongoing Majalis ({activeMajalis.length} Live Now)
-          </h3>
+          {onClearActive && activeMajalis.length > 0 && (
+            <button
+              onClick={onClearActive}
+              className="text-[11px] font-semibold text-[#8E7E73] hover:text-[#3C230B] underline transition"
+            >
+              Clear Directory
+            </button>
+          )}
         </div>
 
         {activeMajalis.length === 0 ? (

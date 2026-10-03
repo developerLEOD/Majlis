@@ -61,7 +61,12 @@ function MainAppContent() {
   } | null>(null);
 
   // Live ongoing majalis fetched and synced via WebSocket & REST
-  const { activeMajalis, addOptimisticMajlis } = useActiveMajalis(!!activeMeeting);
+  const { activeMajalis, addOptimisticMajlis, clearAllActive } = useActiveMajalis(!!activeMeeting);
+
+  // Clear current ongoing majalis on user request
+  useEffect(() => {
+    clearAllActive();
+  }, [clearAllActive]);
 
   useEffect(() => {
     fetchAppConfig();
@@ -230,6 +235,7 @@ function MainAppContent() {
             upcomingSessions={upcomingSessions}
             onStartMajlis={() => setIsStartModalOpen(true)}
             onJoinMajlis={handleInitiateJoin}
+            onClearActive={clearAllActive}
           />
         )}
 
@@ -239,6 +245,7 @@ function MainAppContent() {
             upcomingSessions={upcomingSessions}
             onJoinMajlis={handleInitiateJoin}
             onStartMajlis={() => setIsStartModalOpen(true)}
+            onClearActive={clearAllActive}
           />
         )}
 

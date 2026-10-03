@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { MajlisSession } from '../types/meeting';
-import { subscribeToCloudActiveRooms } from '../services/firebaseMeetingSync';
+import { subscribeToCloudActiveRooms, clearAllCloudActiveRooms } from '../services/firebaseMeetingSync';
 
 const STORAGE_ACTIVE_ROOMS_KEY = 'infinitymeet_active_rooms_cache';
 
@@ -23,6 +23,20 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   const [loading, setLoading] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
+
+  const clearAllActive = useCallback(async () => {
+    try {
+      localStorage.removeItem(STORAGE_ACTIVE_ROOMS_KEY);
+      setActiveMajalis([]);
+      if (broadcastRef.current) {
+        broadcastRef.current.postMessage({ type: 'directory-update', rooms: [] });
+      }
+      await fetch('/api/clear-active-majalis', { method: 'POST' }).catch(() => {});
+      await clearAllCloudActiveRooms().catch(() => {});
+    } catch (e) {
+      console.warn('Error clearing active majalis:', e);
+    }
+  }, []);
 
   // Sync to local storage & broadcast to other tabs
   const persistAndBroadcast = useCallback((rooms: MajlisSession[]) => {
@@ -160,5 +174,5 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
   }, [fetchActive, persistAndBroadcast]);
 
-  return { activeMajalis, refreshActiveMajalis: fetchActive, addOptimisticMajlis, loading };
+  return { activeMajalis, refreshActiveMajalis: fetchActive, addOptimisticMajlis, clearAllActive, loading };
 }

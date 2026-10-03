@@ -652,6 +652,12 @@ app.get('/api/active-majalis', (req, res) => {
   res.json({ activeMajalis: getActiveRoomsList() });
 });
 
+app.post('/api/clear-active-majalis', (req, res) => {
+  rooms.clear();
+  broadcastActiveRooms();
+  res.json({ success: true, message: 'All active ongoing majalis cleared.' });
+});
+
 app.post('/api/create-majlis', (req, res) => {
   const { roomId, title, hostName } = req.body;
   if (!roomId) {

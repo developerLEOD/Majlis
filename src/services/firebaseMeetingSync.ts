@@ -382,3 +382,14 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
     }
   );
 }
+
+export async function clearAllCloudActiveRooms(): Promise<void> {
+  const path = 'rooms';
+  try {
+    const snapshot = await getDocs(collection(db, 'rooms'));
+    const promises = snapshot.docs.map((docSnap) => deleteDoc(docSnap.ref));
+    await Promise.all(promises);
+  } catch (e) {
+    handleFirestoreError(e, OperationType.DELETE, path);
+  }
+}

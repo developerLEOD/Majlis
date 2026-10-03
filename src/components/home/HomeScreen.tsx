@@ -7,6 +7,7 @@ interface HomeScreenProps {
   upcomingSessions: MajlisSession[];
   onStartMajlis: () => void;
   onJoinMajlis: (roomId: string, title?: string) => void;
+  onClearActive?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -14,6 +15,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   upcomingSessions,
   onStartMajlis,
   onJoinMajlis,
+  onClearActive,
 }) => {
   const [inputCode, setInputCode] = useState('');
 
@@ -100,6 +102,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               Ongoing Majalis <span className="text-[#8E7E73] font-normal lowercase">({activeMajalis.length} live now)</span>
             </h3>
           </div>
+          {onClearActive && activeMajalis.length > 0 && (
+            <button
+              onClick={onClearActive}
+              className="text-[11px] font-semibold text-[#8E7E73] hover:text-[#3C230B] underline transition"
+            >
+              Clear Directory
+            </button>
+          )}
         </div>
 
         {activeMajalis.length === 0 ? (
