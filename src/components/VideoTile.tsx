@@ -76,10 +76,10 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
   return (
     <div
-      className={`relative w-full h-full bg-slate-900 rounded-2xl overflow-hidden border transition-all duration-200 select-none group flex items-center justify-center ${
+      className={`relative w-full h-full bg-[#18120E] rounded-2xl overflow-hidden border transition-all duration-200 select-none group flex items-center justify-center ${
         isSpeaking
-          ? 'border-emerald-500 shadow-lg shadow-emerald-500/20 ring-2 ring-emerald-500/40'
-          : 'border-slate-800 hover:border-slate-700'
+          ? 'border-[#D4AF37] shadow-lg shadow-[#D4AF37]/15 ring-2 ring-[#D4AF37]/40'
+          : 'border-[#3C230B]/40 hover:border-[#3C230B]/70'
       }`}
     >
       {/* Remote audio player */}
@@ -101,27 +101,27 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
       {/* Avatar Fallback when Camera is Off */}
       {(participant.isVideoOff || !hasVideoTrack) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1A1410]">
           <div className="relative">
             <div
-              className={`w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold text-white shadow-xl transition-transform ${
+              className={`w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-editorial font-bold shadow-md transition-transform ${
                 isSpeaking
-                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 scale-105 ring-4 ring-emerald-500/30'
-                  : 'bg-gradient-to-tr from-blue-700 to-indigo-600'
+                  ? 'bg-[#3C230B] text-[#D4AF37] ring-3 ring-[#D4AF37]/50 scale-105'
+                  : 'bg-[#2B1706] text-[#E0C2A6] border border-[#3C230B]'
               }`}
             >
               {initials}
             </div>
             {isSpeaking && (
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 shadow-md animate-pulse">
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#D4AF37] flex items-center justify-center text-[#3C230B] shadow-md animate-pulse">
                 <Mic className="w-3.5 h-3.5" />
               </div>
             )}
           </div>
-          <span className="text-sm font-medium text-slate-300 mt-3 truncate max-w-[80%]">
+          <span className="text-xs font-medium text-[#E0C2A6] mt-3 truncate max-w-[80%]">
             {participant.name}
           </span>
-          <span className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+          <span className="text-[11px] text-[#8E7E73] flex items-center gap-1 mt-0.5">
             <VideoOff className="w-3 h-3" /> Camera is off
           </span>
         </div>
@@ -129,8 +129,8 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
       {/* Hand Raised Banner */}
       {participant.handRaised && (
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-bold shadow-lg animate-bounce">
-          <Hand className="w-3.5 h-3.5" /> Hand Raised
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4AF37] text-[#3C230B] text-xs font-bold shadow-lg animate-bounce">
+          <Hand className="w-3.5 h-3.5" /> Adab • Hand Raised
         </div>
       )}
 
@@ -138,7 +138,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       {onTogglePin && (
         <button
           onClick={onTogglePin}
-          className="absolute top-3 right-3 z-10 p-2 rounded-xl bg-slate-900/80 backdrop-blur text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-800"
+          className="absolute top-3 right-3 z-10 p-2 rounded-xl bg-[#241710]/80 backdrop-blur text-[#D9D0C3] hover:text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#3C230B]"
           title={isPinned ? 'Unpin view' : 'Pin to spotlight'}
         >
           {isPinned ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -147,18 +147,18 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
       {/* Bottom Name & Status Badge */}
       <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800/80 max-w-[80%] shadow">
-          <span className="text-xs font-semibold text-white truncate">
+        <div className="flex items-center gap-2 bg-[#1A1410]/85 backdrop-blur-md px-3 py-1.5 rounded-xl border border-[#3C230B]/50 max-w-[80%] shadow-xs">
+          <span className="text-xs font-semibold text-[#FFFCF5] truncate">
             {participant.name}
             {isLocal && ' (You)'}
           </span>
           {participant.isHost && (
-            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              <Crown className="w-3 h-3" /> Host
+            <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40">
+              <Crown className="w-3 h-3" /> Facilitator
             </span>
           )}
           {participant.isScreenSharing && (
-            <span className="text-[10px] text-blue-400 bg-blue-500/20 px-1.5 py-0.5 rounded border border-blue-500/30 font-medium">
+            <span className="text-[10px] text-[#E0C2A6] bg-[#3C230B] px-1.5 py-0.5 rounded border border-[#E0C2A6]/30 font-medium">
               Screen
             </span>
           )}
@@ -166,12 +166,12 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
         {/* Mic Status */}
         <div
-          className={`p-1.5 rounded-xl backdrop-blur-md border shadow flex items-center justify-center ${
+          className={`p-1.5 rounded-xl backdrop-blur-md border shadow-xs flex items-center justify-center ${
             participant.isMuted
-              ? 'bg-red-500/20 text-red-400 border-red-500/30'
+              ? 'bg-red-950/70 text-red-400 border-red-800/40'
               : isSpeaking
-              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 ring-1 ring-emerald-500/40'
-              : 'bg-slate-950/80 text-slate-400 border-slate-800/80'
+              ? 'bg-[#3C230B]/90 text-[#D4AF37] border-[#D4AF37]/60 ring-1 ring-[#D4AF37]/40'
+              : 'bg-[#1A1410]/85 text-[#8E7E73] border-[#3C230B]/50'
           }`}
         >
           {participant.isMuted ? (

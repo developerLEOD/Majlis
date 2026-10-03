@@ -1,16 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
   Camera,
   Check,
   ChevronUp,
-  Circle,
   Copy,
   Crown,
   Disc,
-  Grid,
   Hand,
-  HardDrive,
   Info,
   LayoutGrid,
   Lock,
@@ -23,7 +19,6 @@ import {
   Pause,
   PhoneOff,
   Play,
-  Radio,
   Settings as SettingsIcon,
   Shield,
   Smile,
@@ -32,7 +27,7 @@ import {
   Users,
   Video,
   VideoOff,
-  Volume2,
+  X,
 } from 'lucide-react';
 import {
   ChatMessage,
@@ -60,22 +55,24 @@ interface MeetingRoomProps {
   roomId: string;
   userId: string;
   userName: string;
+  sessionTitle?: string;
   isHost: boolean;
   initialStream: MediaStream | null;
   initialMuted: boolean;
   initialVideoOff: boolean;
-  onLeaveMeeting: () => void;
+  onEndOrLeaveMeeting: () => void;
 }
 
 export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   roomId,
   userId,
   userName,
+  sessionTitle,
   isHost: initialIsHost,
   initialStream,
   initialMuted,
   initialVideoOff,
-  onLeaveMeeting,
+  onEndOrLeaveMeeting,
 }) => {
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -96,21 +93,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showSecurityMenu, setShowSecurityMenu] = useState(false);
+  const [showLeaveConfirmDialog, setShowLeaveConfirmDialog] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mirrorVideo, setMirrorVideo] = useState(true);
   const [appUrl, setAppUrl] = useState<string>(getCachedPublicAppUrl());
 
-  useEffect(() => {
-    async function loadConfig() {
-      const url = await fetchAppConfig();
-      if (url) setAppUrl(url);
-    }
-    loadConfig();
-  }, []);
-
-  // Time elapsed in meeting
+  // Time elapsed
   const [meetingSeconds, setMeetingSeconds] = useState(0);
 
   // Recording State (Moderator local recording)
@@ -128,7 +117,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const clientRef = useRef<MeetingClient | null>(null);
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
 
-  // Setup meeting timer (unlimited)
   useEffect(() => {
     const timer = setInterval(() => {
       setMeetingSeconds((prev) => prev + 1);
@@ -136,7 +124,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Format seconds to HH:MM:SS
+  useEffect(() => {
+    async function loadConfig() {
+      const url = await fetchAppConfig();
+      if (url) setAppUrl(url);
+    }
+    loadConfig();
+  }, []);
+
   const formatTime = (totalSec: number) => {
     const hrs = Math.floor(totalSec / 3600);
     const mins = Math.floor((totalSec % 3600) / 60);
@@ -149,12 +144,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
   const formatBytes = (bytes: number) => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  // Initialize WebRTC & WebSocket client
   useEffect(() => {
-    // Local participant entry
     const localParticipant: Participant = {
       id: userId,
       name: userName,
@@ -174,9 +167,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         setIsHost(data.isHost);
         setIsLocked(data.locked);
         if (data.isRecording) {
-          setRemoteRecordingNotice({ isRecording: true, by: 'Moderator' });
+          setRemoteRecordingNotice({ isRecording: true, by: 'Host' });
         }
-        // Add existing participants
         setParticipants((prev) => {
           const list = [...prev];
           for (const p of data.participants) {
@@ -193,13 +185,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           if (prev.some((p) => p.id === user.id)) return prev;
           return [...prev, { ...user, isLocal: false }];
         });
-        showNotification(`${user.name} joined the meeting`);
+        showNotification(`${user.name} joined`);
       },
 
       onUserLeft: (leftUserId, leftName) => {
         setParticipants((prev) => prev.filter((p) => p.id !== leftUserId));
         videoElementsRef.current.delete(leftUserId);
-        showNotification(`${leftName || 'A participant'} left the meeting`);
+        showNotification(`${leftName || 'A member'} left`);
       },
 
       onRemoteStream: (remoteUserId, stream) => {
@@ -227,17 +219,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         if (localStreamRef.current) {
           localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = false));
         }
-        showNotification('The moderator has muted your microphone');
+        showNotification('Muted by host');
       },
 
       onKicked: (reason) => {
-        alert(reason || 'You have been removed from the meeting');
-        onLeaveMeeting();
+        alert(reason || 'Removed from Majlis');
+        handleFinalExit();
       },
 
       onLockChanged: (locked) => {
         setIsLocked(locked);
-        showNotification(locked ? 'Meeting has been locked by the host' : 'Meeting unlocked');
+        showNotification(locked ? 'Majlis locked' : 'Majlis unlocked');
       },
 
       onRecordingNotice: (recording, by) => {
@@ -279,7 +271,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }, 4000);
   };
 
-  // Toggle Microphone
   const toggleAudio = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
@@ -297,7 +288,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.updateStatus({ isMuted: nextMuted });
   };
 
-  // Toggle Camera
   const toggleVideo = () => {
     const nextVideoOff = !isVideoOff;
     setIsVideoOff(nextVideoOff);
@@ -315,10 +305,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.updateStatus({ isVideoOff: nextVideoOff });
   };
 
-  // Toggle Screen Share
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      // Stop sharing
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
         screenStreamRef.current = null;
@@ -333,7 +321,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       }
       clientRef.current?.updateStatus({ isScreenSharing: false });
     } else {
-      // Start sharing
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
@@ -342,7 +329,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
 
-        // Mix or use screen video track
         const combinedStream = new MediaStream();
         screenStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
         if (localStreamRef.current) {
@@ -360,12 +346,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           toggleScreenShare();
         };
       } catch (err) {
-        console.warn('Screen share cancelled or rejected:', err);
+        console.warn('Screen share cancelled:', err);
       }
     }
   };
 
-  // Hand Raise Toggle
   const toggleHandRaise = () => {
     const nextState = !handRaised;
     setHandRaised(nextState);
@@ -376,10 +361,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.sendReaction(nextState ? '✋' : '👋');
   };
 
-  // Local Session Recording on Moderator's Device
-  const startRecording = async (mode: 'composite' | 'screen' = 'composite') => {
+  const startRecording = async () => {
     if (!isHost) {
-      alert('Only the moderator can start session recordings.');
+      alert('Only the host can record.');
       return;
     }
 
@@ -390,7 +374,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       const rec = new LocalMeetingRecorder({
         roomId,
-        mode,
+        mode: 'composite',
         localStream: localStreamRef.current,
         remoteStreams,
         getVideoElements: () => {
@@ -414,20 +398,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       setRecorder(rec);
       setRecordingStatus('recording');
       clientRef.current?.notifyRecording(true);
-      showNotification('Local recording started on your device');
+      showNotification('Recording session locally');
     } catch (err) {
       console.error('Failed to start recording:', err);
-      showNotification('Could not start recording: ' + (err as Error).message);
     }
   };
 
   const pauseResumeRecording = () => {
     if (!recorder) return;
-    if (recordingStatus === 'recording') {
-      recorder.pause();
-    } else if (recordingStatus === 'paused') {
-      recorder.resume();
-    }
+    if (recordingStatus === 'recording') recorder.pause();
+    else if (recordingStatus === 'paused') recorder.resume();
   };
 
   const stopRecording = async () => {
@@ -438,24 +418,21 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       setRecordingStatus('idle');
       setLastFinishedRecording(result);
       clientRef.current?.notifyRecording(false);
-      showNotification('Recording finished and ready for review');
+      showNotification('Recording ready');
     } catch (err) {
       console.error('Error stopping recording:', err);
     }
   };
 
-  // Reactions
   const sendEmojiReaction = (emoji: string) => {
     clientRef.current?.sendReaction(emoji);
     setShowReactionPicker(false);
   };
 
-  // Chat
   const sendChatMessage = (text: string) => {
     clientRef.current?.sendChatMessage(text);
   };
 
-  // Host Controls
   const handleMuteAll = () => {
     clientRef.current?.hostMuteAll();
     showNotification('Muted all participants');
@@ -469,20 +446,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.hostKickUser(targetUserId);
   };
 
-  // Copy Room Link
   const copyMeetingLink = async () => {
     const inviteUrl = buildMeetingInviteUrl(roomId, appUrl);
     const success = await copyTextToClipboard(inviteUrl);
     if (success) {
       setCopiedLink(true);
-      showNotification('Meeting invite link copied to clipboard!');
+      showNotification('Link copied');
       setTimeout(() => setCopiedLink(false), 2000);
     } else {
       setShowInviteModal(true);
     }
   };
 
-  // Fullscreen toggle
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -493,34 +468,42 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }
   };
 
-  // Active speaker or pinned participant
+  const handleFinalExit = () => {
+    setShowLeaveConfirmDialog(false);
+    if (recorder) {
+      recorder.stop().catch(console.warn);
+    }
+    clientRef.current?.leave();
+    onEndOrLeaveMeeting();
+  };
+
   const pinnedParticipant = participants.find((p) => p.id === pinnedUserId);
   const otherParticipants = participants.filter((p) => p.id !== pinnedUserId);
 
   return (
-    <div className="relative w-screen h-screen bg-slate-950 text-slate-100 flex flex-col overflow-hidden select-none">
-      {/* System Toast / Banner */}
+    <div className="relative w-screen h-screen bg-[#140F0C] text-[#FFFCF5] flex flex-col overflow-hidden select-none font-sans">
+      {/* Toast Notification */}
       {systemBanner && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-900/95 border border-slate-750 text-slate-200 text-xs font-medium rounded-full shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-3 flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 text-blue-400" />
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#2B1706]/95 border border-[#D4AF37]/30 text-[#E0C2A6] text-xs font-medium rounded-full shadow-lg backdrop-blur-md flex items-center gap-2">
+          <Info className="w-3.5 h-3.5 text-[#D4AF37]" />
           <span>{systemBanner}</span>
         </div>
       )}
 
-      {/* Floating Emoji Reactions Stream */}
+      {/* Floating Reactions */}
       <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
         {activeReactions.map((reaction) => (
           <div
             key={reaction.id}
-            className="absolute bottom-24 right-1/4 animate-bounce text-4xl"
+            className="absolute bottom-24 right-1/4 text-3xl"
             style={{
-              animation: 'floatUp 3.2s ease-out forwards',
+              animation: 'floatUp 3s ease-out forwards',
               right: `${20 + Math.random() * 40}%`,
             }}
           >
             <div className="flex flex-col items-center">
               <span>{reaction.emoji}</span>
-              <span className="text-[10px] bg-slate-900/80 text-slate-300 px-1.5 py-0.5 rounded-full mt-0.5 shadow">
+              <span className="text-[10px] bg-[#1A1410]/90 text-[#E0C2A6] px-2 py-0.5 rounded-full mt-0.5 border border-[#3C230B]">
                 {reaction.senderName}
               </span>
             </div>
@@ -530,150 +513,86 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       <style>{`
         @keyframes floatUp {
-          0% {
-            transform: translateY(0) scale(0.6);
-            opacity: 0;
-          }
-          15% {
-            opacity: 1;
-            transform: translateY(-40px) scale(1.1);
-          }
-          80% {
-            opacity: 0.9;
-          }
-          100% {
-            transform: translateY(-240px) scale(1.3);
-            opacity: 0;
-          }
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          15% { opacity: 1; transform: translateY(-30px) scale(1); }
+          80% { opacity: 0.9; }
+          100% { transform: translateY(-200px) scale(1.2); opacity: 0; }
         }
       `}</style>
 
-      {/* TOP HEADER BAR */}
-      <header className="h-14 px-4 sm:px-6 bg-slate-900/80 backdrop-blur border-b border-slate-800/80 flex items-center justify-between z-20 shrink-0">
-        {/* Left: Room Code & Link Copy */}
+      {/* TOP COMPACT HEADER */}
+      <header className="h-12 px-4 bg-[#1A1410]/90 backdrop-blur border-b border-[#3C230B]/60 flex items-center justify-between z-20 shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-sm tracking-tight text-white hidden sm:inline">
-              Infinity<span className="text-blue-500">Meet</span>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-[#8E7E73] hidden sm:inline">
+              The Wisdom Lounge
             </span>
-            <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+            <span className="text-xs font-bold text-[#E0C2A6]">Majlis</span>
             <button
               onClick={copyMeetingLink}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800/80 hover:bg-slate-750 text-slate-300 hover:text-white rounded-lg border border-slate-700/60 text-xs font-mono transition"
-              title="Click to copy invite link"
+              className="flex items-center gap-1.5 px-2 py-0.5 bg-[#241710] hover:bg-[#2B1706] text-[#D9D0C3] rounded border border-[#3C230B] text-xs font-mono transition"
+              title="Copy Majlis Link"
             >
               <span>{roomId}</span>
-              {copiedLink ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-slate-400" />
-              )}
-            </button>
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 rounded-lg border border-blue-500/30 text-xs font-medium transition"
-              title="Invite participants"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Invite</span>
+              {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-[#8E7E73]" />}
             </button>
           </div>
 
-          {/* Room locked badge */}
+          {sessionTitle && (
+            <span className="text-xs font-semibold text-[#FFFCF5] truncate max-w-xs hidden md:inline">
+              {sessionTitle}
+            </span>
+          )}
+
           {isLocked && (
-            <span className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-md">
-              <Lock className="w-3 h-3" /> Locked
+            <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/40 rounded">
+              Locked
             </span>
           )}
         </div>
 
-        {/* Center: Meeting Duration & Unlimited Tag */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 bg-slate-950/60 border border-slate-800/80 px-3 py-1 rounded-full text-xs">
+        <div className="flex items-center gap-3 text-xs">
+          {/* Duration & Status */}
+          <div className="flex items-center gap-2 text-[#E0C2A6] font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-mono font-medium text-slate-200">{formatTime(meetingSeconds)}</span>
-            <span className="text-slate-600">•</span>
-            <span className="text-blue-400 font-semibold text-[11px] hidden sm:inline">
-              Unlimited Session
-            </span>
+            <span>{formatTime(meetingSeconds)}</span>
           </div>
 
           {/* Recording Badge */}
-          {recordingStatus !== 'idle' ? (
-            <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 px-3 py-1 rounded-full text-xs text-red-300">
-              <span className={`w-2.5 h-2.5 rounded-full bg-red-500 ${recordingStatus === 'recording' ? 'animate-ping' : ''}`} />
-              <span className="font-mono font-bold">REC {formatTime(recordingDuration)}</span>
-              <span className="text-red-400/80 text-[11px] hidden md:inline">
-                ({formatBytes(recordingSizeBytes)} • Local)
-              </span>
+          {recordingStatus !== 'idle' && (
+            <div className="flex items-center gap-2 bg-red-950/60 border border-red-800/40 px-2.5 py-0.5 rounded text-red-300 font-mono text-[11px]">
+              <span className={`w-2 h-2 rounded-full bg-red-500 ${recordingStatus === 'recording' ? 'animate-ping' : ''}`} />
+              <span>REC {formatTime(recordingDuration)}</span>
             </div>
-          ) : remoteRecordingNotice?.isRecording ? (
-            <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 px-2.5 py-1 rounded-full text-xs text-red-300">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[11px]">Recording by Host</span>
-            </div>
-          ) : null}
-        </div>
+          )}
 
-        {/* Right: Layout Toggle & Fullscreen */}
-        <div className="flex items-center gap-2">
-          {/* Grid / Speaker View Toggle */}
-          <div className="flex bg-slate-950 border border-slate-800 rounded-xl p-0.5">
+          {/* Layout Toggle */}
+          <div className="flex bg-[#140F0C] border border-[#3C230B] rounded p-0.5">
             <button
-              onClick={() => {
-                setLayout('grid');
-                setPinnedUserId(null);
-              }}
-              className={`p-1.5 rounded-lg transition ${
-                layout === 'grid' && !pinnedUserId
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Grid View"
+              onClick={() => { setLayout('grid'); setPinnedUserId(null); }}
+              className={`p-1 rounded transition ${layout === 'grid' && !pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => {
-                setLayout('speaker');
-                if (participants.length > 0 && !pinnedUserId) {
-                  setPinnedUserId(participants[0].id);
-                }
-              }}
-              className={`p-1.5 rounded-lg transition ${
-                layout === 'speaker' || pinnedUserId
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="Speaker View"
+              onClick={() => { setLayout('speaker'); if (participants.length > 0 && !pinnedUserId) setPinnedUserId(participants[0].id); }}
+              className={`p-1 rounded transition ${layout === 'speaker' || pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5" />
             </button>
           </div>
-
-          {/* Fullscreen Button */}
-          <button
-            onClick={toggleFullscreen}
-            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition hidden sm:block"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
         </div>
       </header>
 
-      {/* MAIN MEETING VIEWPORT */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* VIDEO STAGE */}
-        <main className="flex-1 p-3 sm:p-4 flex items-center justify-center overflow-hidden">
+      {/* MAIN VIDEO STAGE */}
+      <div className="flex-1 flex overflow-hidden relative bg-[#120D0A]">
+        <main className="flex-1 p-3 flex items-center justify-center overflow-hidden">
           {pinnedParticipant ? (
-            /* SPEAKER / PINNED VIEW */
-            <div className="w-full h-full flex flex-col gap-3">
-              {/* Top Filmstrip */}
+            <div className="w-full h-full flex flex-col gap-2">
               {otherParticipants.length > 0 && (
-                <div className="h-28 sm:h-32 flex gap-3 overflow-x-auto pb-1 shrink-0 scrollbar-thin">
+                <div className="h-28 flex gap-2 overflow-x-auto pb-1 shrink-0">
                   {otherParticipants.map((p) => (
-                    <div key={p.id} className="w-44 h-full shrink-0">
+                    <div key={p.id} className="w-40 h-full shrink-0">
                       <VideoTile
                         participant={p}
                         isLocal={p.isLocal}
@@ -688,9 +607,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   ))}
                 </div>
               )}
-
-              {/* Main Stage */}
-              <div className="flex-1 rounded-2xl overflow-hidden shadow-2xl relative">
+              <div className="flex-1 rounded-xl overflow-hidden relative">
                 <VideoTile
                   participant={pinnedParticipant}
                   isLocal={pinnedParticipant.isLocal}
@@ -705,22 +622,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               </div>
             </div>
           ) : (
-            /* DYNAMIC GRID VIEW */
             <div
-              className={`w-full h-full grid gap-3 sm:gap-4 max-w-7xl mx-auto transition-all ${
+              className={`w-full h-full grid gap-3 max-w-7xl mx-auto transition-all ${
                 participants.length === 1
                   ? 'grid-cols-1 max-w-4xl max-h-[85vh]'
                   : participants.length === 2
                   ? 'grid-cols-1 sm:grid-cols-2 max-h-[80vh]'
                   : participants.length <= 4
                   ? 'grid-cols-2 grid-rows-2'
-                  : participants.length <= 6
-                  ? 'grid-cols-2 sm:grid-cols-3 grid-rows-2'
-                  : 'grid-cols-3 sm:grid-cols-4'
+                  : 'grid-cols-2 sm:grid-cols-3'
               }`}
             >
               {participants.map((p) => (
-                <div key={p.id} className="w-full h-full min-h-[160px] min-w-[200px]">
+                <div key={p.id} className="w-full h-full min-h-[160px]">
                   <VideoTile
                     participant={p}
                     isLocal={p.isLocal}
@@ -737,7 +651,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           )}
         </main>
 
-        {/* SIDE DRAWERS */}
+        {/* Side Panels */}
         {activeDrawer === 'chat' && (
           <ChatDrawer
             messages={messages}
@@ -762,290 +676,141 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         )}
       </div>
 
-      {/* BOTTOM CONTROL DOCK (SLEEK ZOOM STYLE) */}
-      <footer className="h-20 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-4 sm:px-6 flex items-center justify-between z-30 shrink-0">
-        {/* Left: Audio & Video controls */}
+      {/* BOTTOM CONTROL BAR */}
+      <footer className="h-16 bg-[#1A1410] border-t border-[#3C230B]/60 px-4 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-2">
-          {/* Microphone */}
-          <div className="flex items-center bg-slate-800/80 rounded-2xl border border-slate-750 overflow-hidden">
-            <button
-              onClick={toggleAudio}
-              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold transition ${
-                isMuted
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  : 'text-slate-100 hover:bg-slate-700/60'
-              }`}
-            >
-              {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isMuted ? 'Unmute' : 'Mute'}</span>
-            </button>
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="px-2 py-2.5 text-slate-400 hover:text-white hover:bg-slate-700/60 border-l border-slate-700 transition"
-              title="Audio Settings"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {/* Audio */}
+          <button
+            onClick={toggleAudio}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+              isMuted ? 'bg-red-950/70 text-red-400' : 'bg-[#241710] text-[#FFFCF5] hover:bg-[#2B1706]'
+            }`}
+          >
+            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isMuted ? 'Unmute' : 'Mute'}</span>
+          </button>
 
-          {/* Camera */}
-          <div className="flex items-center bg-slate-800/80 rounded-2xl border border-slate-750 overflow-hidden">
-            <button
-              onClick={toggleVideo}
-              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs font-semibold transition ${
-                isVideoOff
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                  : 'text-slate-100 hover:bg-slate-700/60'
-              }`}
-            >
-              {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isVideoOff ? 'Start Video' : 'Stop Video'}</span>
-            </button>
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="px-2 py-2.5 text-slate-400 hover:text-white hover:bg-slate-700/60 border-l border-slate-700 transition"
-              title="Video Settings"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {/* Video */}
+          <button
+            onClick={toggleVideo}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
+              isVideoOff ? 'bg-red-950/70 text-red-400' : 'bg-[#241710] text-[#FFFCF5] hover:bg-[#2B1706]'
+            }`}
+          >
+            {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isVideoOff ? 'Start Video' : 'Stop Video'}</span>
+          </button>
         </div>
 
-        {/* Center: Meeting Collaboration & Recording */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Center Controls */}
+        <div className="flex items-center gap-2">
           {/* Screen Share */}
           <button
             onClick={toggleScreenShare}
-            className={`flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl transition border ${
+            className={`p-2.5 rounded-xl border text-xs transition ${
               isScreenSharing
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-lg shadow-emerald-500/10'
-                : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-750 hover:bg-slate-700/60'
+                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/50'
+                : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
             }`}
-            title="Share Screen"
+            title="Screen Share"
           >
             <MonitorUp className="w-4 h-4" />
-            <span className="text-[10px] font-medium mt-1">
-              {isScreenSharing ? 'Sharing' : 'Share'}
-            </span>
           </button>
 
-          {/* LOCAL RECORDING BUTTON (Moderator Only) */}
-          {isHost ? (
+          {/* Local Recording */}
+          {isHost && (
             recordingStatus === 'idle' ? (
               <button
-                onClick={() => startRecording('composite')}
-                className="flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl bg-slate-800/80 hover:bg-red-500/20 text-slate-300 hover:text-red-400 border border-slate-750 hover:border-red-500/40 transition group"
-                title="Start Local Recording on this Device (No time limit)"
+                onClick={startRecording}
+                className="p-2.5 rounded-xl bg-[#241710] text-[#D9D0C3] border border-[#3C230B] hover:bg-[#2B1706] transition"
+                title="Record Session"
               >
-                <div className="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                </div>
-                <span className="text-[10px] font-medium mt-1">Record</span>
+                <Square className="w-4 h-4 text-red-400" />
               </button>
             ) : (
-              <div className="flex items-center bg-red-500/15 border border-red-500/40 rounded-2xl p-1 gap-1 shadow-lg shadow-red-500/20">
-                {/* Pause / Resume */}
-                <button
-                  onClick={pauseResumeRecording}
-                  className="p-2 text-slate-200 hover:text-white rounded-xl hover:bg-red-500/20 transition"
-                  title={recordingStatus === 'recording' ? 'Pause Recording' : 'Resume Recording'}
-                >
-                  {recordingStatus === 'recording' ? (
-                    <Pause className="w-4 h-4 text-amber-400" />
-                  ) : (
-                    <Play className="w-4 h-4 text-emerald-400" />
-                  )}
-                </button>
-
-                {/* Stop & Save */}
-                <button
-                  onClick={stopRecording}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition shadow"
-                  title="Stop recording and download locally"
-                >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  <span className="hidden sm:inline">Stop REC</span>
-                </button>
-              </div>
-            )
-          ) : (
-            /* Non-moderator indicator */
-            remoteRecordingNotice?.isRecording && (
-              <div className="flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
-                <Disc className="w-4 h-4 animate-spin" />
-                <span className="text-[9px] font-semibold mt-1">Recording</span>
-              </div>
-            )
-          )}
-
-          {/* Security / Moderator Hub */}
-          {isHost && (
-            <div className="relative">
               <button
-                onClick={() => setShowSecurityMenu(!showSecurityMenu)}
-                className="flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl bg-slate-800/80 text-slate-300 hover:text-white border border-slate-750 hover:bg-slate-700/60 transition"
-                title="Moderator Security Controls"
+                onClick={stopRecording}
+                className="px-3 py-1.5 bg-red-800 text-white text-xs font-bold rounded-xl"
               >
-                <Shield className="w-4 h-4 text-blue-400" />
-                <span className="text-[10px] font-medium mt-1">Host</span>
+                Stop REC
               </button>
-
-              {showSecurityMenu && (
-                <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-56 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 z-40 text-xs">
-                  <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Moderator Controls
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleToggleLock();
-                      setShowSecurityMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-xl hover:bg-slate-700 transition"
-                  >
-                    {isLocked ? (
-                      <>
-                        <Unlock className="w-3.5 h-3.5 text-amber-400" /> Unlock Room
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="w-3.5 h-3.5 text-slate-300" /> Lock Room
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => {
-                      handleMuteAll();
-                      setShowSecurityMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-xl text-red-400 hover:bg-slate-700 transition"
-                  >
-                    <MicOff className="w-3.5 h-3.5" /> Mute All Participants
-                  </button>
-                  <div className="my-1 border-t border-slate-700/80" />
-                  <button
-                    onClick={() => {
-                      setShowInviteModal(true);
-                      setShowSecurityMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-left rounded-xl text-blue-400 hover:bg-slate-700 transition"
-                  >
-                    <Users className="w-3.5 h-3.5" /> Invite Link & Code
-                  </button>
-                </div>
-              )}
-            </div>
+            )
           )}
 
-          {/* Participants Button */}
+          {/* Participants */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className={`flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl transition border relative ${
-              activeDrawer === 'participants'
-                ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/20'
-                : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-750 hover:bg-slate-700/60'
+            className={`p-2.5 rounded-xl border text-xs transition relative ${
+              activeDrawer === 'participants' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B]'
             }`}
             title="Participants"
           >
             <Users className="w-4 h-4" />
-            <span className="text-[10px] font-medium mt-1">Users</span>
-            <span className="absolute top-1.5 right-1.5 text-[9px] font-bold bg-slate-900 px-1 rounded-full border border-slate-700">
-              {participants.length}
-            </span>
           </button>
 
-          {/* Chat Button */}
+          {/* Chat */}
           <button
-            onClick={() => {
-              setActiveDrawer(activeDrawer === 'chat' ? null : 'chat');
-              setUnreadChatCount(0);
-            }}
-            className={`flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl transition border relative ${
-              activeDrawer === 'chat'
-                ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-600/20'
-                : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-750 hover:bg-slate-700/60'
+            onClick={() => { setActiveDrawer(activeDrawer === 'chat' ? null : 'chat'); setUnreadChatCount(0); }}
+            className={`p-2.5 rounded-xl border text-xs transition relative ${
+              activeDrawer === 'chat' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B]'
             }`}
             title="Chat"
           >
             <MessageSquare className="w-4 h-4" />
-            <span className="text-[10px] font-medium mt-1">Chat</span>
             {unreadChatCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center shadow">
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#D4AF37] text-[#3C230B] rounded-full text-[9px] font-bold flex items-center justify-center">
                 {unreadChatCount}
               </span>
             )}
           </button>
-
-          {/* Reactions Button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowReactionPicker(!showReactionPicker)}
-              className="flex flex-col items-center justify-center w-12 sm:w-16 h-14 rounded-2xl bg-slate-800/80 text-slate-300 hover:text-white border border-slate-750 hover:bg-slate-700/60 transition"
-              title="Send Reaction or Raise Hand"
-            >
-              <Smile className="w-4 h-4" />
-              <span className="text-[10px] font-medium mt-1">React</span>
-            </button>
-
-            {showReactionPicker && (
-              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-2 z-40 flex items-center gap-1.5 animate-in fade-in zoom-in-95">
-                {['👍', '❤️', '👏', '😂', '🎉', '😮'].map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={() => sendEmojiReaction(emoji)}
-                    className="p-2 text-xl hover:scale-125 transition-transform"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-                <div className="h-6 w-px bg-slate-700 mx-1" />
-                <button
-                  onClick={() => {
-                    toggleHandRaise();
-                    setShowReactionPicker(false);
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-                    handRaised
-                      ? 'bg-amber-500 text-slate-950 shadow'
-                      : 'bg-slate-750 text-slate-200 hover:bg-slate-700'
-                  }`}
-                >
-                  <Hand className="w-3.5 h-3.5" />
-                  <span>{handRaised ? 'Lower Hand' : 'Raise Hand'}</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Right: Leave / End Call */}
-        <div className="flex items-center gap-2">
+        {/* Leave Action */}
+        <div>
           <button
-            onClick={onLeaveMeeting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 active:scale-98 text-white rounded-2xl text-xs font-semibold shadow-lg shadow-red-600/30 transition"
+            onClick={() => setShowLeaveConfirmDialog(true)}
+            className="px-3.5 py-2 bg-red-800 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition"
           >
-            <PhoneOff className="w-4 h-4" />
-            <span className="hidden sm:inline">
-              {isHost ? 'End / Leave' : 'Leave Call'}
-            </span>
+            {isHost ? 'End Majlis' : 'Leave Majlis'}
           </button>
         </div>
       </footer>
 
-      {/* MODALS */}
-      {/* 1. Recording Ready Modal */}
-      {lastFinishedRecording && (
-        <RecordingModal
-          recording={lastFinishedRecording}
-          onClose={() => setLastFinishedRecording(null)}
-        />
+      {/* Confirmation Dialog */}
+      {showLeaveConfirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none">
+          <div className="w-full max-w-xs bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl p-5 text-center space-y-3">
+            <h3 className="text-base font-bold text-[#3C230B]">
+              {isHost ? 'End Majlis?' : 'Leave Majlis?'}
+            </h3>
+            <p className="text-xs text-[#68594E]">
+              Are you sure you want to exit the live room?
+            </p>
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleFinalExit}
+                className="w-full py-2 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-semibold"
+              >
+                {isHost ? 'End Majlis for All' : 'Leave Majlis'}
+              </button>
+              <button
+                onClick={() => setShowLeaveConfirmDialog(false)}
+                className="w-full py-1.5 text-xs text-[#8E7E73]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* 2. Invite Modal */}
+      {/* Modals */}
+      {lastFinishedRecording && (
+        <RecordingModal recording={lastFinishedRecording} onClose={() => setLastFinishedRecording(null)} />
+      )}
       {showInviteModal && (
         <InviteModal roomId={roomId} onClose={() => setShowInviteModal(false)} />
       )}
-
-      {/* 3. Settings Modal */}
       {showSettingsModal && (
         <SettingsModal
           localStream={localStreamRef.current}

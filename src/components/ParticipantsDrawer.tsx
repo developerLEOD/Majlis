@@ -47,40 +47,42 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   );
 
   return (
-    <div className="w-80 sm:w-96 h-full bg-slate-900 border-l border-slate-800 flex flex-col z-30 shadow-2xl animate-in slide-in-from-right duration-200">
+    <div className="w-80 sm:w-96 h-full bg-[#1A1410] border-l border-[#3C230B]/60 flex flex-col z-30 shadow-2xl animate-in slide-in-from-right duration-200 select-none">
       {/* Header */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+      <div className="p-4 border-b border-[#3C230B]/60 flex items-center justify-between bg-[#140F0C]">
         <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-blue-400" />
-          <h3 className="text-sm font-semibold text-white">Participants</h3>
-          <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-mono">
+          <Users className="w-4 h-4 text-[#D4AF37]" />
+          <h3 className="font-editorial text-base font-bold text-[#FFFCF5]">
+            Majlis Seekers
+          </h3>
+          <span className="text-[10px] bg-[#2B1706] text-[#E0C2A6] px-2 py-0.5 rounded-full font-mono">
             {participants.length}
           </span>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+          className="p-1.5 text-[#8E7E73] hover:text-[#FFFCF5] rounded-lg hover:bg-[#2B1706] transition"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Host Quick Controls Bar */}
+      {/* Host Moderation Bar */}
       {isHost && (
-        <div className="p-3 bg-slate-850/60 border-b border-slate-800 flex items-center justify-between gap-2">
+        <div className="p-3 bg-[#241710] border-b border-[#3C230B]/60 flex items-center justify-between gap-2">
           <button
             onClick={onMuteAll}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 active:scale-98 rounded-lg border border-slate-700/60 transition"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#FFFCF5] bg-[#3C230B] hover:bg-[#2B1706] rounded-xl border border-[#D4AF37]/20 transition"
           >
             <MicOff className="w-3.5 h-3.5 text-red-400" />
             Mute All
           </button>
           <button
             onClick={onToggleLock}
-            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition ${
               isLocked
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-slate-800 text-slate-300 border-slate-700/60 hover:bg-slate-700'
+                ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
+                : 'bg-[#1E1712] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
             }`}
           >
             {isLocked ? (
@@ -89,7 +91,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
               </>
             ) : (
               <>
-                <Unlock className="w-3.5 h-3.5 text-slate-400" /> Lock Room
+                <Unlock className="w-3.5 h-3.5 text-[#8E7E73]" /> Lock Room
               </>
             )}
           </button>
@@ -97,13 +99,13 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
       )}
 
       {/* Search Input */}
-      <div className="p-3 border-b border-slate-800">
+      <div className="p-3 border-b border-[#3C230B]/40">
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search participants..."
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          placeholder="Filter attendees..."
+          className="w-full bg-[#1E1712] border border-[#3C230B] rounded-xl px-3 py-1.5 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37] transition"
         />
       </div>
 
@@ -114,33 +116,33 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
           return (
             <div
               key={p.id}
-              className="group relative flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-800/60 transition"
+              className="group relative flex items-center justify-between p-2.5 rounded-xl hover:bg-[#241710] transition"
             >
               {/* User Avatar + Name */}
               <div className="flex items-center gap-3 min-w-0">
-                <div className="relative w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-inner">
+                <div className="relative w-8 h-8 rounded-xl bg-[#2B1706] border border-[#3C230B] flex items-center justify-center font-editorial font-bold text-sm text-[#E0C2A6] shrink-0">
                   {p.name.charAt(0).toUpperCase()}
                   {p.handRaised && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow">
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#D4AF37] text-[#3C230B] flex items-center justify-center shadow">
                       <Hand className="w-2.5 h-2.5" />
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-medium text-slate-200 truncate">
+                    <span className="text-xs font-semibold text-[#FFFCF5] truncate">
                       {p.name}
                     </span>
                     {isMe && (
-                      <span className="text-[10px] text-slate-400 font-normal">
+                      <span className="text-[10px] text-[#8E7E73] font-normal">
                         (You)
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     {p.isHost && (
-                      <span className="flex items-center gap-0.5 text-[9px] font-semibold text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
-                        <Crown className="w-2.5 h-2.5" /> Host
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-[#D4AF37] bg-[#D4AF37]/15 px-1 py-0.2 rounded border border-[#D4AF37]/30">
+                        <Crown className="w-2.5 h-2.5" /> Facilitator
                       </span>
                     )}
                   </div>
@@ -152,8 +154,8 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                 <div
                   className={`p-1.5 rounded-lg ${
                     p.isMuted
-                      ? 'text-red-400 bg-red-500/10'
-                      : 'text-slate-400 bg-slate-800'
+                      ? 'text-red-400 bg-red-950/50'
+                      : 'text-[#E0C2A6] bg-[#2B1706]'
                   }`}
                 >
                   {p.isMuted ? (
@@ -165,8 +167,8 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                 <div
                   className={`p-1.5 rounded-lg ${
                     p.isVideoOff
-                      ? 'text-red-400 bg-red-500/10'
-                      : 'text-slate-400 bg-slate-800'
+                      ? 'text-red-400 bg-red-950/50'
+                      : 'text-[#E0C2A6] bg-[#2B1706]'
                   }`}
                 >
                   {p.isVideoOff ? (
@@ -183,21 +185,21 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                       onClick={() =>
                         setActiveMenuId(activeMenuId === p.id ? null : p.id)
                       }
-                      className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700/60 transition"
+                      className="p-1.5 text-[#8E7E73] hover:text-[#FFFCF5] rounded-lg hover:bg-[#2B1706] transition"
                     >
                       <MoreVertical className="w-3.5 h-3.5" />
                     </button>
 
                     {activeMenuId === p.id && (
-                      <div className="absolute right-0 top-8 z-40 w-36 bg-slate-800 border border-slate-700 rounded-xl shadow-xl py-1 text-xs">
+                      <div className="absolute right-0 top-8 z-40 w-40 bg-[#241710] border border-[#3C230B] rounded-xl shadow-xl py-1 text-xs">
                         <button
                           onClick={() => {
                             onKickUser(p.id);
                             setActiveMenuId(null);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-400 hover:bg-slate-700/80 transition"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-400 hover:bg-[#2B1706] transition"
                         >
-                          <UserMinus className="w-3.5 h-3.5" /> Remove User
+                          <UserMinus className="w-3.5 h-3.5" /> Dismiss from Majlis
                         </button>
                       </div>
                     )}
@@ -210,13 +212,13 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
       </div>
 
       {/* Invite footer */}
-      <div className="p-4 border-t border-slate-800 bg-slate-900/90">
+      <div className="p-4 border-t border-[#3C230B]/60 bg-[#140F0C]">
         <button
           onClick={onOpenInvite}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow transition"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#FFFCF5] bg-[#3C230B] hover:bg-[#2B1706] rounded-xl shadow transition"
         >
-          <Users className="w-4 h-4" />
-          Invite More People
+          <Users className="w-4 h-4 text-[#E0C2A6]" />
+          <span>Invite More Seekers</span>
         </button>
       </div>
     </div>

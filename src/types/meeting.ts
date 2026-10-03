@@ -33,13 +33,18 @@ export interface RecordingResult {
   sizeBytes: number;
   createdAt: number;
   fileName: string;
+  title?: string;
 }
 
 export type MeetingLayout = 'grid' | 'speaker';
-export type VirtualBackground = 'none' | 'blur' | 'office' | 'cozy' | 'gradient';
 
-export interface RoomSecuritySettings {
-  isLocked: boolean;
-  allowParticipantScreenShare: boolean;
-  allowParticipantChat: boolean;
+export interface MajlisSession {
+  id: string;
+  roomId: string;
+  title: string;
+  scheduledAt: string;
+  status: 'live' | 'upcoming' | 'completed';
+  hostName: string;
 }
+
+export type NavTab = 'home' | 'majalis' | 'profile' | 'settings';

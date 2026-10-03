@@ -52,8 +52,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'InfinityMeet Video Meeting',
-          text: `Join my InfinityMeet call: ${roomId}`,
+          title: 'Majlis — The Wisdom Lounge',
+          text: `Join the live Majlis on The Wisdom Lounge: ${roomId}`,
           url: inviteUrl,
         });
       } catch {
@@ -63,35 +63,42 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-750 rounded-2xl shadow-2xl p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150">
+      <div className="relative w-full max-w-md bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between pb-4 border-b border-[#E6DFD5]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-xl bg-[#EFECE4] border border-[#D9D0C3] flex items-center justify-center text-[#3C230B]">
               <Users className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-semibold text-white">Invite to Meeting</h3>
+            <div>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[#8E7E73] block leading-none">
+                The Wisdom Lounge
+              </span>
+              <h3 className="text-base font-bold text-[#3C230B] leading-tight">
+                Invite to Majlis
+              </h3>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="p-1.5 text-[#8E7E73] hover:text-[#3C230B] rounded-lg hover:bg-[#EFECE4] transition"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="mt-5 space-y-4">
-          {/* Direct Meeting URL */}
+          {/* Direct Majlis URL */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5 text-blue-400" />
-                Direct Meeting Link
+              <label className="text-xs font-semibold text-[#3C230B] flex items-center gap-1.5">
+                <Link className="w-3.5 h-3.5 text-[#8E7E73]" />
+                Direct Majlis Link
               </label>
               {canShare && (
                 <button
                   onClick={handleNativeShare}
-                  className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition"
+                  className="flex items-center gap-1 text-[11px] text-[#3C230B] hover:underline font-medium transition"
                 >
                   <Share2 className="w-3 h-3" /> Share...
                 </button>
@@ -101,17 +108,17 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
             <div className="flex items-center gap-2">
               <div
                 onClick={handleCopyLink}
-                className="flex-1 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono truncate select-all cursor-pointer transition"
+                className="flex-1 bg-white border border-[#D9D0C3] hover:border-[#3C230B] rounded-xl px-3 py-2 text-xs text-[#241710] font-mono truncate select-all cursor-pointer transition"
                 title="Click to copy full invite link"
               >
                 {inviteUrl}
               </div>
               <button
                 onClick={handleCopyLink}
-                className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition shrink-0 shadow-md ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition shrink-0 ${
                   copiedLink
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-blue-600 hover:bg-blue-500 active:scale-98 text-white'
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5]'
                 }`}
               >
                 {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -120,28 +127,28 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, onClose }) => 
             </div>
           </div>
 
-          {/* Room Code */}
+          {/* Majlis ID */}
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-              Room Code Only
+            <label className="text-xs font-semibold text-[#3C230B] block mb-1.5">
+              Majlis ID Only
             </label>
-            <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-xl p-3">
-              <span className="font-mono text-lg font-bold tracking-widest text-blue-400 select-all">
+            <div className="flex items-center justify-between bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl p-3">
+              <span className="font-mono text-base font-bold tracking-widest text-[#3C230B] select-all">
                 {roomId}
               </span>
               <button
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#3C230B] hover:bg-[#E6DFD5] bg-[#EFECE4] rounded-lg transition"
               >
-                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedCode ? 'Copied Code' : 'Copy Code'}
+                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedCode ? 'Copied' : 'Copy ID'}
               </button>
             </div>
           </div>
 
           {/* Quick info note */}
-          <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300/90 leading-relaxed">
-            Guests simply click the link or enter the room code to join right in their browser. No sign-up or download needed.
+          <div className="p-3 bg-[#EFECE4]/80 border border-[#D9D0C3] rounded-xl text-xs text-[#68594E] leading-relaxed">
+            Participants click the link or enter the Majlis ID to join directly in their browser with audio, video, and screen sharing.
           </div>
         </div>
       </div>

@@ -4,30 +4,96 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Lobby } from './components/Lobby';
+import { Sidebar } from './components/navigation/Sidebar';
+import { HomeScreen } from './components/home/HomeScreen';
+import { MajalisScreen } from './components/majalis/MajalisScreen';
+import { ProfileScreen } from './components/profile/ProfileScreen';
+import { SettingsView } from './components/settings/SettingsView';
+import { StartMajlisModal } from './components/majalis/StartMajlisModal';
+import { PreJoinScreen } from './components/prejoin/PreJoinScreen';
 import { MeetingRoom } from './components/MeetingRoom';
+import {
+  MajlisSession,
+  NavTab,
+} from './types/meeting';
 import { fetchAppConfig, getRoomCodeFromCurrentLocation } from './utils/urlHelper';
 
-export default function App() {
-  const [inMeeting, setInMeeting] = useState(false);
-  const [roomId, setRoomId] = useState('');
-  const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
-  const [userName, setUserName] = useState('');
-  const [isHost, setIsHost] = useState(false);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  // Read room code immediately on initial load (synchronously)
-  const [initialRoomParam, setInitialRoomParam] = useState<string>(() => getRoomCodeFromCurrentLocation());
+const INITIAL_MAJALIS: MajlisSession[] = [
+  {
+    id: 's-1',
+    roomId: 'quran-tafsir',
+    title: 'The Exegesis of the Noble Quran',
+    scheduledAt: 'Happening Now',
+    status: 'live',
+    hostName: 'Shaykh Abdullah',
+  },
+  {
+    id: 's-2',
+    roomId: 'ihya-ilm',
+    title: 'Kitab al-Ilm: The Book of Knowledge',
+    scheduledAt: 'Today • 8:00 PM',
+    status: 'upcoming',
+    hostName: 'Ustadh Taha',
+  },
+  {
+    id: 's-3',
+    roomId: 'shamail',
+    title: 'Al-Shama’il al-Muhammadiyya',
+    scheduledAt: 'Tomorrow • 7:30 PM',
+    status: 'upcoming',
+    hostName: 'Ustadha Fatima',
+  },
+];
 
-  // Listen to browser history navigation and ensure config is fetched
+export default function App() {
+  const [currentTab, setCurrentTab] = useState<NavTab>('home');
+  const [userName, setUserName] = useState<string>(() => {
+    return localStorage.getItem('infinitymeet_username') || 'Member';
+  });
+  const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+  const [mirrorVideo, setMirrorVideo] = useState(true);
+
+  const [sessions, setSessions] = useState<MajlisSession[]>(INITIAL_MAJALIS);
+  const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+
+  // Pre-join Target
+  const [preJoinTarget, setPreJoinTarget] = useState<{
+    roomId: string;
+    title?: string;
+    isHost?: boolean;
+  } | null>(() => {
+    const code = getRoomCodeFromCurrentLocation();
+    if (code) {
+      return {
+        roomId: code,
+        title: `Majlis (${code})`,
+        isHost: false,
+      };
+    }
+    return null;
+  });
+
+  // Active Live Meeting State
+  const [activeMeeting, setActiveMeeting] = useState<{
+    roomId: string;
+    title: string;
+    isHost: boolean;
+    stream: MediaStream | null;
+    isMuted: boolean;
+    isVideoOff: boolean;
+  } | null>(null);
+
   useEffect(() => {
     fetchAppConfig();
 
     const handleLocationChange = () => {
       const code = getRoomCodeFromCurrentLocation();
-      if (code) {
-        setInitialRoomParam(code);
+      if (code && !activeMeeting) {
+        setPreJoinTarget({
+          roomId: code,
+          title: `Majlis (${code})`,
+          isHost: false,
+        });
       }
     };
 
@@ -37,9 +103,22 @@ export default function App() {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, []);
+  }, [activeMeeting]);
 
-  const handleJoinMeeting = (params: {
+  const handleUpdateUserName = (newName: string) => {
+    setUserName(newName);
+    localStorage.setItem('infinitymeet_username', newName);
+  };
+
+  const handleInitiateJoin = (roomId: string, title?: string) => {
+    setPreJoinTarget({
+      roomId,
+      title: title || `Majlis (${roomId})`,
+      isHost: false,
+    });
+  };
+
+  const handleEnterLiveMeeting = (params: {
     roomId: string;
     userName: string;
     isHost: boolean;
@@ -47,47 +126,124 @@ export default function App() {
     isMuted: boolean;
     isVideoOff: boolean;
   }) => {
-    setRoomId(params.roomId);
-    setUserName(params.userName);
-    setIsHost(params.isHost);
-    setLocalStream(params.stream);
-    setIsMuted(params.isMuted);
-    setIsVideoOff(params.isVideoOff);
-    setInMeeting(true);
+    const title = preJoinTarget?.title || 'Majlis';
 
-    // Update browser URL without reloading
+    setPreJoinTarget(null);
+
+    setActiveMeeting({
+      roomId: params.roomId,
+      title,
+      isHost: params.isHost,
+      stream: params.stream,
+      isMuted: params.isMuted,
+      isVideoOff: params.isVideoOff,
+    });
+
     const newUrl = `${window.location.pathname}?room=${params.roomId}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
 
-  const handleLeaveMeeting = () => {
-    setInMeeting(false);
-    // Clean up local tracks
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-      setLocalStream(null);
+  const handleEndOrLeaveMeeting = () => {
+    if (activeMeeting?.stream) {
+      activeMeeting.stream.getTracks().forEach((track) => track.stop());
     }
-    // Remove query param
+    setActiveMeeting(null);
     window.history.pushState({}, '', window.location.pathname);
   };
 
+  const handleStartNewSession = (newSession: MajlisSession) => {
+    setSessions((prev) => [newSession, ...prev]);
+    setIsStartModalOpen(false);
+
+    setPreJoinTarget({
+      roomId: newSession.roomId,
+      title: newSession.title,
+      isHost: true,
+    });
+  };
+
+  // 1. LIVE MEETING ROOM SCREEN
+  if (activeMeeting) {
+    return (
+      <MeetingRoom
+        roomId={activeMeeting.roomId}
+        userId={userId}
+        userName={userName}
+        sessionTitle={activeMeeting.title}
+        isHost={activeMeeting.isHost}
+        initialStream={activeMeeting.stream}
+        initialMuted={activeMeeting.isMuted}
+        initialVideoOff={activeMeeting.isVideoOff}
+        onEndOrLeaveMeeting={handleEndOrLeaveMeeting}
+      />
+    );
+  }
+
+  // 2. PRE-JOIN / PREPARATION SCREEN
+  if (preJoinTarget) {
+    return (
+      <PreJoinScreen
+        roomId={preJoinTarget.roomId}
+        sessionTitle={preJoinTarget.title}
+        isHostDefault={preJoinTarget.isHost}
+        defaultUserName={userName}
+        onEnterMeeting={handleEnterLiveMeeting}
+        onCancel={() => {
+          setPreJoinTarget(null);
+          window.history.pushState({}, '', window.location.pathname);
+        }}
+      />
+    );
+  }
+
+  // 3. MAIN APPLICATION SHELL
   return (
-    <div className="w-full min-h-screen bg-slate-950 font-sans text-slate-100 antialiased">
-      {inMeeting ? (
-        <MeetingRoom
-          roomId={roomId}
-          userId={userId}
+    <div className="w-full h-screen bg-[#F5F2EB] flex flex-col md:flex-row overflow-hidden font-sans text-[#241710] antialiased">
+      <Sidebar
+        currentTab={currentTab}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        userName={userName}
+      />
+
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        {currentTab === 'home' && (
+          <HomeScreen
+            sessions={sessions}
+            onStartMajlis={() => setIsStartModalOpen(true)}
+            onJoinMajlis={handleInitiateJoin}
+          />
+        )}
+
+        {currentTab === 'majalis' && (
+          <MajalisScreen
+            sessions={sessions}
+            onJoinMajlis={handleInitiateJoin}
+            onStartMajlis={() => setIsStartModalOpen(true)}
+          />
+        )}
+
+        {currentTab === 'profile' && (
+          <ProfileScreen
+            userName={userName}
+            onUpdateUserName={handleUpdateUserName}
+          />
+        )}
+
+        {currentTab === 'settings' && (
+          <SettingsView
+            userName={userName}
+            onUpdateUserName={handleUpdateUserName}
+            mirrorVideo={mirrorVideo}
+            onToggleMirror={setMirrorVideo}
+          />
+        )}
+      </main>
+
+      {isStartModalOpen && (
+        <StartMajlisModal
           userName={userName}
-          isHost={isHost}
-          initialStream={localStream}
-          initialMuted={isMuted}
-          initialVideoOff={isVideoOff}
-          onLeaveMeeting={handleLeaveMeeting}
-        />
-      ) : (
-        <Lobby
-          initialRoomId={initialRoomParam}
-          onJoinMeeting={handleJoinMeeting}
+          onClose={() => setIsStartModalOpen(false)}
+          onStartSession={handleStartNewSession}
         />
       )}
     </div>

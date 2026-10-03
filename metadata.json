@@ -1,6 +1,6 @@
 {
-  "name": "InfinityMeet - Limitless Video Calls & Local Recording",
-  "description": "A clean, simple Zoom alternative with no meeting time limits, crystal-clear WebRTC video, and local in-browser session recording on the moderator's device.",
+  "name": "Majlis by TWL — Live Learning & Scholarly Assembly",
+  "description": "The live meeting, study circle, and discussion platform of The Wisdom Lounge. Dedicated space for seeking wisdom, clarity, and authentic learning.",
   "requestFramePermissions": [
     "camera",
     "microphone",
