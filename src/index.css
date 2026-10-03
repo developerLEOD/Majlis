@@ -37,3 +37,29 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #C2B6A6;
 }
+
+@keyframes floatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.2);
+  }
+  35% {
+    transform: translateY(-60px) scale(1);
+  }
+  75% {
+    opacity: 0.95;
+    transform: translateY(-180px) scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-280px) scale(0.75);
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 3.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}

@@ -74,6 +74,7 @@ export class MeetingClient {
   private participants = new Map<string, Participant>();
   private peerIdToUserId = new Map<string, string>();
   private userIdToPeerId = new Map<string, string>();
+  private syncTimer: number | null = null;
 
   public roomId: string = '';
   public userId: string = '';
@@ -130,17 +131,31 @@ export class MeetingClient {
       // Handle remote incoming streams
       this.room.onPeerStream = (stream: MediaStream, peerId: string) => {
         const targetUserId = this.peerIdToUserId.get(peerId) || peerId;
-        const participant = this.participants.get(targetUserId);
+        const participant = this.participants.get(targetUserId) || this.participants.get(peerId);
         if (participant) {
           participant.stream = stream;
+        } else {
+          // If profile message hasn't arrived yet, save stream under peerId
+          this.participants.set(peerId, {
+            id: peerId,
+            name: 'Member',
+            isHost: false,
+            isLocal: false,
+            isMuted: false,
+            isVideoOff: false,
+            isScreenSharing: false,
+            handRaised: false,
+            stream: stream,
+          });
         }
         this.events.onRemoteStream(targetUserId, stream);
       };
 
       // When a peer connects to our room
       this.room.onPeerJoin = (peerId: string) => {
-        // Send our profile to the newly connected peer
+        // Broadcast profile immediately and again after a short delay
         this.broadcastMyProfile(peerId);
+        setTimeout(() => this.broadcastMyProfile(peerId), 500);
 
         // Share our media stream with the new peer if active
         if (this.localStream && this.room) {
@@ -160,7 +175,16 @@ export class MeetingClient {
         this.peerIdToUserId.set(peerId, profile.userId);
         this.userIdToPeerId.set(profile.userId, peerId);
 
-        const existing = this.participants.get(profile.userId);
+        // Check for existing stream saved under either profile.userId or peerId
+        const existingByUserId = this.participants.get(profile.userId);
+        const existingByPeerId = this.participants.get(peerId);
+        const activeStream = existingByUserId?.stream || existingByPeerId?.stream;
+
+        // Clean up temporary peerId entry if it was created prior to profile arrival
+        if (existingByPeerId && peerId !== profile.userId) {
+          this.participants.delete(peerId);
+        }
+
         const participant: Participant = {
           id: profile.userId,
           name: profile.name || 'Member',
@@ -170,14 +194,13 @@ export class MeetingClient {
           isVideoOff: !!profile.isVideoOff,
           isScreenSharing: !!profile.isScreenSharing,
           handRaised: !!profile.handRaised,
-          stream: existing?.stream,
+          stream: activeStream,
         };
 
         this.participants.set(profile.userId, participant);
 
-        if (!existing) {
+        if (!existingByUserId) {
           this.events.onUserJoined(participant);
-          // Return our profile back to ensure bidirectional awareness
           this.broadcastMyProfile(peerId);
         } else {
           this.events.onUserStatusChanged({
@@ -188,7 +211,31 @@ export class MeetingClient {
             handRaised: participant.handRaised,
           });
         }
+
+        if (activeStream) {
+          this.events.onRemoteStream(profile.userId, activeStream);
+        }
       };
+
+      // Periodic heartbeat to guarantee peer profile and stream exchange across all connected peers
+      this.syncTimer = window.setInterval(() => {
+        if (!this.room || this.isClosed) return;
+        try {
+          const peers = this.room.getPeers();
+          for (const peerId of Object.keys(peers)) {
+            this.broadcastMyProfile(peerId);
+            if (this.localStream) {
+              try {
+                this.room.addStream(this.localStream, { target: peerId });
+              } catch (e) {
+                // Stream may already be added
+              }
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 1500);
 
       // Handle peer leaving
       this.room.onPeerLeave = (peerId: string) => {
@@ -382,6 +429,10 @@ export class MeetingClient {
 
   public leave() {
     this.isClosed = true;
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = null;
+    }
     if (this.room) {
       try {
         this.room.leave();

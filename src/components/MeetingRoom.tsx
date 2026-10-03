@@ -44,6 +44,7 @@ import { ParticipantsDrawer } from './ParticipantsDrawer';
 import { RecordingModal } from './RecordingModal';
 import { InviteModal } from './InviteModal';
 import { SettingsModal } from './SettingsModal';
+import { ReactionPicker } from './ReactionPicker';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -182,7 +183,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onUserJoined: (user) => {
         setParticipants((prev) => {
-          if (prev.some((p) => p.id === user.id)) return prev;
+          const index = prev.findIndex((p) => p.id === user.id);
+          if (index >= 0) {
+            const list = [...prev];
+            list[index] = {
+              ...list[index],
+              ...user,
+              isLocal: false,
+              stream: user.stream || list[index].stream,
+            };
+            return list;
+          }
           return [...prev, { ...user, isLocal: false }];
         });
         showNotification(`${user.name} joined`);
@@ -195,9 +206,29 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onRemoteStream: (remoteUserId, stream) => {
-        setParticipants((prev) =>
-          prev.map((p) => (p.id === remoteUserId ? { ...p, stream } : p))
-        );
+        setParticipants((prev) => {
+          const index = prev.findIndex((p) => p.id === remoteUserId);
+          if (index >= 0) {
+            const list = [...prev];
+            list[index] = { ...list[index], stream };
+            return list;
+          }
+          // If remote participant profile hasn't been added yet, add with stream immediately
+          return [
+            ...prev,
+            {
+              id: remoteUserId,
+              name: 'Member',
+              isHost: false,
+              isLocal: false,
+              isMuted: false,
+              isVideoOff: false,
+              isScreenSharing: false,
+              handRaised: false,
+              stream,
+            },
+          ];
+        });
       },
 
       onChatMessage: (message) => {
@@ -359,6 +390,20 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     );
     clientRef.current?.updateStatus({ handRaised: nextState });
     clientRef.current?.sendReaction(nextState ? '✋' : '👋');
+  };
+
+  const handleSendReaction = (emoji: string) => {
+    clientRef.current?.sendReaction(emoji);
+    const newReaction: ReactionItem = {
+      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      senderId: userId,
+      senderName: userName,
+      emoji,
+    };
+    setActiveReactions((prev) => [...prev, newReaction]);
+    setTimeout(() => {
+      setActiveReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+    }, 3200);
   };
 
   const startRecording = async () => {
@@ -586,6 +631,29 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       {/* MAIN VIDEO STAGE */}
       <div className="flex-1 flex overflow-hidden relative bg-[#120D0A]">
+        {/* Floating Animated Emoji Reactions */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+          {activeReactions.map((reaction, index) => {
+            const leftPercent = 15 + ((reaction.id.charCodeAt(reaction.id.length - 1) * 7 + index * 17) % 70);
+            return (
+              <div
+                key={reaction.id}
+                className="absolute bottom-16 flex flex-col items-center animate-float-up pointer-events-none select-none"
+                style={{
+                  left: `${leftPercent}%`,
+                }}
+              >
+                <span className="text-4xl sm:text-5xl filter drop-shadow-lg transform transition-transform">
+                  {reaction.emoji}
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-semibold text-[#FFFCF5] bg-[#1A1410]/90 border border-[#3C230B] px-2 py-0.5 rounded-full mt-1 backdrop-blur-xs shadow-md">
+                  {reaction.senderName}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
         <main className="flex-1 p-3 flex items-center justify-center overflow-hidden">
           {pinnedParticipant ? (
             <div className="w-full h-full flex flex-col gap-2">
@@ -623,18 +691,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             </div>
           ) : (
             <div
-              className={`w-full h-full grid gap-3 max-w-7xl mx-auto transition-all ${
+              className={`w-full h-full grid gap-3.5 mx-auto items-center justify-center p-1 ${
                 participants.length === 1
-                  ? 'grid-cols-1 max-w-4xl max-h-[85vh]'
+                  ? 'grid-cols-1 max-w-4xl h-full'
                   : participants.length === 2
-                  ? 'grid-cols-1 sm:grid-cols-2 max-h-[80vh]'
+                  ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl h-full'
                   : participants.length <= 4
-                  ? 'grid-cols-2 grid-rows-2'
-                  : 'grid-cols-2 sm:grid-cols-3'
+                  ? 'grid-cols-2 grid-rows-2 max-w-6xl h-full'
+                  : 'grid-cols-2 sm:grid-cols-3 max-w-7xl h-full'
               }`}
             >
               {participants.map((p) => (
-                <div key={p.id} className="w-full h-full min-h-[160px]">
+                <div key={p.id} className="w-full h-full min-h-0 min-w-0 overflow-hidden relative rounded-2xl flex items-center justify-center">
                   <VideoTile
                     participant={p}
                     isLocal={p.isLocal}
@@ -715,6 +783,48 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             title="Screen Share"
           >
             <MonitorUp className="w-4 h-4" />
+          </button>
+
+          {/* Emoji Reactions Button & Picker */}
+          <div className="relative">
+            <button
+              onClick={() => setShowReactionPicker((prev) => !prev)}
+              className={`p-2.5 rounded-xl border text-xs transition flex items-center gap-1.5 ${
+                showReactionPicker
+                  ? 'bg-[#3C230B] text-[#D4AF37] border-[#D4AF37]/50 shadow-sm'
+                  : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+              }`}
+              title="Emoji Reactions"
+            >
+              <Smile className="w-4 h-4 text-[#D4AF37]" />
+              <span className="hidden md:inline font-medium">React</span>
+            </button>
+
+            {showReactionPicker && (
+              <ReactionPicker
+                onSelectReaction={(emoji) => {
+                  handleSendReaction(emoji);
+                }}
+                onToggleHandRaise={() => {
+                  toggleHandRaise();
+                }}
+                handRaised={handRaised}
+                onClose={() => setShowReactionPicker(false)}
+              />
+            )}
+          </div>
+
+          {/* Quick Raise Hand Button */}
+          <button
+            onClick={toggleHandRaise}
+            className={`p-2.5 rounded-xl border text-xs transition ${
+              handRaised
+                ? 'bg-[#D4AF37] text-[#241710] border-[#D4AF37] shadow-sm font-bold animate-pulse'
+                : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+            }`}
+            title={handRaised ? 'Lower Hand' : 'Raise Hand'}
+          >
+            <Hand className="w-4 h-4" />
           </button>
 
           {/* Local Recording */}
