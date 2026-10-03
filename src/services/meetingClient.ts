@@ -7,6 +7,14 @@ export interface MeetingClientEvents {
     locked: boolean;
     isRecording: boolean;
     participants: Participant[];
+    title?: string;
+    hostName?: string;
+  }) => void;
+  onRoomInfo?: (info: {
+    title?: string;
+    hostName?: string;
+    locked?: boolean;
+    isRecording?: boolean;
   }) => void;
   onUserJoined: (user: Participant) => void;
   onUserLeft: (userId: string, name?: string) => void;
@@ -159,11 +167,34 @@ export class MeetingClient {
           locked: this.isLocked,
           isRecording: message.isRecording || false,
           participants: remoteParticipants,
+          title: message.title,
+          hostName: message.hostName,
         });
+
+        if (message.title) {
+          this.events.onRoomInfo?.({
+            title: message.title,
+            hostName: message.hostName,
+            locked: this.isLocked,
+            isRecording: message.isRecording,
+          });
+        }
 
         // As the newly joined participant, initiate WebRTC offer to all existing participants in the room
         for (const p of remoteParticipants) {
           await this.createPeerConnection(p.id, true);
+        }
+        break;
+      }
+
+      case 'room-info-update': {
+        if (this.events.onRoomInfo) {
+          this.events.onRoomInfo({
+            title: message.title,
+            hostName: message.hostName,
+            locked: message.locked,
+            isRecording: message.isRecording,
+          });
         }
         break;
       }

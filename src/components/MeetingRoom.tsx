@@ -111,6 +111,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [remoteRecordingNotice, setRemoteRecordingNotice] = useState<{ isRecording: boolean; by: string } | null>(null);
   const [lastFinishedRecording, setLastFinishedRecording] = useState<RecordingResult | null>(null);
   const [systemBanner, setSystemBanner] = useState<string | null>(null);
+  const [currentTitle, setCurrentTitle] = useState<string>(sessionTitle || `Majlis (${roomId})`);
 
   // References
   const localStreamRef = useRef<MediaStream | null>(initialStream);
@@ -167,6 +168,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       onRoomJoined: (data) => {
         setIsHost(data.isHost);
         setIsLocked(data.locked);
+        if (data.title) {
+          setCurrentTitle(data.title);
+        }
         if (data.isRecording) {
           setRemoteRecordingNotice({ isRecording: true, by: 'Host' });
         }
@@ -179,6 +183,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           }
           return list;
         });
+      },
+
+      onRoomInfo: (info) => {
+        if (info.title) {
+          setCurrentTitle(info.title);
+        }
+        if (info.locked !== undefined) {
+          setIsLocked(info.locked);
+        }
       },
 
       onUserJoined: (user) => {
@@ -607,9 +620,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             </button>
           </div>
 
-          {sessionTitle && (
-            <span className="text-xs font-semibold text-[#FFFCF5] truncate max-w-xs hidden md:inline">
-              {sessionTitle}
+          {currentTitle && (
+            <span className="text-xs font-semibold text-[#FFFCF5] truncate max-w-sm inline-block">
+              {currentTitle}
             </span>
           )}
 

@@ -64,9 +64,10 @@ export default function App() {
     const handleLocationChange = () => {
       const code = getRoomCodeFromCurrentLocation();
       if (code && !activeMeeting) {
+        const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === code.toLowerCase());
         setPreJoinTarget({
           roomId: code,
-          title: `Majlis (${code})`,
+          title: existing?.title || `Majlis (${code})`,
           isHost: false,
         });
       }
@@ -78,7 +79,7 @@ export default function App() {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, [activeMeeting]);
+  }, [activeMeeting, activeMajalis]);
 
   const handleUpdateUserName = (newName: string) => {
     setUserName(newName);
@@ -86,9 +87,11 @@ export default function App() {
   };
 
   const handleInitiateJoin = (roomId: string, title?: string) => {
+    const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === roomId.toLowerCase());
+    const resolvedTitle = title || existing?.title || `Majlis (${roomId})`;
     setPreJoinTarget({
       roomId,
-      title: title || `Majlis (${roomId})`,
+      title: resolvedTitle,
       isHost: false,
     });
   };
@@ -100,8 +103,9 @@ export default function App() {
     stream: MediaStream | null;
     isMuted: boolean;
     isVideoOff: boolean;
+    title?: string;
   }) => {
-    const title = preJoinTarget?.title || 'Live Majlis';
+    const title = params.title || preJoinTarget?.title || 'Live Majlis';
     const chosenName = params.userName.trim() || userName;
 
     setUserName(chosenName);

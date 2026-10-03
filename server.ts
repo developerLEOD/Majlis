@@ -166,6 +166,8 @@ wss.on('connection', (ws: WebSocket) => {
             roomId,
             userId,
             isHost: participant.isHost,
+            title: room.title,
+            hostName: room.hostName,
             locked: room.locked,
             isRecording: room.isRecording,
             participants: existingParticipants,

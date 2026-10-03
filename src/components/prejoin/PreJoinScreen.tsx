@@ -14,6 +14,7 @@ interface PreJoinScreenProps {
     stream: MediaStream | null;
     isMuted: boolean;
     isVideoOff: boolean;
+    title?: string;
   }) => void;
   onCancel: () => void;
 }
@@ -27,12 +28,30 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   onCancel,
 }) => {
   const [userName, setUserName] = useState(defaultUserName || '');
+  const [displayTitle, setDisplayTitle] = useState(sessionTitle || `Majlis (${roomId})`);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [micVolume, setMicVolume] = useState(0);
   const [isHost, setIsHost] = useState(isHostDefault);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (roomId) {
+      fetch(`/api/room/${roomId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (active && data.exists && data.title) {
+            setDisplayTitle(data.title);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [roomId]);
 
   useEffect(() => {
     let active = true;
@@ -90,6 +109,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
       stream,
       isMuted: !isMicOn,
       isVideoOff: !isCameraOn,
+      title: displayTitle,
     });
   };
 
@@ -110,8 +130,8 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           <h2 className="text-2xl font-bold text-[#3C230B] mt-0.5">
             Join Majlis
           </h2>
-          {sessionTitle && (
-            <p className="text-xs text-[#68594E] mt-1 font-medium">{sessionTitle}</p>
+          {displayTitle && (
+            <p className="text-xs text-[#68594E] mt-1 font-medium">{displayTitle}</p>
           )}
           <p className="text-[11px] text-[#8E7E73] font-mono mt-0.5">Majlis ID: {roomId}</p>
         </div>
