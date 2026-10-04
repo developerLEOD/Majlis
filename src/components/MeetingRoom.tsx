@@ -41,6 +41,7 @@ import { SettingsModal } from './SettingsModal';
 import { RecordingModal } from './RecordingModal';
 import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
+import { HoneycombGrid } from './common/HoneycombGrid';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -1124,26 +1125,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
                       <div className="flex-1 w-full flex items-center justify-center max-h-[75vh] overflow-y-auto p-1">
                         {regularHoneycombParticipants.length > 0 ? (
-                          <div className="flex flex-wrap items-center justify-center -space-x-3 -space-y-4 sm:-space-x-4 sm:-space-y-5 max-w-lg mx-auto py-2">
-                            {regularHoneycombParticipants.map((p) => (
-                              <div
-                                key={p.id}
-                                className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 shrink-0 transition-transform hover:scale-105 hover:z-30"
-                              >
-                                <VideoTile
-                                  participant={p}
-                                  isLocal={p.isLocal}
-                                  mirror={mirrorVideo}
-                                  forceShape="honeycomb"
-                                  onTogglePin={() => setPinnedUserId(p.id)}
-                                  videoRefCallback={(el) => {
-                                    if (el) videoElementsRef.current.set(p.id, el);
-                                    else videoElementsRef.current.delete(p.id);
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
+                          <HoneycombGrid
+                            participants={regularHoneycombParticipants}
+                            mirrorVideo={mirrorVideo}
+                            onPinUser={(id) => setPinnedUserId(id)}
+                            videoElementsRef={videoElementsRef}
+                          />
                         ) : (
                           <div className="p-5 rounded-sm bg-[#1A110B]/85 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-sm shadow-lg">
                             <IslamicStarRosette size={24} variant="gold-outline" className="mx-auto mb-2 opacity-75" />
