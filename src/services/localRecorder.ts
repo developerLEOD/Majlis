@@ -8,7 +8,7 @@ export interface RecorderOptions {
   mode: RecordingMode;
   localStream: MediaStream | null;
   remoteStreams: MediaStream[];
-  participants: { id: string; name: string; isMuted: boolean; isVideoOff: boolean; stream?: MediaStream; isScreenSharing?: boolean }[];
+  getParticipants: () => { id: string; name: string; isMuted: boolean; isVideoOff: boolean; stream?: MediaStream; isScreenSharing?: boolean }[];
   getVideoElements: () => { id: string; name: string; element: HTMLVideoElement | null; isMuted: boolean }[];
   onTick?: (durationSeconds: number, currentSizeBytes: number) => void;
   onStatusChange?: (status: 'recording' | 'paused' | 'stopped') => void;
@@ -28,6 +28,11 @@ export class LocalMeetingRecorder {
   private canvas: HTMLCanvasElement | null = null;
   private currentSizeBytes = 0;
   private internalVideos: Map<string, HTMLVideoElement> = new Map();
+
+  // Dynamic Audio Mixing context & nodes
+  private audioCtx: AudioContext | null = null;
+  private audioDestination: MediaStreamAudioDestinationNode | null = null;
+  private connectedSources: Map<string, MediaStreamAudioSourceNode & { mediaStream?: MediaStream }> = new Map();
 
   public status: 'idle' | 'recording' | 'paused' | 'stopped' = 'idle';
 
@@ -74,9 +79,16 @@ export class LocalMeetingRecorder {
         }
       });
     } else {
-      // Initialize internal video elements for each participant stream
+      // Initialize dynamic AudioContext & destination node for composite recording
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      this.audioCtx = new AudioContextClass();
+      this.audioDestination = this.audioCtx.createMediaStreamDestination();
+      this.connectedSources.clear();
+
+      // Initialize internal video elements for each participant stream currently active
       this.internalVideos.clear();
-      this.options.participants.forEach((p) => {
+      const currentParticipants = this.options.getParticipants();
+      currentParticipants.forEach((p) => {
         if (p.stream) {
           const v = document.createElement('video');
           v.srcObject = p.stream;
@@ -93,6 +105,8 @@ export class LocalMeetingRecorder {
       this.canvas.height = 720;
       const ctx = this.canvas.getContext('2d')!;
 
+      let frameCount = 0;
+
       const drawMeetingComposite = () => {
         if (this.status === 'stopped') return;
 
@@ -103,21 +117,65 @@ export class LocalMeetingRecorder {
         ctx.fillStyle = '#090d16';
         ctx.fillRect(0, 0, w, h);
 
-        const participantsList = this.options.participants;
+        const participantsList = this.options.getParticipants();
         const domElements = this.options.getVideoElements();
         const domMap = new Map(domElements.map((e) => [e.id, e.element]));
+
+        // Check & sync dynamic audio sources + newly joined video streams
+        frameCount++;
+        if (frameCount % 15 === 0 && this.audioCtx && this.audioDestination) {
+          participantsList.forEach((p) => {
+            // Setup internal video element if missing
+            if (p.stream && !this.internalVideos.has(p.id)) {
+              const v = document.createElement('video');
+              v.srcObject = p.stream;
+              v.muted = true;
+              v.playsInline = true;
+              v.autoplay = true;
+              v.play().catch(() => {});
+              this.internalVideos.set(p.id, v);
+            }
+
+            // Sync dynamic Audio mixer source
+            if (p.stream && p.stream.getAudioTracks().length > 0) {
+              const existingSource = this.connectedSources.get(p.id);
+              if (!existingSource || existingSource.mediaStream !== p.stream) {
+                if (existingSource) {
+                  try { existingSource.disconnect(); } catch {}
+                }
+                try {
+                  const source = this.audioCtx!.createMediaStreamSource(p.stream);
+                  source.connect(this.audioDestination!);
+                  // Attach mediaStream property on node to track stream identity
+                  (source as any).mediaStream = p.stream;
+                  this.connectedSources.set(p.id, source);
+                } catch (err) {
+                  console.warn('Could not attach dynamic audio source in recorder:', err);
+                }
+              }
+            } else {
+              const existingSource = this.connectedSources.get(p.id);
+              if (existingSource) {
+                try { existingSource.disconnect(); } catch {}
+                this.connectedSources.delete(p.id);
+              }
+            }
+          });
+
+          // Disconnect audio sources of participants who left the room
+          this.connectedSources.forEach((source, pId) => {
+            if (!participantsList.some((p) => p.id === pId)) {
+              try { source.disconnect(); } catch {}
+              this.connectedSources.delete(pId);
+            }
+          });
+        }
 
         const getVideoForParticipant = (pId: string, isVideoOff: boolean) => {
           if (isVideoOff) return null;
           const domEl = domMap.get(pId);
-          if (domEl && domEl.videoWidth > 0 && domEl.videoHeight > 0) {
-            return domEl;
-          }
-          const internalEl = this.internalVideos.get(pId);
-          if (internalEl && internalEl.videoWidth > 0 && internalEl.videoHeight > 0) {
-            return internalEl;
-          }
-          return domEl || internalEl || null;
+          if (domEl) return domEl;
+          return this.internalVideos.get(pId) || null;
         };
 
         const count = participantsList.length;
@@ -210,16 +268,9 @@ export class LocalMeetingRecorder {
 
       const canvasStream = this.canvas.captureStream(30);
 
-      const audioStreamsToMix: MediaStream[] = [];
-      if (this.options.localStream) audioStreamsToMix.push(this.options.localStream);
-      this.options.remoteStreams.forEach((s) => audioStreamsToMix.push(s));
-
-      const { mixedStream, cleanup } = createMixedAudioStream(audioStreamsToMix);
-      this.audioCleanup = cleanup;
-
       recordingStream = new MediaStream();
       canvasStream.getVideoTracks().forEach((t) => recordingStream.addTrack(t));
-      mixedStream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
+      this.audioDestination.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
     }
 
     const mimeTypes = [
@@ -313,10 +364,12 @@ export class LocalMeetingRecorder {
     ctx.roundRect(x, y, w, h, [12]);
     ctx.clip();
 
-    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+    let drewVideo = false;
+
+    if (video) {
       try {
-        const vW = video.videoWidth;
-        const vH = video.videoHeight;
+        const vW = video.videoWidth || 640;
+        const vH = video.videoHeight || 480;
         const videoRatio = vW / vH;
         const targetRatio = w / h;
 
@@ -334,10 +387,13 @@ export class LocalMeetingRecorder {
         }
 
         ctx.drawImage(video, offsetX, offsetY, renderW, renderH);
-      } catch {
-        this.drawAvatarPlaceholder(ctx, name, x, y, w, h);
+        drewVideo = true;
+      } catch (err) {
+        // Fallback to avatar if drawImage fails
       }
-    } else {
+    }
+
+    if (!drewVideo) {
       this.drawAvatarPlaceholder(ctx, name, x, y, w, h);
     }
 
@@ -400,6 +456,17 @@ export class LocalMeetingRecorder {
         v.srcObject = null;
       });
       this.internalVideos.clear();
+
+      this.connectedSources.forEach((source) => {
+        try { source.disconnect(); } catch {}
+      });
+      this.connectedSources.clear();
+
+      if (this.audioCtx && this.audioCtx.state !== 'closed') {
+        this.audioCtx.close().catch(() => {});
+        this.audioCtx = null;
+      }
+      this.audioDestination = null;
 
       if (!this.mediaRecorder) {
         resolve({

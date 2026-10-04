@@ -122,6 +122,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const wasVideoOffRef = useRef<boolean>(initialVideoOff);
   const clientRef = useRef<MeetingClient | null>(null);
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const participantsRef = useRef<Participant[]>([]);
+
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   // Auto-spotlight stage when a participant shares screen
   useEffect(() => {
@@ -524,6 +529,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
         const combinedStream = new MediaStream();
         screenStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
+        screenStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
         if (localStreamRef.current) {
           localStreamRef.current.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
         }
@@ -613,15 +619,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         mode: 'composite',
         localStream: localStreamRef.current,
         remoteStreams,
-        participants: participants.map((p) => ({
-          id: p.id,
-          name: p.name,
-          isMuted: p.isMuted,
-          isVideoOff: p.isVideoOff,
-          stream: p.stream,
-        })),
+        getParticipants: () => {
+          return participantsRef.current.map((p) => ({
+            id: p.id,
+            name: p.name,
+            isMuted: p.isMuted,
+            isVideoOff: p.isVideoOff,
+            stream: p.stream,
+          }));
+        },
         getVideoElements: () => {
-          return participants.map((p) => ({
+          return participantsRef.current.map((p) => ({
             id: p.id,
             name: p.name,
             element: videoElementsRef.current.get(p.id) || null,
