@@ -239,7 +239,7 @@ export class LocalMeetingRecorder {
       }
     };
 
-    this.mediaRecorder.start(1000);
+    this.mediaRecorder.start();
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
