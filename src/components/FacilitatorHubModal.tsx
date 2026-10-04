@@ -7,15 +7,14 @@ import {
   Hand,
   MessageSquare,
   Share2,
-  Bell,
   Sparkles,
-  Users,
   Shield,
   X,
   AlertTriangle,
   Radio,
   Tv,
 } from 'lucide-react';
+import { IslamicStarRosette } from './common/IslamicStarRosette';
 
 interface FacilitatorHubModalProps {
   isLocked: boolean;
@@ -64,89 +63,90 @@ export const FacilitatorHubModal: React.FC<FacilitatorHubModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-[#18120E] border border-[#3C230B] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in">
+      <div className="w-full max-w-lg bg-[#FAF8F5] border border-[#302116] rounded-md overflow-hidden flex flex-col max-h-[90vh] text-[#1C1917] shadow-2xl">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#3C230B]/80 flex items-center justify-between bg-gradient-to-r from-[#241710] to-[#1A130E]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#D4AF37]/15 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37]">
-              <Crown className="w-4 h-4" />
-            </div>
+        <div className="px-6 py-4 border-b border-[#EAE4DC] flex items-center justify-between bg-[#F5F2EB]">
+          <div className="flex items-center gap-3">
+            <IslamicStarRosette size={26} variant="full" />
             <div>
-              <h3 className="font-editorial text-base font-bold text-[#FFFCF5] flex items-center gap-2">
-                Facilitator Control Center
-              </h3>
-              <p className="text-[11px] text-[#A8988B]">
-                Moderation & Adab tools for {participantCount} attendee{participantCount === 1 ? '' : 's'}
+              <h2 className="text-base font-bold text-[#1C1917] leading-tight flex items-center gap-2">
+                <span>Facilitator Control Center</span>
+                <span className="px-1.5 py-0.2 bg-[#E9A83A] text-[#1E140C] text-[9px] font-bold rounded-sm uppercase tracking-wider">
+                  Host
+                </span>
+              </h2>
+              <p className="text-[11px] text-[#8A7A6D] mt-0.5">
+                Moderation tools for {participantCount} attendee{participantCount === 1 ? '' : 's'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#8E7E73] hover:text-[#FFFCF5] rounded-lg hover:bg-[#2B1706] transition"
+            className="p-1 text-[#8A7A6D] hover:text-[#1C1917] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 overflow-y-auto space-y-5 text-[#FFFCF5]">
-          {/* Quick Order Actions */}
+        <div className="p-6 overflow-y-auto space-y-5 text-xs">
+          {/* Quick Actions */}
           <div>
-            <h4 className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> Quick Actions
-            </h4>
+            <h3 className="text-xs font-bold text-[#1C1917] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" /> Quick Actions
+            </h3>
             <div className="grid grid-cols-2 gap-2.5">
               {/* Mute All */}
               <button
                 onClick={onMuteAll}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-[#241710] hover:bg-[#2B1706] border border-[#3C230B] hover:border-[#D4AF37]/40 transition text-left group"
+                className="flex items-center gap-2.5 p-3 rounded-sm bg-[#F5F2EB] hover:bg-[#EAE4DC] border border-[#E0D7CB] transition-colors text-left shadow-xs"
               >
-                <div className="p-2 rounded-lg bg-red-950/60 text-red-400 group-hover:scale-105 transition-transform">
-                  <MicOff className="w-4 h-4" />
+                <div className="p-1.5 rounded-sm bg-red-100 text-[#A83245]">
+                  <MicOff className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-[#FFFCF5]">Mute All Seekers</div>
-                  <div className="text-[10px] text-[#8E7E73]">Silence all attendee mics</div>
+                  <div className="text-xs font-bold text-[#1C1917]">Mute All Seekers</div>
+                  <div className="text-[10px] text-[#7A6C62]">Silence attendee mics</div>
                 </div>
               </button>
 
               {/* Lower All Hands */}
               <button
                 onClick={onLowerAllHands}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-[#241710] hover:bg-[#2B1706] border border-[#3C230B] hover:border-[#D4AF37]/40 transition text-left group"
+                className="flex items-center gap-2.5 p-3 rounded-sm bg-[#F5F2EB] hover:bg-[#EAE4DC] border border-[#E0D7CB] transition-colors text-left shadow-xs"
               >
-                <div className="p-2 rounded-lg bg-[#3C230B] text-[#D4AF37] group-hover:scale-105 transition-transform">
-                  <Hand className="w-4 h-4" />
+                <div className="p-1.5 rounded-sm bg-amber-100 text-[#8F6614]">
+                  <Hand className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-[#FFFCF5]">Lower All Hands</div>
-                  <div className="text-[10px] text-[#8E7E73]">Clear raised hands queue</div>
+                  <div className="text-xs font-bold text-[#1C1917]">Lower All Hands</div>
+                  <div className="text-[10px] text-[#7A6C62]">Clear raised queue</div>
                 </div>
               </button>
 
               {/* Lock / Unlock */}
               <button
                 onClick={onToggleLock}
-                className={`flex items-center gap-2.5 p-3 rounded-xl border transition text-left group ${
+                className={`flex items-center gap-2.5 p-3 rounded-sm border transition-colors text-left shadow-xs ${
                   isLocked
-                    ? 'bg-amber-950/40 border-amber-600/50 hover:bg-amber-950/60'
-                    : 'bg-[#241710] hover:bg-[#2B1706] border-[#3C230B] hover:border-[#D4AF37]/40'
+                    ? 'bg-amber-50 border-amber-300'
+                    : 'bg-[#F5F2EB] hover:bg-[#EAE4DC] border-[#E0D7CB]'
                 }`}
               >
                 <div
-                  className={`p-2 rounded-lg group-hover:scale-105 transition-transform ${
-                    isLocked ? 'bg-amber-900/60 text-amber-300' : 'bg-[#1A1410] text-[#8E7E73]'
+                  className={`p-1.5 rounded-sm ${
+                    isLocked ? 'bg-amber-200 text-amber-900' : 'bg-[#EAE4DC] text-[#7A6C62]'
                   }`}
                 >
-                  {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-[#FFFCF5]">
+                  <div className="text-xs font-bold text-[#1C1917]">
                     {isLocked ? 'Unlock Majlis' : 'Lock Majlis'}
                   </div>
-                  <div className="text-[10px] text-[#8E7E73]">
-                    {isLocked ? 'Allow new joiners' : 'Prevent new entries'}
+                  <div className="text-[10px] text-[#7A6C62]">
+                    {isLocked ? 'Allow joiners' : 'Prevent new entries'}
                   </div>
                 </div>
               </button>
@@ -154,17 +154,17 @@ export const FacilitatorHubModal: React.FC<FacilitatorHubModalProps> = ({
               {/* Spotlight Reset */}
               <button
                 onClick={onClearSpotlight}
-                className="flex items-center gap-2.5 p-3 rounded-xl bg-[#241710] hover:bg-[#2B1706] border border-[#3C230B] hover:border-[#D4AF37]/40 transition text-left group"
+                className="flex items-center gap-2.5 p-3 rounded-sm bg-[#F5F2EB] hover:bg-[#EAE4DC] border border-[#E0D7CB] transition-colors text-left shadow-xs"
               >
-                <div className="p-2 rounded-lg bg-[#3C230B] text-[#E0C2A6] group-hover:scale-105 transition-transform">
-                  <Tv className="w-4 h-4" />
+                <div className="p-1.5 rounded-sm bg-[#DDE6DC] text-[#075E4A]">
+                  <Tv className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-[#FFFCF5]">
+                  <div className="text-xs font-bold text-[#1C1917]">
                     {spotlightUserId ? 'Clear Spotlight' : 'Stage Layout'}
                   </div>
-                  <div className="text-[10px] text-[#8E7E73]">
-                    {spotlightUserId ? 'Return to grid view' : 'Balanced grid active'}
+                  <div className="text-[10px] text-[#7A6C62]">
+                    {spotlightUserId ? 'Return to grid' : 'Balanced grid active'}
                   </div>
                 </div>
               </button>
@@ -172,52 +172,52 @@ export const FacilitatorHubModal: React.FC<FacilitatorHubModalProps> = ({
           </div>
 
           {/* Attendee Permissions */}
-          <div className="border-t border-[#3C230B]/60 pt-4">
-            <h4 className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5" /> Attendee Permissions
-            </h4>
-            <div className="space-y-2 bg-[#201611] rounded-xl p-3 border border-[#3C230B]/70">
+          <div className="border-t border-[#EAE4DC] pt-4">
+            <h3 className="text-xs font-bold text-[#1C1917] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-[#8A7A6D]" /> Attendee Permissions
+            </h3>
+            <div className="space-y-2.5 bg-[#F5F2EB] rounded-sm p-3.5 border border-[#E0D7CB]">
               {/* Chat Permission */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-4 h-4 text-[#A8988B]" />
+                  <MessageSquare className="w-3.5 h-3.5 text-[#8A7A6D]" />
                   <div>
-                    <div className="text-xs font-medium text-[#FFFCF5]">In-Session Chat</div>
-                    <div className="text-[10px] text-[#8E7E73]">Allow seekers to post messages</div>
+                    <div className="text-xs font-semibold text-[#1C1917]">In-Session Chat</div>
+                    <div className="text-[10px] text-[#7A6C62]">Allow seekers to post thoughts</div>
                   </div>
                 </div>
                 <button
                   onClick={() => onToggleChatPermission(!chatEnabled)}
-                  className={`w-10 h-5.5 rounded-full transition-colors relative flex items-center px-0.5 ${
-                    chatEnabled ? 'bg-[#D4AF37]' : 'bg-[#3C230B]'
+                  className={`w-9 h-5 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    chatEnabled ? 'bg-[#075E4A]' : 'bg-[#D9D0C3]'
                   }`}
                 >
                   <div
-                    className={`w-4.5 h-4.5 rounded-full bg-[#18120E] shadow transform transition-transform ${
-                      chatEnabled ? 'translate-x-4.5' : 'translate-x-0'
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      chatEnabled ? 'translate-x-4' : 'translate-x-0'
                     }`}
                   />
                 </button>
               </div>
 
               {/* Screen Share Permission */}
-              <div className="flex items-center justify-between pt-2 border-t border-[#3C230B]/40">
+              <div className="flex items-center justify-between pt-2.5 border-t border-[#EAE4DC]">
                 <div className="flex items-center gap-2.5">
-                  <Share2 className="w-4 h-4 text-[#A8988B]" />
+                  <Share2 className="w-3.5 h-3.5 text-[#8A7A6D]" />
                   <div>
-                    <div className="text-xs font-medium text-[#FFFCF5]">Attendee Screen Sharing</div>
-                    <div className="text-[10px] text-[#8E7E73]">Allow non-hosts to present screen</div>
+                    <div className="text-xs font-semibold text-[#1C1917]">Attendee Screen Sharing</div>
+                    <div className="text-[10px] text-[#7A6C62]">Allow non-hosts to present screen</div>
                   </div>
                 </div>
                 <button
                   onClick={() => onToggleScreenSharePermission(!screenShareEnabled)}
-                  className={`w-10 h-5.5 rounded-full transition-colors relative flex items-center px-0.5 ${
-                    screenShareEnabled ? 'bg-[#D4AF37]' : 'bg-[#3C230B]'
+                  className={`w-9 h-5 rounded-full transition-colors relative flex items-center px-0.5 ${
+                    screenShareEnabled ? 'bg-[#075E4A]' : 'bg-[#D9D0C3]'
                   }`}
                 >
                   <div
-                    className={`w-4.5 h-4.5 rounded-full bg-[#18120E] shadow transform transition-transform ${
-                      screenShareEnabled ? 'translate-x-4.5' : 'translate-x-0'
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      screenShareEnabled ? 'translate-x-4' : 'translate-x-0'
                     }`}
                   />
                 </button>
@@ -226,65 +226,65 @@ export const FacilitatorHubModal: React.FC<FacilitatorHubModalProps> = ({
           </div>
 
           {/* Broadcast Announcement */}
-          <div className="border-t border-[#3C230B]/60 pt-4">
-            <h4 className="text-xs font-bold text-[#D4AF37] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5" /> Broadcast Stage Announcement
-            </h4>
+          <div className="border-t border-[#EAE4DC] pt-4">
+            <h3 className="text-xs font-bold text-[#1C1917] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-[#E9A83A]" /> Broadcast Stage Announcement
+            </h3>
             <form onSubmit={handleSendAnnouncement} className="space-y-2">
-              <div className="relative">
+              <div className="flex gap-2">
                 <input
                   type="text"
                   value={announcementText}
                   onChange={(e) => setAnnouncementText(e.target.value)}
-                  placeholder="e.g. Resuming after Maghrib prayer / Q&A open..."
-                  className="w-full bg-[#201611] border border-[#3C230B] rounded-xl px-3 py-2 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37] pr-20"
+                  placeholder="e.g. Q&A open / Resuming short break..."
+                  className="flex-1 bg-[#FAF8F5] border border-[#D5CABB] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
                 />
                 <button
                   type="submit"
                   disabled={!announcementText.trim()}
-                  className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-[#D4AF37] hover:bg-[#C29D2D] disabled:opacity-40 text-[#241710] font-bold text-[11px] rounded-lg transition"
+                  className="px-4 py-2 bg-[#075E4A] hover:bg-[#05493A] disabled:opacity-40 text-white font-semibold text-xs rounded-sm transition-colors shrink-0 shadow-xs"
                 >
                   Broadcast
                 </button>
               </div>
               {sentSuccess && (
-                <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                  ✓ Announcement broadcast to all attendees
+                <p className="text-[11px] text-[#19A6A0] font-semibold">
+                  ✓ Announcement broadcast to all attendees on stage
                 </p>
               )}
             </form>
           </div>
 
-          {/* End Session Danger Zone */}
-          <div className="border-t border-[#3C230B]/60 pt-4">
-            <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+          {/* End Session */}
+          <div className="border-t border-[#EAE4DC] pt-4">
+            <h3 className="text-xs font-bold text-[#A83245] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5" /> Conclude Gathering
-            </h4>
+            </h3>
             {!showEndConfirm ? (
               <button
                 onClick={() => setShowEndConfirm(true)}
-                className="w-full py-2.5 px-4 bg-red-950/40 hover:bg-red-950/80 border border-red-900/60 hover:border-red-700 text-red-300 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2"
+                className="w-full py-2.5 px-3 bg-red-50 hover:bg-red-100 border border-red-200 text-[#A83245] rounded-sm text-xs font-semibold transition-colors"
               >
-                <span>End Majlis Session for All Attendees</span>
+                End Majlis Session for All
               </button>
             ) : (
-              <div className="p-3 bg-red-950/80 border border-red-800 rounded-xl space-y-2.5 text-center">
-                <p className="text-xs text-red-200 font-medium">
-                  This will disconnect all attendees and remove this room from the live directory.
+              <div className="p-4 bg-red-50 border border-red-200 rounded-sm space-y-2.5 text-center">
+                <p className="text-xs text-red-900 font-semibold">
+                  Disconnect all seekers and close the live room?
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-center">
                   <button
                     onClick={() => {
                       onEndMeetingForAll();
                       onClose();
                     }}
-                    className="flex-1 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-bold rounded-lg shadow transition"
+                    className="py-1.5 px-4 bg-[#A83245] hover:bg-[#8B2334] text-white text-xs font-bold rounded-sm transition-colors shadow-xs"
                   >
                     Yes, End for All
                   </button>
                   <button
                     onClick={() => setShowEndConfirm(false)}
-                    className="px-3 py-1.5 bg-[#241710] text-[#D9D0C3] text-xs rounded-lg hover:bg-[#2B1706] transition"
+                    className="py-1.5 px-4 bg-[#EAE4DC] text-[#1C1917] border border-[#D5CABB] text-xs font-semibold rounded-sm hover:bg-[#DFD8CE] transition-colors"
                   >
                     Cancel
                   </button>
@@ -295,10 +295,10 @@ export const FacilitatorHubModal: React.FC<FacilitatorHubModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#3C230B]/80 bg-[#140F0C] flex justify-end">
+        <div className="p-4 border-t border-[#EAE4DC] bg-[#F5F2EB] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-[#2B1706] hover:bg-[#3C230B] text-[#E0C2A6] text-xs font-semibold rounded-xl border border-[#3C230B] transition"
+            className="px-5 py-2 bg-[#075E4A] hover:bg-[#05493A] text-white text-xs font-bold rounded-sm transition-colors shadow-xs"
           >
             Done
           </button>

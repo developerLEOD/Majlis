@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Crown, Key, Lock, Mic, MicOff, Shield, Video, VideoOff } from 'lucide-react';
+import { Crown, Key, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 import { useAuth } from '../../context/AuthContext';
+import { IslamicStarRosette } from '../common/IslamicStarRosette';
 
 interface PreJoinScreenProps {
   roomId: string;
@@ -136,23 +137,54 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F2EB] text-[#241710] flex flex-col items-center justify-center p-4 sm:p-6 select-none">
-      <div className="w-full max-w-md bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl shadow-sm p-6 space-y-5">
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8E7E73] block">
-            The Wisdom Lounge
-          </span>
-          <h2 className="text-2xl font-bold text-[#3C230B] mt-0.5">
-            Join Majlis
-          </h2>
-          {displayTitle && (
-            <p className="text-xs text-[#68594E] mt-1 font-medium">{displayTitle}</p>
-          )}
-          <p className="text-[11px] text-[#8E7E73] font-mono mt-0.5">Majlis ID: {roomId}</p>
+    <div className="min-h-screen bg-[#140D08] text-[#1C1917] flex flex-col items-center justify-center p-4 select-none relative overflow-hidden">
+      {/* Ambient Stained Glass Sanctuary Background */}
+      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+        <img
+          src="/src/assets/images/hero_stained_glass_1791101546981.jpg"
+          alt="Majlis Sanctuary"
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover filter blur-xs brightness-[0.6] contrast-[1.05]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#160E09]/80 via-[#100A06]/65 to-[#0A0503]/85" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-gradient-to-r from-[#E9A83A]/20 via-[#075E4A]/25 to-[#174A83]/20 blur-3xl pointer-events-none rounded-full" />
+      </div>
+
+      <div className="w-full max-w-md bg-[#FFFCF5] border border-[#302116] rounded-sm p-6 sm:p-7 space-y-5 shadow-2xl relative z-10">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b border-[#E6DFD5] pb-4">
+          <IslamicStarRosette size={32} variant="full" />
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8E7E73] flex items-center gap-1.5">
+              <span>The Wisdom Lounge</span>
+              <span className="text-[#E9A83A]">✦</span>
+            </div>
+            <h1 className="text-xl font-bold text-[#1C1917]">
+              Step into Majlis
+            </h1>
+          </div>
+        </div>
+
+        {/* Room Info */}
+        <div className="bg-[#FAF8F5] border border-[#E6DFD5] rounded-sm p-3.5 text-xs space-y-1">
+          <div className="font-bold text-[#1C1917] text-sm">{displayTitle}</div>
+          <div className="text-[#8E7E73] font-mono text-[11px] flex items-center justify-between">
+            <span className="text-[#302116]">Circle ID: #{roomId}</span>
+            <span className="text-[#075E4A] font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#19A6A0]" />
+              Active Sanctuary
+            </span>
+          </div>
         </div>
 
         {/* Camera Preview */}
-        <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-[#D9D0C3] flex items-center justify-center">
+        <div className="relative aspect-video rounded-sm bg-[#160E09] overflow-hidden border border-[#302116] flex items-center justify-center shadow-md">
+          {/* Architectural corner mullions */}
+          <div className="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-[#E9A83A]/60 z-20 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-[#E9A83A]/60 z-20 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-[#E9A83A]/60 z-20 pointer-events-none" />
+          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#E9A83A]/60 z-20 pointer-events-none" />
+
           <video
             ref={videoRef}
             autoPlay
@@ -163,19 +195,24 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
             }`}
           />
           {!isCameraOn && (
-            <span className="text-xs text-[#8E7E73]">Camera Off</span>
+            <div className="flex flex-col items-center gap-2 text-xs text-[#8E7E73]">
+              <IslamicStarRosette size={24} variant="gold-outline" />
+              <span className="flex items-center gap-1.5">
+                <VideoOff className="w-4 h-4 text-[#E9A83A]" /> Camera Off
+              </span>
+            </div>
           )}
 
           {/* Mic Meter */}
-          <div className="absolute bottom-2.5 left-2.5 bg-black/70 backdrop-blur px-2 py-1 rounded text-white flex items-center gap-2 text-xs">
+          <div className="absolute bottom-2 left-2 bg-[#1A110B]/90 border border-[#302116] px-2 py-1 rounded-sm text-white flex items-center gap-2 text-xs">
             {isMicOn ? (
-              <Mic className="w-3 h-3 text-emerald-400" />
+              <Mic className="w-3.5 h-3.5 text-[#19A6A0]" />
             ) : (
-              <MicOff className="w-3 h-3 text-red-400" />
+              <MicOff className="w-3.5 h-3.5 text-[#A83245]" />
             )}
-            <div className="w-12 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div className="w-12 h-1 bg-[#2B1B12] rounded-full overflow-hidden">
               <div
-                className="h-full bg-emerald-500 transition-all duration-75"
+                className="h-full bg-[#19A6A0] transition-all duration-75"
                 style={{ width: `${Math.min(100, micVolume * 1.5)}%` }}
               />
             </div>
@@ -187,39 +224,41 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           <button
             type="button"
             onClick={() => setIsMicOn(!isMicOn)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+            className={`flex-1 py-2 rounded-sm text-xs font-semibold border transition-colors flex items-center justify-center gap-1.5 ${
               isMicOn
-                ? 'bg-[#EFECE4] border-[#D9D0C3] text-[#3C230B]'
-                : 'bg-red-100 border-red-200 text-red-700'
+                ? 'bg-[#EFECE4] border-[#D9D0C3] text-[#302116]'
+                : 'bg-red-50 border-red-200 text-[#A83245]'
             }`}
           >
-            {isMicOn ? 'Mic Active' : 'Mic Muted'}
+            {isMicOn ? <Mic className="w-3.5 h-3.5 text-[#075E4A]" /> : <MicOff className="w-3.5 h-3.5" />}
+            <span>{isMicOn ? 'Mic Active' : 'Mic Muted'}</span>
           </button>
           <button
             type="button"
             onClick={() => setIsCameraOn(!isCameraOn)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+            className={`flex-1 py-2 rounded-sm text-xs font-semibold border transition-colors flex items-center justify-center gap-1.5 ${
               isCameraOn
-                ? 'bg-[#EFECE4] border-[#D9D0C3] text-[#3C230B]'
-                : 'bg-red-100 border-red-200 text-red-700'
+                ? 'bg-[#EFECE4] border-[#D9D0C3] text-[#302116]'
+                : 'bg-red-50 border-red-200 text-[#A83245]'
             }`}
           >
-            {isCameraOn ? 'Camera Active' : 'Camera Off'}
+            {isCameraOn ? <Video className="w-3.5 h-3.5 text-[#075E4A]" /> : <VideoOff className="w-3.5 h-3.5" />}
+            <span>{isCameraOn ? 'Camera Active' : 'Camera Off'}</span>
           </button>
         </div>
 
         {/* Host Mode Role Toggle */}
-        <div className="p-3 bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl space-y-2">
+        <div className="p-3 bg-[#FAF8F5] border border-[#E6DFD5] rounded-sm space-y-2">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5">
-              <Crown className={`w-3.5 h-3.5 ${isHost ? 'text-[#D4AF37]' : 'text-[#8E7E73]'}`} />
-              <span className="font-semibold text-[#3C230B]">Enter as Facilitator</span>
+              <Crown className={`w-3.5 h-3.5 ${isHost ? 'text-[#E9A83A]' : 'text-[#8E7E73]'}`} />
+              <span className="font-semibold text-[#1C1917]">Enter as Facilitator</span>
             </div>
             <button
               type="button"
               onClick={handleToggleHostMode}
               className={`w-9 h-5 rounded-full relative flex items-center transition-colors px-0.5 ${
-                isHost ? 'bg-[#3C230B]' : 'bg-[#D9D0C3]'
+                isHost ? 'bg-[#075E4A]' : 'bg-[#D9D0C3]'
               }`}
             >
               <div
@@ -231,17 +270,15 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           </div>
 
           {showHostNotice && !isFacilitator && (
-            <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-lg text-[11px] text-[#3C230B] space-y-1.5">
-              <p>
-                Facilitator role is enabled on recognized moderator accounts.
-              </p>
+            <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-sm text-[11px] text-[#302116] space-y-1.5">
+              <p>Facilitator privileges require an authorized moderator account.</p>
               {onOpenAuthModal && (
                 <button
                   type="button"
                   onClick={onOpenAuthModal}
-                  className="text-xs font-bold text-[#3C230B] underline flex items-center gap-1"
+                  className="text-xs font-bold text-[#075E4A] underline flex items-center gap-1"
                 >
-                  <Key className="w-3 h-3 text-[#D4AF37]" /> Sign in with Moderator Account
+                  <Key className="w-3 h-3 text-[#E9A83A]" /> Sign in as Facilitator
                 </button>
               )}
             </div>
@@ -251,7 +288,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 pt-1 border-t border-[#E6DFD5]">
           <div>
-            <label className="text-xs font-semibold text-[#3C230B] block mb-1">
+            <label className="text-xs font-semibold text-[#1C1917] block mb-1">
               Your Display Name
             </label>
             <input
@@ -260,24 +297,24 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="Display Name..."
-              className="w-full bg-white border border-[#D9D0C3] rounded-xl px-3.5 py-2 text-xs text-[#241710] focus:outline-none focus:border-[#3C230B]"
+              className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3.5 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
             />
           </div>
 
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center justify-between text-xs pt-1">
             <button
               type="button"
               onClick={handleCancel}
-              className="text-[#8E7E73] hover:text-[#3C230B] font-medium"
+              className="text-[#8E7E73] hover:text-[#1C1917] font-medium"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] font-semibold text-xs rounded-xl shadow-xs transition"
+              className="px-5 py-2.5 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] font-semibold text-xs rounded-sm transition-colors border border-[#19A6A0]/40 shadow-xs"
             >
-              Join Majlis
+              Enter Sanctuary
             </button>
           </div>
         </form>

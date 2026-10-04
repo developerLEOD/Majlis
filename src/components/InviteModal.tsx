@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Copy, Link, Share2, Users, X } from 'lucide-react';
+import { Check, Copy, Link, Share2, X } from 'lucide-react';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
   fetchAppConfig,
   getCachedPublicAppUrl,
 } from '../utils/urlHelper';
+import { IslamicStarRosette } from './common/IslamicStarRosette';
 
 interface InviteModalProps {
   roomId: string;
@@ -64,45 +65,40 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, title, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in duration-150">
-      <div className="relative w-full max-w-md bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl shadow-xl p-6">
-        <div className="flex items-center justify-between pb-4 border-b border-[#E6DFD5]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#EFECE4] border border-[#D9D0C3] flex items-center justify-center text-[#3C230B]">
-              <Users className="w-4 h-4" />
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in">
+      <div className="relative w-full max-w-md bg-[#FAF8F5] border border-[#302116] rounded-md p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between pb-3 border-b border-[#EAE4DC]">
+          <div className="flex items-center gap-3">
+            <IslamicStarRosette size={26} variant="full" />
             <div>
-              <span className="text-[9px] font-bold uppercase tracking-widest text-[#8E7E73] block leading-none">
-                The Wisdom Lounge
-              </span>
-              <h3 className="text-base font-bold text-[#3C230B] leading-tight">
+              <div className="text-[10px] uppercase font-bold tracking-[0.2em] text-[#8A7A6D]">
+                THE WISDOM LOUNGE
+              </div>
+              <h2 className="text-base font-bold text-[#1C1917]">
                 Invite to Majlis
-              </h3>
-              {title && (
-                <p className="text-xs text-[#68594E] font-medium truncate max-w-xs mt-0.5">{title}</p>
-              )}
+              </h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#8E7E73] hover:text-[#3C230B] rounded-lg hover:bg-[#EFECE4] transition"
+            className="p-1 text-[#8A7A6D] hover:text-[#1C1917] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="mt-5 space-y-4">
-          {/* Direct Majlis URL */}
+        <div className="space-y-4 text-xs">
+          {/* Direct Link */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-semibold text-[#3C230B] flex items-center gap-1.5">
-                <Link className="w-3.5 h-3.5 text-[#8E7E73]" />
+              <label className="font-semibold text-[#1C1917] flex items-center gap-1.5">
+                <Link className="w-3.5 h-3.5 text-[#8A7A6D]" />
                 Direct Majlis Link
               </label>
               {canShare && (
                 <button
                   onClick={handleNativeShare}
-                  className="flex items-center gap-1 text-[11px] text-[#3C230B] hover:underline font-medium transition"
+                  className="flex items-center gap-1 text-[#0D3B36] hover:underline font-semibold transition-colors"
                 >
                   <Share2 className="w-3 h-3" /> Share...
                 </button>
@@ -112,47 +108,47 @@ export const InviteModal: React.FC<InviteModalProps> = ({ roomId, title, onClose
             <div className="flex items-center gap-2">
               <div
                 onClick={handleCopyLink}
-                className="flex-1 bg-white border border-[#D9D0C3] hover:border-[#3C230B] rounded-xl px-3 py-2 text-xs text-[#241710] font-mono truncate select-all cursor-pointer transition"
+                className="flex-1 bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm px-3 py-2 text-[#1C1917] font-mono truncate select-all cursor-pointer"
                 title="Click to copy full invite link"
               >
                 {inviteUrl}
               </div>
               <button
                 onClick={handleCopyLink}
-                className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition shrink-0 ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 font-semibold rounded-sm transition-colors shrink-0 shadow-xs ${
                   copiedLink
-                    ? 'bg-emerald-700 text-white'
-                    : 'bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5]'
+                    ? 'bg-[#15803D] text-white'
+                    : 'bg-[#0D3B36] hover:bg-[#072B26] text-white'
                 }`}
               >
                 {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedLink ? 'Copied!' : 'Copy Link'}
+                {copiedLink ? 'Copied' : 'Copy'}
               </button>
             </div>
           </div>
 
-          {/* Majlis ID */}
+          {/* Majlis Code */}
           <div>
-            <label className="text-xs font-semibold text-[#3C230B] block mb-1.5">
-              Majlis ID Only
+            <label className="font-semibold text-[#1C1917] block mb-1.5">
+              Majlis Code Only
             </label>
-            <div className="flex items-center justify-between bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl p-3">
-              <span className="font-mono text-base font-bold tracking-widest text-[#3C230B] select-all">
-                {roomId}
+            <div className="flex items-center justify-between bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm p-3">
+              <span className="font-mono text-sm font-bold tracking-wider text-[#1C1917] select-all">
+                #{roomId}
               </span>
               <button
                 onClick={handleCopyCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#3C230B] hover:bg-[#E6DFD5] bg-[#EFECE4] rounded-lg transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#1C1917] bg-[#EAE4DC] border border-[#D5CABB] rounded-sm hover:bg-[#DFD8CE] transition-colors"
               >
-                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedCode ? 'Copied' : 'Copy ID'}
+                {copiedCode ? <Check className="w-3.5 h-3.5 text-[#15803D]" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedCode ? 'Copied' : 'Copy Code'}
               </button>
             </div>
           </div>
 
           {/* Quick info note */}
-          <div className="p-3 bg-[#EFECE4]/80 border border-[#D9D0C3] rounded-xl text-xs text-[#68594E] leading-relaxed">
-            Participants click the link or enter the Majlis ID to join directly in their browser with audio, video, and screen sharing.
+          <div className="p-3 bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm text-[11px] text-[#6B5E55] leading-relaxed">
+            Invitees can open the direct link or enter the room code to join the live circle instantly.
           </div>
         </div>
       </div>

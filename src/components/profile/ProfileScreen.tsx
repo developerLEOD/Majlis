@@ -21,19 +21,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F5F2EB] p-6 lg:p-12 select-none space-y-6 max-w-xl">
+    <div className="flex-1 overflow-y-auto bg-[#FFFCF5] p-6 lg:p-10 select-none space-y-6 max-w-xl">
       <div className="border-b border-[#E6DFD5] pb-4">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8E7E73] block">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-[#8E7E73] mb-1">
           Account
-        </span>
-        <h2 className="text-2xl font-bold text-[#3C230B] mt-0.5">
-          Profile
-        </h2>
+        </div>
+        <h1 className="text-2xl font-semibold text-[#1C1917] tracking-tight">
+          User Profile
+        </h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-[#F5F2EB] border border-[#E6DFD5] rounded-sm p-5 space-y-4">
         <div>
-          <label className="text-xs font-semibold text-[#3C230B] block mb-1.5">
+          <label className="text-xs font-medium text-[#1C1917] block mb-1.5">
             Your Display Name
           </label>
           <input
@@ -41,17 +41,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             required
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
-            className="w-full bg-white border border-[#D9D0C3] rounded-xl px-3.5 py-2.5 text-xs text-[#241710] focus:outline-none focus:border-[#3C230B]"
+            className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#3C230B]"
           />
         </div>
 
         <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-emerald-700 font-medium">
+          <span className="text-xs text-emerald-800 font-medium">
             {saved && '✓ Name updated'}
           </span>
           <button
             type="submit"
-            className="px-4 py-2 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] rounded-xl text-xs font-semibold transition"
+            className="px-4 py-2 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] rounded-sm text-xs font-medium transition-colors"
           >
             Save Profile
           </button>

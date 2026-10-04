@@ -2,24 +2,18 @@
 
 @layer base {
   :root {
-    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    --font-serif: 'Playfair Display', Georgia, serif;
-    --font-cinzel: 'Cinzel', serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    background-color: #F5F2EB;
-    color: #241710;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #FFFCF5;
+    color: #1C1917;
   }
 }
 
-.font-serif-title {
-  font-family: 'Playfair Display', Georgia, serif;
-}
-
-.font-cinzel-title {
-  font-family: 'Cinzel', serif;
+.font-serif, .font-editorial, .font-cinzel, .font-serif-title, .font-cinzel-title {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 /* Custom scrollbars */

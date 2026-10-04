@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Camera, Mic, MicOff } from 'lucide-react';
 import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 
 interface SettingsViewProps {
@@ -11,7 +11,6 @@ interface SettingsViewProps {
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   userName,
-  onUpdateUserName,
   mirrorVideo,
   onToggleMirror,
 }) => {
@@ -69,24 +68,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   }, [stream, isMicOn]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F5F2EB] p-6 lg:p-12 select-none space-y-6 max-w-xl">
+    <div className="flex-1 overflow-y-auto bg-[#FFFCF5] p-6 lg:p-10 select-none space-y-6 max-w-xl">
       <div className="border-b border-[#E6DFD5] pb-4">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8E7E73] block">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-[#8E7E73] mb-1">
           Configuration
-        </span>
-        <h2 className="text-2xl font-bold text-[#3C230B] mt-0.5">
+        </div>
+        <h1 className="text-2xl font-semibold text-[#1C1917] tracking-tight">
           Settings
-        </h2>
+        </h1>
       </div>
 
-      <div className="bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl p-6 space-y-6">
+      <div className="bg-[#F5F2EB] border border-[#E6DFD5] rounded-sm p-5 space-y-5">
         {/* Camera Preview */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-[#3C230B]">
+          <h2 className="text-sm font-semibold text-[#1C1917]">
             Video & Audio Test
-          </h3>
+          </h2>
 
-          <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-[#D9D0C3] flex items-center justify-center">
+          <div className="relative aspect-video rounded-sm bg-black overflow-hidden border border-[#D9D0C3] flex items-center justify-center">
             <video
               ref={videoRef}
               autoPlay
@@ -101,13 +100,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             )}
 
             {/* Mic indicator */}
-            <div className="absolute bottom-2.5 left-2.5 bg-black/70 backdrop-blur px-2 py-1 rounded text-white flex items-center gap-2 text-xs">
+            <div className="absolute bottom-2 left-2 bg-black/80 px-2 py-1 rounded-sm text-white flex items-center gap-2 text-xs">
               {isMicOn ? (
-                <Mic className="w-3 h-3 text-emerald-400" />
+                <Mic className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
-                <MicOff className="w-3 h-3 text-red-400" />
+                <MicOff className="w-3.5 h-3.5 text-red-400" />
               )}
-              <div className="w-14 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div className="w-12 h-1 bg-slate-700 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 transition-all duration-75"
                   style={{ width: `${Math.min(100, micVolume * 1.5)}%` }}
@@ -119,13 +118,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="flex items-center gap-2 pt-1">
             <button
               onClick={() => setIsMicOn(!isMicOn)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#EFECE4] text-[#3C230B]"
+              className="px-3 py-1.5 rounded-sm text-xs font-medium bg-[#EFECE4] text-[#3C230B] border border-[#D9D0C3]"
             >
               {isMicOn ? 'Mic Active' : 'Mic Muted'}
             </button>
             <button
               onClick={() => setIsCameraOn(!isCameraOn)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#EFECE4] text-[#3C230B]"
+              className="px-3 py-1.5 rounded-sm text-xs font-medium bg-[#EFECE4] text-[#3C230B] border border-[#D9D0C3]"
             >
               {isCameraOn ? 'Camera Active' : 'Camera Off'}
             </button>
@@ -135,18 +134,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* Video Mirroring */}
         <div className="pt-4 border-t border-[#E6DFD5] flex items-center justify-between text-xs">
           <div>
-            <span className="font-semibold text-[#3C230B] block">Mirror Camera</span>
+            <span className="font-medium text-[#1C1917] block">Mirror Camera</span>
             <span className="text-[#8E7E73]">Flip preview horizontally</span>
           </div>
           <button
             onClick={() => onToggleMirror(!mirrorVideo)}
-            className={`w-10 h-5 rounded-full transition-colors relative p-0.5 ${
+            className={`w-9 h-5 rounded-full transition-colors relative p-0.5 ${
               mirrorVideo ? 'bg-[#3C230B]' : 'bg-[#D9D0C3]'
             }`}
           >
             <div
               className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                mirrorVideo ? 'translate-x-5' : 'translate-x-0'
+                mirrorVideo ? 'translate-x-4' : 'translate-x-0'
               }`}
             />
           </button>

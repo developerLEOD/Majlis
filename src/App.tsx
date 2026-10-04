@@ -22,7 +22,7 @@ function MainAppContent() {
   const { user, isFacilitator } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [userName, setUserName] = useState<string>(() => {
-    return localStorage.getItem('infinitymeet_username') || 'Member';
+    return localStorage.getItem('infinitymeet_username') || 'Araiz Hasan';
   });
   const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
   const [mirrorVideo, setMirrorVideo] = useState(true);
@@ -220,7 +220,7 @@ function MainAppContent() {
 
   // 3. MAIN APPLICATION SHELL
   return (
-    <div className="w-full h-screen bg-[#F5F2EB] flex flex-col md:flex-row overflow-hidden font-sans text-[#241710] antialiased">
+    <div className="w-full h-screen bg-[#120B07] flex flex-col md:flex-row overflow-hidden font-sans text-[#FFFCF5] antialiased">
       <Sidebar
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}

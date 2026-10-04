@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   Check,
-  Cloud,
   CloudUpload,
   Copy,
   Download,
@@ -14,8 +13,8 @@ import {
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 import { RecordingResult } from '../types/meeting';
-import { LocalMeetingRecorder } from '../services/localRecorder';
 import { copyTextToClipboard } from '../utils/urlHelper';
+import { IslamicStarRosette } from './common/IslamicStarRosette';
 
 interface RecordingModalProps {
   recording: RecordingResult | null;
@@ -38,24 +37,37 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({ recording, onClo
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}m ${secs}s`;
+  const formatDuration = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
   };
 
   const handleDownload = () => {
-    LocalMeetingRecorder.downloadFile(recording.blob, recording.fileName);
+    const a = document.createElement('a');
+    a.href = recording.url;
+    a.download = recording.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleUploadToCloud = async () => {
-    setIsUploading(true);
-    setUploadError(null);
-    setUploadProgress(0);
+    if (!storage) {
+      setUploadError('Firebase storage is not configured.');
+      return;
+    }
 
     try {
-      const storageRef = ref(storage, `recordings/${recording.fileName}`);
-      const uploadTask = uploadBytesResumable(storageRef, recording.blob);
+      setIsUploading(true);
+      setUploadError(null);
+
+      const storagePath = `recordings/${recording.fileName}`;
+      const storageRef = ref(storage, storagePath);
+
+      const uploadTask = uploadBytesResumable(storageRef, recording.blob, {
+        contentType: recording.blob.type || 'video/webm',
+      });
 
       uploadTask.on(
         'state_changed',
@@ -64,9 +76,8 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({ recording, onClo
           setUploadProgress(Math.round(progress));
         },
         (error) => {
-          console.error('Cloud upload error:', error);
-          setUploadError(error.message || 'Failed to upload recording to Cloud Storage');
           setIsUploading(false);
+          setUploadError(error.message || 'Upload failed.');
         },
         async () => {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
@@ -74,51 +85,48 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({ recording, onClo
           setIsUploading(false);
         }
       );
-    } catch (err: any) {
-      console.error('Cloud upload exception:', err);
-      setUploadError(err.message || 'Cloud storage upload failed');
+    } catch (e: any) {
       setIsUploading(false);
+      setUploadError(e?.message || 'Upload error');
     }
   };
 
   const handleCopyCloudLink = async () => {
     if (!cloudUrl) return;
-    const success = await copyTextToClipboard(cloudUrl);
-    if (success) {
+    const ok = await copyTextToClipboard(cloudUrl);
+    if (ok) {
       setCopiedCloudLink(true);
       setTimeout(() => setCopiedCloudLink(false), 2500);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200 select-none">
-      <div className="relative w-full max-w-2xl bg-[#FFFCF5] border border-[#E6DFD5] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in">
+      <div className="relative w-full max-w-xl bg-[#FAF8F5] border border-[#302116] rounded-md overflow-hidden flex flex-col max-h-[90vh] shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#E6DFD5] bg-[#F5F2EB]/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EAE4DC] bg-[#F5F2EB]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#3C230B]/10 border border-[#3C230B]/20 flex items-center justify-center text-[#3C230B]">
-              <Film className="w-5 h-5" />
-            </div>
+            <IslamicStarRosette size={26} variant="full" />
             <div>
-              <span className="text-[10px] uppercase tracking-widest font-semibold text-[#8E7E73] block">
-                The Wisdom Lounge
-              </span>
-              <h2 className="font-editorial text-xl font-bold text-[#3C230B]">
-                Majlis Recording Ready
+              <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#8A7A6D]">
+                THE WISDOM LOUNGE
+              </div>
+              <h2 className="text-base font-bold text-[#1C1917]">
+                Majlis Session Recording
               </h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#8E7E73] hover:text-[#3C230B] rounded-lg hover:bg-[#EFECE4] transition"
+            className="p-1 text-[#8A7A6D] hover:text-[#1C1917] transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Video Preview */}
         <div className="p-6 overflow-y-auto space-y-4">
-          <div className="relative rounded-2xl overflow-hidden bg-black aspect-video border border-[#D9D0C3] shadow-inner flex items-center justify-center">
+          <div className="relative rounded-sm overflow-hidden bg-black aspect-video border border-[#D5CABB] flex items-center justify-center">
             {recording.url ? (
               <video
                 src={recording.url}
@@ -127,136 +135,121 @@ export const RecordingModal: React.FC<RecordingModalProps> = ({ recording, onClo
                 playsInline
               />
             ) : (
-              <p className="text-sm text-[#8E7E73]">Video preview not available</p>
+              <p className="text-xs text-[#8A7A6D]">Video preview not available</p>
             )}
           </div>
 
           {/* Metadata Grid */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl p-3">
-              <span className="text-[10px] text-[#8E7E73] uppercase font-semibold block mb-1">
+          <div className="grid grid-cols-3 gap-2.5 text-xs">
+            <div className="bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm p-3">
+              <span className="text-[10px] text-[#8A7A6D] uppercase font-bold block mb-0.5">
                 Duration
               </span>
-              <span className="text-sm font-semibold text-[#3C230B]">
+              <span className="font-bold text-[#1C1917]">
                 {formatDuration(recording.durationSeconds)}
               </span>
             </div>
-            <div className="bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl p-3">
-              <span className="text-[10px] text-[#8E7E73] uppercase font-semibold block mb-1">
+            <div className="bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm p-3">
+              <span className="text-[10px] text-[#8A7A6D] uppercase font-bold block mb-0.5">
                 File Size
               </span>
-              <span className="text-sm font-semibold text-[#3C230B]">
+              <span className="font-bold text-[#1C1917]">
                 {formatSize(recording.sizeBytes)}
               </span>
             </div>
-            <div className="bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl p-3">
-              <span className="text-[10px] text-[#8E7E73] uppercase font-semibold block mb-1">
-                Cloud Sync
+            <div className="bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm p-3">
+              <span className="text-[10px] text-[#8A7A6D] uppercase font-bold block mb-0.5">
+                Storage
               </span>
-              <span className="text-sm font-semibold text-[#3C230B] flex items-center gap-1.5">
-                {cloudUrl ? (
-                  <span className="text-emerald-800 flex items-center gap-1">
-                    <Cloud className="w-4 h-4 text-emerald-600" /> Saved
-                  </span>
-                ) : (
-                  <span className="text-[#68594E] flex items-center gap-1">
-                    <HardDrive className="w-4 h-4 text-[#8E7E73]" /> Local + Cloud Option
-                  </span>
-                )}
+              <span className="font-bold text-[#15803D] flex items-center gap-1">
+                <HardDrive className="w-3.5 h-3.5" /> Local Device
               </span>
             </div>
           </div>
 
-          {/* Cloud Upload Action Box */}
+          {/* Cloud Storage Section */}
           {cloudUrl ? (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
-                  <Cloud className="w-4 h-4 text-emerald-600" /> Uploaded to Firebase Cloud Storage
-                </div>
+            <div className="p-3.5 bg-[#DDE6DC]/50 border border-[#B8CEB5] rounded-sm space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-[#1E382B] font-bold">
+                <ShieldCheck className="w-4 h-4 text-[#15803D]" />
+                <span>Uploaded to Cloud Storage</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={cloudUrl}
+                  className="flex-1 bg-white border border-[#B8CEB5] rounded-sm px-3 py-1.5 text-xs text-[#1C1917] font-mono select-all"
+                />
                 <button
                   onClick={handleCopyCloudLink}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-800 text-white rounded-xl text-xs font-semibold hover:bg-emerald-900 transition shadow-xs"
+                  className="px-3.5 py-1.5 bg-[#0D3B36] hover:bg-[#072B26] text-white font-semibold rounded-sm text-xs transition-colors shrink-0 flex items-center gap-1.5 shadow-xs"
                 >
                   {copiedCloudLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedCloudLink ? 'Link Copied!' : 'Copy Cloud Link'}</span>
+                  <span>{copiedCloudLink ? 'Copied' : 'Copy Link'}</span>
                 </button>
-              </div>
-              <div className="text-[11px] font-mono text-emerald-800 truncate bg-emerald-100/60 p-2 rounded-lg">
-                {cloudUrl}
               </div>
             </div>
           ) : isUploading ? (
-            <div className="p-4 bg-[#F5F2EB] border border-[#E6DFD5] rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-[#3C230B]">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-[#D4AF37] animate-spin" /> Uploading to Cloud Storage...
-                </div>
-                <span>{uploadProgress}%</span>
+            <div className="p-4 bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm space-y-2 text-xs">
+              <div className="flex items-center justify-between text-[#1C1917] font-semibold">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0D3B36]" /> Uploading to cloud...
+                </span>
+                <span className="font-mono">{uploadProgress}%</span>
               </div>
-              <div className="w-full h-2 bg-[#D9D0C3] rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-[#D5CABB] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#3C230B] transition-all duration-150"
+                  className="h-full bg-[#0D3B36] transition-all duration-150"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
             </div>
           ) : (
-            <div className="p-4 bg-[#F5F2EB] border border-[#E6DFD5] rounded-2xl flex items-center justify-between gap-3">
-              <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-[#3C230B] flex items-center gap-1.5">
-                  <CloudUpload className="w-4 h-4 text-[#D4AF37]" /> Save to Cloud Storage
+            <div className="p-3.5 bg-[#F5F2EB] border border-[#E0D7CB] rounded-sm flex items-center justify-between gap-3 text-xs">
+              <div>
+                <p className="font-bold text-[#1C1917] flex items-center gap-1.5">
+                  <CloudUpload className="w-4 h-4 text-[#8A7A6D]" /> Cloud Storage Backup
                 </p>
-                <p className="text-[11px] text-[#68594E]">
-                  Upload to Firebase Cloud Storage to generate a shareable cloud link.
+                <p className="text-[11px] text-[#6B5E55] mt-0.5">
+                  Upload recording to generate a remote shareable link.
                 </p>
               </div>
               <button
                 onClick={handleUploadToCloud}
-                className="px-4 py-2 bg-[#241710] hover:bg-[#3C230B] text-[#FFFCF5] rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-1.5 shadow-xs"
+                className="px-4 py-2 bg-[#0D3B36] hover:bg-[#072B26] text-white rounded-sm text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5 shadow-xs"
               >
-                <CloudUpload className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span>Upload to Cloud</span>
+                <CloudUpload className="w-3.5 h-3.5 text-[#E5A93C]" />
+                <span>Upload</span>
               </button>
             </div>
           )}
 
           {uploadError && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
+            <div className="p-3 bg-red-50 border border-red-200 text-[#8C2334] text-xs rounded-sm font-medium">
               {uploadError}
             </div>
           )}
-
-          {/* Privacy Note */}
-          <div className="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 text-xs text-emerald-900 leading-relaxed">
-            <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold text-emerald-950">Dual Recording Standard</p>
-              <p className="text-emerald-800/90 mt-0.5">
-                Recordings are captured HD on-device. You can download directly to your computer or upload to Firebase Cloud Storage for remote sharing.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Footer actions */}
-        <div className="px-6 py-4 bg-[#F5F2EB]/80 border-t border-[#E6DFD5] flex items-center justify-between gap-3">
-          <div className="text-[11px] text-[#8E7E73] font-mono truncate max-w-[260px]">
+        <div className="px-6 py-4 bg-[#F5F2EB] border-t border-[#EAE4DC] flex items-center justify-between gap-3 text-xs">
+          <div className="text-[11px] text-[#8A7A6D] font-mono truncate max-w-[220px]">
             {recording.fileName}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-semibold text-[#68594E] hover:text-[#3C230B] rounded-xl border border-[#D9D0C3] hover:bg-[#EFECE4] transition"
+              className="px-4 py-2 font-semibold text-[#6B5E55] hover:text-[#1C1917] transition-colors"
             >
               Close
             </button>
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-[#FFFCF5] bg-[#3C230B] hover:bg-[#2B1706] active:scale-[0.99] rounded-xl shadow-sm transition"
+              className="flex items-center gap-1.5 px-5 py-2 font-bold text-white bg-[#0D3B36] hover:bg-[#072B26] rounded-sm transition-colors shadow-xs"
             >
-              <Download className="w-4 h-4 text-[#E0C2A6]" />
-              <span>Download Recording</span>
+              <Download className="w-3.5 h-3.5 text-[#E5A93C]" />
+              <span>Download MP4/WebM</span>
             </button>
           </div>
         </div>

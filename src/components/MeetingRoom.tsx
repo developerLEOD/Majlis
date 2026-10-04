@@ -40,6 +40,7 @@ import { InviteModal } from './InviteModal';
 import { SettingsModal } from './SettingsModal';
 import { RecordingModal } from './RecordingModal';
 import { FacilitatorHubModal } from './FacilitatorHubModal';
+import { IslamicStarRosette } from './common/IslamicStarRosette';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -761,8 +762,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     <div className="relative w-screen h-screen bg-[#140F0C] text-[#FFFCF5] flex flex-col overflow-hidden select-none font-sans">
       {/* Toast Notification */}
       {systemBanner && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#2B1706]/95 border border-[#D4AF37]/30 text-[#E0C2A6] text-xs font-medium rounded-full shadow-lg backdrop-blur-md flex items-center gap-2 animate-in fade-in">
-          <Info className="w-3.5 h-3.5 text-[#D4AF37]" />
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#2B1706] border border-[#302116] text-[#E0C2A6] text-xs font-medium rounded-sm shadow-md flex items-center gap-2 animate-in fade-in">
+          <Info className="w-3.5 h-3.5 text-[#E9A83A]" />
           <span>{systemBanner}</span>
         </div>
       )}
@@ -780,7 +781,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           >
             <div className="flex flex-col items-center">
               <span>{reaction.emoji}</span>
-              <span className="text-[10px] bg-[#1A1410]/90 text-[#E0C2A6] px-2 py-0.5 rounded-full mt-0.5 border border-[#3C230B]">
+              <span className="text-[10px] bg-[#1A1410] text-[#E0C2A6] px-2 py-0.5 rounded-sm mt-0.5 border border-[#302116]">
                 {reaction.senderName}
               </span>
             </div>
@@ -798,32 +799,37 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       `}</style>
 
       {/* TOP COMPACT HEADER */}
-      <header className="h-12 px-4 bg-[#1A1410]/90 backdrop-blur border-b border-[#3C230B]/60 flex items-center justify-between z-20 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-[#8E7E73] hidden sm:inline">
-              The Wisdom Lounge
+      <header className="h-13 px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md">
+        <div className="flex items-center gap-3.5">
+          <IslamicStarRosette size={26} variant="full" />
+          <div className="flex items-center gap-2.5">
+            <span className="text-[10px] uppercase font-bold tracking-[0.22em] text-[#D9C6B0] hidden sm:flex items-center gap-1.5">
+              <span>THE WISDOM LOUNGE</span>
+              <span className="text-[#E9A83A]">✦</span>
             </span>
-            <span className="text-xs font-bold text-[#E0C2A6]">Majlis</span>
+            <span className="text-xs font-bold text-[#FFFCF5]">Majlis</span>
             <button
               onClick={copyMeetingLink}
-              className="flex items-center gap-1.5 px-2 py-0.5 bg-[#241710] hover:bg-[#2B1706] text-[#D9D0C3] rounded border border-[#3C230B] text-xs font-mono transition"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#20150E] hover:bg-[#2B1C13] text-[#E9A83A] rounded-sm border border-[#3A2619] text-xs font-mono transition-colors shadow-xs"
               title="Copy Majlis Link"
             >
               <span>{roomId}</span>
-              {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-[#8E7E73]" />}
+              {copiedLink ? <Check className="w-3 h-3 text-[#19A6A0]" /> : <Copy className="w-3 h-3 text-[#8A7A6D]" />}
             </button>
           </div>
 
           {currentTitle && (
-            <span className="text-xs font-semibold text-[#FFFCF5] truncate max-w-sm inline-block">
-              {currentTitle}
-            </span>
+            <div className="hidden md:flex items-center gap-2 pl-3 border-l border-[#302116]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E9A83A]" />
+              <span className="text-xs font-semibold text-[#FFFCF5] bg-[#22160E] border border-[#3A2619] px-2.5 py-0.5 rounded-sm max-w-xs truncate">
+                {currentTitle}
+              </span>
+            </div>
           )}
 
           {isLocked && (
-            <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/40 rounded flex items-center gap-1">
-              <Lock className="w-3 h-3" /> Locked
+            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#A83245]/20 text-[#E9A83A] border border-[#A83245]/60 rounded-sm flex items-center gap-1">
+              <Lock className="w-3 h-3 text-[#E9A83A]" /> Locked
             </span>
           )}
         </div>
@@ -833,51 +839,50 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {isHost && (
             <button
               onClick={() => setShowFacilitatorHub(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 border border-[#D4AF37]/50 rounded-lg text-[#D4AF37] font-semibold transition shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm text-[#FFFCF5] font-semibold transition-colors shadow-xs"
               title="Open Facilitator Control Center"
             >
-              <Crown className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Facilitator Hub</span>
+              <Crown className="w-3.5 h-3.5 text-[#E9A83A]" />
+              <span className="text-xs">Facilitator Hub</span>
             </button>
           )}
 
           {/* Participant Count */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#1A1410] hover:bg-[#241710] border border-[#3C230B] rounded-lg text-[#E0C2A6] text-xs font-mono transition"
-            title="View participants in Majlis"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#20150E] hover:bg-[#2B1C13] border border-[#3A2619] rounded-sm text-[#FFFCF5] text-xs font-mono transition-colors shadow-xs"
+            title="View participants"
           >
-            <Users className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span className="font-bold text-[#FFFCF5]">{participants.length}</span>
-            <span className="hidden sm:inline text-[11px] text-[#A8988B]">attendees</span>
+            <Users className="w-3.5 h-3.5 text-[#E9A83A]" />
+            <span className="font-semibold text-[#FFFCF5]">{participants.length}</span>
           </button>
 
           {/* Duration & Status */}
-          <div className="flex items-center gap-2 text-[#E0C2A6] font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-1.5 text-[#E9A83A] font-mono text-xs px-2.5 py-1.5 bg-[#20150E] border border-[#3A2619] rounded-sm shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-[#19A6A0] animate-pulse" />
             <span>{formatTime(meetingSeconds)}</span>
           </div>
 
           {/* Recording Badge */}
           {recordingStatus !== 'idle' && (
-            <div className="flex items-center gap-2 bg-red-950/60 border border-red-800/40 px-2.5 py-0.5 rounded text-red-300 font-mono text-[11px]">
-              <span className={`w-2 h-2 rounded-full bg-red-500 ${recordingStatus === 'recording' ? 'animate-ping' : ''}`} />
+            <div className="flex items-center gap-1.5 bg-[#A83245] border border-[#C44056] px-2.5 py-1.5 rounded-sm text-white font-mono text-xs shadow-xs">
+              <span className={`w-2 h-2 rounded-full bg-white ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`} />
               <span>REC {formatTime(recordingDuration)}</span>
             </div>
           )}
 
           {/* Layout Toggle */}
-          <div className="flex bg-[#140F0C] border border-[#3C230B] rounded p-0.5">
+          <div className="flex bg-[#160E09] border border-[#302116] rounded-sm p-0.5 shadow-xs">
             <button
               onClick={() => { setLayout('grid'); setPinnedUserId(null); }}
-              className={`p-1 rounded transition ${layout === 'grid' && !pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
+              className={`p-1.5 rounded-sm transition-colors ${layout === 'grid' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
               title="Grid View"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => { setLayout('speaker'); if (participants.length > 0 && !pinnedUserId) setPinnedUserId(participants[0].id); }}
-              className={`p-1 rounded transition ${layout === 'speaker' || pinnedUserId ? 'bg-[#3C230B] text-[#E0C2A6]' : 'text-[#8E7E73]'}`}
+              className={`p-1.5 rounded-sm transition-colors ${layout === 'speaker' || pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
               title="Speaker Spotlight"
             >
               <Maximize2 className="w-3.5 h-3.5" />
@@ -888,17 +893,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       {/* STAGE ANNOUNCEMENT BANNER */}
       {stageAnnouncement && (
-        <div className="bg-gradient-to-r from-[#2B1B0F] via-[#3C230B] to-[#2B1B0F] border-b border-[#D4AF37]/40 px-4 py-2 flex items-center justify-between z-20 animate-in slide-in-from-top duration-200 shadow-md">
+        <div className="bg-gradient-to-r from-[#2B1706] via-[#3C230B] to-[#2B1706] border-b border-[#E9A83A]/40 px-4 py-2 flex items-center justify-between z-20 animate-in slide-in-from-top duration-200 shadow-md">
           <div className="flex items-center gap-2.5 text-xs text-[#FFFCF5]">
-            <Radio className="w-4 h-4 text-[#D4AF37] shrink-0 animate-pulse" />
-            <span className="font-bold text-[#D4AF37] uppercase text-[10px] tracking-wider">
+            <Radio className="w-4 h-4 text-[#E9A83A] shrink-0 animate-pulse" />
+            <span className="font-bold text-[#E9A83A] uppercase text-[10px] tracking-wider">
               {stageAnnouncement.senderName ? `${stageAnnouncement.senderName}:` : 'Facilitator Notice:'}
             </span>
             <span className="font-medium text-[#FFFCF5]">{stageAnnouncement.text}</span>
           </div>
           <button
             onClick={() => setStageAnnouncement(null)}
-            className="p-1 text-[#D4AF37]/70 hover:text-white rounded transition"
+            className="p-1 text-[#E9A83A]/70 hover:text-white rounded-sm transition"
             title="Dismiss Notice"
           >
             <X className="w-3.5 h-3.5" />
@@ -907,7 +912,35 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       )}
 
       {/* MAIN VIDEO STAGE */}
-      <div className="flex-1 flex overflow-hidden relative bg-[#120D0A]">
+      <div className="flex-1 flex overflow-hidden relative bg-[#100A06]">
+        {/* Atmospheric Stained Glass Architectural Background with Clear Sanctuary View */}
+        <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
+          <img
+            src="/src/assets/images/hero_stained_glass_1791101546981.jpg"
+            alt="Majlis Sanctuary"
+            referrerPolicy="no-referrer"
+            className="w-full h-full object-cover brightness-[0.70] contrast-[1.08] filter blur-[0.5px]"
+          />
+          {/* Subtle warm bronze & emerald architectural overlay scrim */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#160E09]/75 via-[#100A06]/55 to-[#0A0503]/80" />
+
+          {/* Delicate Geometric Girih Leaded Glass Overlay Grid */}
+          <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none stroke-[#E9A83A]" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="meeting-girih-pattern" width="80" height="80" patternUnits="userSpaceOnUse">
+                <path d="M40 0 L80 40 L40 80 L0 40 Z" fill="none" strokeWidth="1" strokeOpacity="0.4" />
+                <path d="M40 10 L70 40 L40 70 L10 40 Z" fill="none" strokeWidth="0.75" strokeOpacity="0.3" stroke="#075E4A" />
+                <path d="M0 0 L80 80 M80 0 L0 80" fill="none" strokeWidth="0.5" strokeOpacity="0.25" stroke="#E9A83A" />
+                <circle cx="40" cy="40" r="6" fill="none" strokeWidth="0.75" strokeOpacity="0.4" stroke="#E9A83A" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#meeting-girih-pattern)" />
+          </svg>
+
+          {/* Ambient warm jewel glass radial light in center of stage */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[850px] h-[520px] bg-gradient-to-r from-[#E9A83A]/15 via-[#075E4A]/20 to-[#174A83]/15 blur-3xl pointer-events-none rounded-full" />
+        </div>
+
         {/* Floating Animated Emoji Reactions */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
           {activeReactions.map((reaction, index) => {
@@ -915,7 +948,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             return (
               <div
                 key={reaction.id}
-                className="absolute bottom-16 flex flex-col items-center animate-float-up pointer-events-none select-none"
+                className="absolute bottom-20 flex flex-col items-center animate-float-up pointer-events-none select-none"
                 style={{
                   left: `${leftPercent}%`,
                 }}
@@ -923,7 +956,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                 <span className="text-4xl sm:text-5xl filter drop-shadow-lg transform transition-transform">
                   {reaction.emoji}
                 </span>
-                <span className="text-[10px] sm:text-[11px] font-semibold text-[#FFFCF5] bg-[#1A1410]/90 border border-[#3C230B] px-2 py-0.5 rounded-full mt-1 backdrop-blur-xs shadow-md">
+                <span className="text-[10px] sm:text-[11px] font-semibold text-[#FFFCF5] bg-[#1A110B] border border-[#302116] px-2.5 py-0.5 rounded-sm mt-1 shadow-md">
                   {reaction.senderName}
                 </span>
               </div>
@@ -931,13 +964,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           })}
         </div>
 
-        <main className="flex-1 p-3 flex items-center justify-center overflow-hidden">
+        <main className="flex-1 p-4 sm:p-6 flex items-center justify-center overflow-hidden relative z-10">
           {pinnedParticipant ? (
-            <div className="w-full h-full flex flex-col gap-2">
+            <div className="w-full h-full flex flex-col gap-3">
               {otherParticipants.length > 0 && (
-                <div className="h-28 flex gap-2 overflow-x-auto pb-1 shrink-0">
+                <div className="h-28 flex gap-2.5 overflow-x-auto pb-1 shrink-0">
                   {otherParticipants.map((p) => (
-                    <div key={p.id} className="w-40 h-full shrink-0">
+                    <div key={p.id} className="w-44 h-full shrink-0">
                       <VideoTile
                         participant={p}
                         isLocal={p.isLocal}
@@ -952,7 +985,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   ))}
                 </div>
               )}
-              <div className="flex-1 rounded-xl overflow-hidden relative">
+              <div className="flex-1 rounded-sm overflow-hidden relative">
                 <VideoTile
                   participant={pinnedParticipant}
                   isLocal={pinnedParticipant.isLocal}
@@ -968,20 +1001,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             </div>
           ) : (
             <div
-              className={`w-full h-full grid gap-3.5 mx-auto items-center justify-center p-1 ${
+              className={`w-full flex items-center justify-center ${
                 participants.length === 1
-                  ? 'grid-cols-1 max-w-4xl h-full'
+                  ? 'max-w-4xl w-full aspect-video max-h-[72vh] my-auto'
                   : participants.length === 2
-                  ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl h-full'
-                  : participants.length === 3
-                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl h-full'
-                  : participants.length === 4
-                  ? 'grid-cols-2 grid-rows-2 max-w-6xl h-full'
-                  : 'grid-cols-2 sm:grid-cols-3 max-w-7xl h-full'
+                  ? 'grid grid-cols-1 sm:grid-cols-2 max-w-5xl w-full gap-4 max-h-[72vh] my-auto'
+                  : participants.length <= 4
+                  ? 'grid grid-cols-2 max-w-5xl w-full gap-4 max-h-[78vh] my-auto'
+                  : 'grid grid-cols-2 sm:grid-cols-3 max-w-6xl w-full gap-4 max-h-[82vh] my-auto'
               }`}
             >
               {participants.map((p) => (
-                <div key={p.id} className="w-full h-full min-h-0 min-w-0 overflow-hidden relative rounded-2xl flex items-center justify-center">
+                <div key={p.id} className="w-full h-full min-h-0 min-w-0 overflow-hidden relative rounded-sm flex items-center justify-center shadow-2xl">
                   <VideoTile
                     participant={p}
                     isLocal={p.isLocal}
@@ -1032,59 +1063,63 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       </div>
 
       {/* BOTTOM CONTROL BAR */}
-      <footer className="h-16 bg-[#1A1410] border-t border-[#3C230B]/60 px-4 flex items-center justify-between z-30 shrink-0">
-        <div className="flex items-center gap-2">
+      <footer className="h-16 bg-[#160E09]/95 backdrop-blur-lg border-t border-[#302116] px-6 flex items-center justify-between z-30 shrink-0 shadow-2xl">
+        <div className="flex items-center gap-2.5">
           {/* Audio */}
           <button
             onClick={toggleAudio}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
-              isMuted ? 'bg-red-950/70 text-red-400' : 'bg-[#241710] text-[#FFFCF5] hover:bg-[#2B1706]'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
+              isMuted
+                ? 'bg-[#A83245] hover:bg-[#8B2334] text-white border border-[#C44056]'
+                : 'bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] border border-[#19A6A0]/50'
             }`}
           >
-            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[#19A6A0]" />}
             <span className="hidden sm:inline">{isMuted ? 'Unmute' : 'Mute'}</span>
           </button>
 
           {/* Video */}
           <button
             onClick={toggleVideo}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
-              isVideoOff ? 'bg-red-950/70 text-red-400' : 'bg-[#241710] text-[#FFFCF5] hover:bg-[#2B1706]'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
+              isVideoOff
+                ? 'bg-[#A83245] hover:bg-[#8B2334] text-white border border-[#C44056]'
+                : 'bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] border border-[#19A6A0]/50'
             }`}
           >
-            {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+            {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4 text-[#19A6A0]" />}
             <span className="hidden sm:inline">{isVideoOff ? 'Start Video' : 'Stop Video'}</span>
           </button>
         </div>
 
-        {/* Center Controls */}
-        <div className="flex items-center gap-2">
+        {/* Center Controls Dock */}
+        <div className="flex items-center gap-1.5 p-1 bg-[#1F140D] border border-[#3A2619] rounded-sm shadow-inner">
           {/* Screen Share */}
           <button
             onClick={toggleScreenShare}
-            className={`p-2.5 rounded-xl border text-xs transition ${
+            className={`p-2.5 rounded-sm border text-xs transition-colors ${
               isScreenSharing
-                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-700/50'
-                : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+                ? 'bg-[#075E4A] text-white border-[#19A6A0]'
+                : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title={!isHost && !screenShareEnabled ? 'Screen share disabled by facilitator' : 'Screen Share'}
           >
             <MonitorUp className="w-4 h-4" />
           </button>
 
-          {/* Emoji Reactions Button & Picker */}
+          {/* Emoji Reactions */}
           <div className="relative">
             <button
               onClick={() => setShowReactionPicker((prev) => !prev)}
-              className={`p-2.5 rounded-xl border text-xs transition flex items-center gap-1.5 ${
+              className={`p-2.5 rounded-sm border text-xs transition-colors flex items-center gap-1.5 ${
                 showReactionPicker
-                  ? 'bg-[#3C230B] text-[#D4AF37] border-[#D4AF37]/50 shadow-sm'
-                  : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+                  ? 'bg-[#075E4A] text-[#E9A83A] border-[#E9A83A]'
+                  : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
               }`}
-              title="Emoji Reactions"
+              title="Reactions"
             >
-              <Smile className="w-4 h-4 text-[#D4AF37]" />
-              <span className="hidden md:inline font-medium">React</span>
+              <Smile className="w-4 h-4 text-[#E9A83A]" />
+              <span className="hidden md:inline font-medium text-xs">React</span>
             </button>
 
             {showReactionPicker && (
@@ -1101,45 +1136,45 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             )}
           </div>
 
-          {/* Quick Raise Hand Button */}
+          {/* Hand Raise */}
           <button
             onClick={toggleHandRaise}
-            className={`p-2.5 rounded-xl border text-xs transition ${
+            className={`p-2.5 rounded-sm border text-xs transition-all ${
               handRaised
-                ? 'bg-[#D4AF37] text-[#241710] border-[#D4AF37] shadow-sm font-bold animate-pulse'
-                : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+                ? 'bg-[#E9A83A] text-[#1E140C] border-[#D4982E] font-bold shadow-[0_0_15px_rgba(233,168,58,0.5)]'
+                : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title={handRaised ? 'Lower Hand' : 'Raise Hand'}
           >
             <Hand className="w-4 h-4" />
           </button>
 
-          {/* Facilitator Hub Button in Toolbar */}
+          {/* Facilitator Hub Toolbar Button */}
           {isHost && (
             <button
               onClick={() => setShowFacilitatorHub(true)}
-              className="p-2.5 rounded-xl bg-[#2B1706] hover:bg-[#3C230B] border border-[#D4AF37]/40 text-[#D4AF37] text-xs font-semibold transition flex items-center gap-1.5"
+              className="p-2.5 rounded-sm bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 text-[#FFFCF5] text-xs font-medium transition-colors flex items-center gap-1.5 shadow-xs"
               title="Facilitator Control Center"
             >
-              <Crown className="w-4 h-4" />
-              <span className="hidden lg:inline text-xs">Facilitator Hub</span>
+              <Crown className="w-4 h-4 text-[#E9A83A]" />
+              <span className="hidden lg:inline text-xs font-semibold">Hub</span>
             </button>
           )}
 
-          {/* Local Recording */}
+          {/* Recording */}
           {isHost && (
             recordingStatus === 'idle' ? (
               <button
                 onClick={startRecording}
-                className="p-2.5 rounded-xl bg-[#241710] text-[#D9D0C3] border border-[#3C230B] hover:bg-[#2B1706] transition"
+                className="p-2.5 rounded-sm bg-transparent text-[#FAF8F5] hover:bg-[#2B1B12] transition-colors"
                 title="Record Session"
               >
-                <Square className="w-4 h-4 text-red-400" />
+                <Square className="w-4 h-4 text-[#A83245]" />
               </button>
             ) : (
               <button
                 onClick={stopRecording}
-                className="px-3 py-1.5 bg-red-800 text-white text-xs font-bold rounded-xl"
+                className="px-3 py-1.5 bg-[#A83245] text-white text-xs font-bold rounded-sm border border-[#C44056] animate-pulse"
               >
                 Stop REC
               </button>
@@ -1149,13 +1184,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Participants */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className={`p-2.5 rounded-xl border text-xs transition relative flex items-center justify-center ${
-              activeDrawer === 'participants' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50 shadow-sm' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B] hover:bg-[#2B1706]'
+            className={`p-2.5 rounded-sm border text-xs transition-colors relative flex items-center justify-center ${
+              activeDrawer === 'participants' ? 'bg-[#075E4A] text-white border-[#19A6A0]' : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title="Participants List"
           >
-            <Users className="w-4 h-4" />
-            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-[#D4AF37] text-[#241710] rounded-full text-[10px] font-bold flex items-center justify-center font-mono shadow-xs border border-[#1A1410]">
+            <Users className="w-4 h-4 text-[#E9A83A]" />
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[10px] font-mono font-bold flex items-center justify-center shadow-xs">
               {participants.length}
             </span>
           </button>
@@ -1163,25 +1198,25 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Chat */}
           <button
             onClick={() => { setActiveDrawer(activeDrawer === 'chat' ? null : 'chat'); setUnreadChatCount(0); }}
-            className={`p-2.5 rounded-xl border text-xs transition relative ${
-              activeDrawer === 'chat' ? 'bg-[#3C230B] text-white border-[#D4AF37]/50' : 'bg-[#241710] text-[#D9D0C3] border-[#3C230B]'
+            className={`p-2.5 rounded-sm border text-xs transition-colors relative ${
+              activeDrawer === 'chat' ? 'bg-[#075E4A] text-white border-[#19A6A0]' : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title="Chat"
           >
-            <MessageSquare className="w-4 h-4" />
+            <MessageSquare className="w-4 h-4 text-[#19A6A0]" />
             {unreadChatCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#D4AF37] text-[#3C230B] rounded-full text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[9px] font-bold flex items-center justify-center">
                 {unreadChatCount}
               </span>
             )}
           </button>
         </div>
 
-        {/* Leave Action */}
+        {/* Leave Action — Jewel Ruby Button */}
         <div>
           <button
             onClick={() => setShowLeaveConfirmDialog(true)}
-            className="px-3.5 py-2 bg-red-800 hover:bg-red-700 text-white rounded-xl text-xs font-semibold transition"
+            className="px-5 py-2.5 bg-[#A83245] hover:bg-[#8B2334] text-white rounded-sm text-xs font-bold transition-all border border-[#7E1C2C] shadow-xs"
           >
             {isHost ? 'End Majlis' : 'Leave Majlis'}
           </button>
@@ -1191,19 +1226,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       {/* Confirmation Dialog */}
       {showLeaveConfirmDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none">
-          <div className="w-full max-w-xs bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl p-5 text-center space-y-3">
-            <h3 className="text-base font-bold text-[#3C230B]">
+          <div className="w-full max-w-xs bg-[#FFFCF5] border border-[#302116] rounded-sm p-5 text-center space-y-3 shadow-xl">
+            <h3 className="text-base font-bold text-[#1C1917]">
               {isHost ? 'End Majlis?' : 'Leave Majlis?'}
             </h3>
             <p className="text-xs text-[#68594E]">
               {isHost
-                ? 'Would you like to conclude this Majlis session for all seekers, or leave individually?'
+                ? 'Conclude this Majlis session for all seekers, or leave individually?'
                 : 'Are you sure you want to exit the live room?'}
             </p>
             <div className="space-y-2 pt-2">
               <button
                 onClick={handleFinalExit}
-                className="w-full py-2 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-semibold"
+                className="w-full py-2 bg-[#A83245] hover:bg-[#8B2334] text-white rounded-sm text-xs font-semibold border border-[#7E1C2C]"
               >
                 {isHost ? 'End Majlis for All' : 'Leave Majlis'}
               </button>

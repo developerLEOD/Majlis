@@ -50,21 +50,21 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 select-none animate-in fade-in">
-      <div className="relative w-full max-w-sm bg-[#FFFCF5] border border-[#E6DFD5] rounded-2xl shadow-xl p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in">
+      <div className="relative w-full max-w-sm bg-[#FFFCF5] border border-[#302116] rounded-md shadow-xl p-6 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#E6DFD5]">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8E7E73] block">
               The Wisdom Lounge
             </span>
-            <h2 className="text-lg font-bold text-[#3C230B] flex items-center gap-2">
-              <Crown className="w-4 h-4 text-[#D4AF37]" /> Start Majlis
+            <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2 mt-0.5">
+              <Crown className="w-4 h-4 text-[#E9A83A]" /> Start Majlis
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1 text-[#8E7E73] hover:text-[#3C230B]"
+            className="p-1 text-[#8E7E73] hover:text-[#1C1917] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -72,9 +72,9 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
 
         {/* Facilitator Authorization Check */}
         {!isFacilitator ? (
-          <div className="p-4 bg-[#F5F2EB] border border-[#E6DFD5] rounded-xl space-y-3 text-xs">
-            <div className="flex items-start gap-2.5 text-[#3C230B] font-semibold">
-              <Shield className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+          <div className="p-4 bg-[#F5F2EB] border border-[#E6DFD5] rounded-sm space-y-3 text-xs">
+            <div className="flex items-start gap-2.5 text-[#1C1917] font-semibold">
+              <Shield className="w-4 h-4 text-[#E9A83A] shrink-0 mt-0.5" />
               <div>
                 Facilitator Sign-In Required
               </div>
@@ -89,21 +89,21 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
                 onClose();
                 onOpenAuthModal();
               }}
-              className="w-full py-2 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] font-semibold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+              className="w-full py-2 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] font-semibold text-xs rounded-sm transition-colors flex items-center justify-center gap-1.5 border border-[#19A6A0]/40"
             >
-              <Key className="w-3.5 h-3.5 text-[#D4AF37]" />
+              <Key className="w-3.5 h-3.5 text-[#E9A83A]" />
               <span>Sign In as Facilitator</span>
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[11px] flex items-center gap-2 font-medium">
-              <Crown className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <div className="p-2.5 bg-[#075E4A]/10 border border-[#075E4A]/30 text-[#075E4A] rounded-sm text-[11px] flex items-center gap-2 font-medium">
+              <Crown className="w-3.5 h-3.5 text-[#075E4A] shrink-0" />
               <span>Facilitator Active: <strong>{user?.email}</strong></span>
             </div>
 
             <div>
-              <label className="font-semibold text-[#3C230B] block mb-1">
+              <label className="font-semibold text-[#1C1917] block mb-1">
                 Majlis Title
               </label>
               <input
@@ -112,12 +112,12 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Weekly Reflection & Inquiry"
-                className="w-full bg-white border border-[#D9D0C3] rounded-xl px-3 py-2 text-xs text-[#241710] focus:outline-none focus:border-[#3C230B]"
+                className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
               />
             </div>
 
             <div>
-              <label className="font-semibold text-[#3C230B] block mb-1">
+              <label className="font-semibold text-[#1C1917] block mb-1">
                 Facilitator Display Name
               </label>
               <input
@@ -125,7 +125,7 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
                 value={hostName}
                 onChange={(e) => setHostName(e.target.value)}
                 placeholder="Facilitator Name..."
-                className="w-full bg-white border border-[#D9D0C3] rounded-xl px-3 py-2 text-xs text-[#241710] focus:outline-none focus:border-[#3C230B]"
+                className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
               />
             </div>
 
@@ -133,13 +133,13 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3.5 py-2 text-xs font-semibold text-[#8E7E73] hover:text-[#3C230B]"
+                className="px-3.5 py-2 text-xs font-semibold text-[#8E7E73] hover:text-[#1C1917] transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] font-semibold text-xs rounded-xl shadow-xs transition"
+                className="px-4 py-2 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] font-semibold text-xs rounded-sm border border-[#19A6A0]/40 transition-colors"
               >
                 Start Majlis
               </button>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Crown, X, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { LoungeArcLogo } from '../common/LoungeArcLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -67,73 +68,71 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-[#18120E] border border-[#3C230B] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 select-none">
+      <div className="w-full max-w-md bg-[#FFFCF5] border border-[#E6DFD5] rounded-md overflow-hidden flex flex-col text-[#1C1917]">
         {/* Header */}
-        <div className="p-5 border-b border-[#3C230B]/80 flex items-center justify-between bg-gradient-to-r from-[#241710] to-[#1A130E]">
+        <div className="p-4 border-b border-[#E6DFD5] flex items-center justify-between bg-[#F5F2EB]">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#D4AF37]/15 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37]">
-              <Crown className="w-5 h-5" />
-            </div>
+            <LoungeArcLogo size="xs" />
             <div>
-              <h3 className="font-editorial text-base font-bold text-[#FFFCF5]">
+              <h2 className="text-sm font-semibold text-[#1C1917]">
                 {user ? 'Account Settings' : 'Sign In'}
-              </h3>
-              <p className="text-[11px] text-[#A8988B]">
+              </h2>
+              <p className="text-[11px] text-[#8E7E73]">
                 {requiredForFacilitator
                   ? 'Facilitator privileges require a moderator account'
-                  : 'Sign in to access hosting & facilitator features'}
+                  : 'Sign in to access hosting features'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-[#8E7E73] hover:text-[#FFFCF5] rounded-lg hover:bg-[#2B1706] transition"
+            className="p-1 text-[#8E7E73] hover:text-[#1C1917] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-5 space-y-4 text-[#FFFCF5]">
+        <div className="p-5 space-y-4 text-xs">
           {/* Current Auth Status Notice */}
           {user ? (
-            <div className="p-4 rounded-xl bg-[#241710] border border-[#3C230B] space-y-3">
+            <div className="p-3.5 rounded-sm bg-[#F5F2EB] border border-[#E6DFD5] space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/40 flex items-center justify-center text-[#D4AF37] font-bold text-xs">
+                  <div className="w-7 h-7 rounded-full bg-[#3C230B] text-[#FFFCF5] font-medium text-xs flex items-center justify-center shrink-0">
                     {user.email?.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-[#FFFCF5] truncate max-w-[200px]">
+                    <div className="font-semibold text-[#1C1917] truncate max-w-[180px]">
                       {user.email}
                     </div>
-                    <div className="text-[10px] text-[#8E7E73]">Authenticated Account</div>
+                    <div className="text-[10px] text-[#8E7E73]">Authenticated</div>
                   </div>
                 </div>
                 {isFacilitator ? (
-                  <span className="px-2.5 py-1 text-[10px] font-bold bg-[#D4AF37]/20 text-[#D4AF37] border border-[#D4AF37]/40 rounded-full flex items-center gap-1">
-                    <Crown className="w-3 h-3" /> Facilitator
+                  <span className="px-2 py-0.5 text-[10px] font-medium bg-[#EFECE4] text-[#3C230B] border border-[#D9D0C3] rounded-sm flex items-center gap-1">
+                    <Crown className="w-3 h-3 text-[#D4AF37]" /> Facilitator
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 text-[10px] font-medium bg-[#2B1706] text-[#A8988B] border border-[#3C230B] rounded-full">
+                  <span className="px-2 py-0.5 text-[10px] font-medium bg-[#EFECE4] text-[#8E7E73] border border-[#D9D0C3] rounded-sm">
                     Seeker Account
                   </span>
                 )}
               </div>
 
               {!isFacilitator && (
-                <div className="p-2.5 rounded-lg bg-[#2B1706]/80 border border-[#3C230B] text-[#E0C2A6] text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+                <div className="p-2 rounded-sm bg-[#EFECE4] border border-[#D9D0C3] text-[#3C230B] text-[11px] flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    Signed in as <strong>{user.email}</strong>. Facilitator privileges are active on designated moderator accounts.
+                    Signed in as <strong>{user.email}</strong>. Facilitator role active on moderator accounts.
                   </span>
                 </div>
               )}
 
               <button
                 onClick={signOutUser}
-                className="w-full py-2 bg-[#2B1706] hover:bg-[#3C230B] border border-[#3C230B] text-[#E0C2A6] rounded-xl text-xs font-semibold transition"
+                className="w-full py-1.5 bg-[#FFFCF5] hover:bg-[#EFECE4] border border-[#D9D0C3] text-[#3C230B] rounded-sm text-xs font-medium transition-colors"
               >
                 Sign Out / Switch Account
               </button>
@@ -141,7 +140,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           ) : (
             <>
               {error && (
-                <div className="p-3 bg-red-950/80 border border-red-800 text-red-300 text-xs rounded-xl flex items-center gap-2">
+                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-sm flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -151,7 +150,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="w-full py-2.5 px-4 bg-[#241710] hover:bg-[#2B1706] border border-[#3C230B] hover:border-[#D4AF37]/40 text-[#FFFCF5] rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2.5 shadow-xs"
+                className="w-full py-2 px-3 bg-[#FFFCF5] hover:bg-[#F5F2EB] border border-[#D9D0C3] text-[#1C1917] rounded-sm text-xs font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
@@ -176,9 +175,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="relative text-center my-2">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-[#3C230B]" />
+                  <div className="w-full border-t border-[#E6DFD5]" />
                 </div>
-                <span className="relative px-2 bg-[#18120E] text-[10px] text-[#8E7E73] font-mono uppercase">
+                <span className="relative px-2 bg-[#FFFCF5] text-[10px] text-[#8E7E73] uppercase tracking-wider">
                   or email sign in
                 </span>
               </div>
@@ -186,7 +185,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               {/* Email Form */}
               <form onSubmit={handleEmailSubmit} className="space-y-3">
                 <div>
-                  <label className="block text-[11px] text-[#A8988B] font-medium mb-1">
+                  <label className="block text-[11px] text-[#68594E] font-medium mb-1">
                     Email Address
                   </label>
                   <input
@@ -194,12 +193,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full bg-[#201611] border border-[#3C230B] rounded-xl px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-1.5 text-xs text-[#1C1917] focus:outline-none focus:border-[#3C230B]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] text-[#A8988B] font-medium mb-1">
+                  <label className="block text-[11px] text-[#68594E] font-medium mb-1">
                     Password
                   </label>
                   <input
@@ -207,7 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-[#201611] border border-[#3C230B] rounded-xl px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8E7E73] focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-1.5 text-xs text-[#1C1917] focus:outline-none focus:border-[#3C230B]"
                   />
                 </div>
 
@@ -215,14 +214,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 py-2.5 bg-[#3C230B] hover:bg-[#2B1706] border border-[#D4AF37]/30 text-[#FFFCF5] text-xs font-semibold rounded-xl transition"
+                    className="flex-1 py-1.5 bg-[#3C230B] hover:bg-[#2B1706] text-[#FFFCF5] text-xs font-medium rounded-sm transition-colors"
                   >
                     {mode === 'signin' ? 'Sign In' : 'Create Account'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-                    className="text-xs text-[#D4AF37] hover:underline px-2"
+                    className="text-xs text-[#3C230B] hover:underline px-2 font-medium"
                   >
                     {mode === 'signin' ? 'Register' : 'Sign In'}
                   </button>
@@ -233,10 +232,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#3C230B]/80 bg-[#140F0C] flex justify-end">
+        <div className="p-3 border-t border-[#E6DFD5] bg-[#F5F2EB] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-[#2B1706] text-[#E0C2A6] text-xs rounded-xl hover:bg-[#3C230B] transition"
+            className="px-3.5 py-1 bg-[#EFECE4] text-[#3C230B] border border-[#D9D0C3] text-xs rounded-sm hover:bg-[#E6DFD5] transition-colors"
           >
             Close
           </button>
