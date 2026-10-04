@@ -1070,13 +1070,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   <>
                     {/* LEFT SIDE: ELEVATED SPEAKER STAGE AREA */}
                     <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
-                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 shrink-0">
-                        <IslamicStarRosette variant="full" size={16} />
-                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-[#E9A83A] bg-[#2A1B12]/85 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
-                          ✦ SPEAKER STAGE ({speakersOnStage.length}) ✦
-                        </span>
-                      </div>
-
                       {/* Star Medallion Portals on Left Side */}
                       <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
                         {speakersOnStage.map((speaker) => (
@@ -1121,13 +1114,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
                     {/* RIGHT SIDE: REGULAR PARTICIPANTS HONEYCOMB ASSEMBLY */}
                     <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
-                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 shrink-0">
-                        <IslamicStarRosette variant="gold-outline" size={16} />
-                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-[#D9C6B0] bg-[#1E130B]/85 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-[#3A2619] shadow-md">
-                          ✦ SANCTUARY HONEYCOMB ({regularHoneycombParticipants.length}) ✦
-                        </span>
-                      </div>
-
                       <div className="flex-1 w-full flex items-center justify-center max-h-[75vh] overflow-y-auto p-1">
                         {regularHoneycombParticipants.length > 0 ? (
                           <HoneycombGrid
