@@ -620,6 +620,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           isVideoOff: p.isVideoOff,
           stream: p.stream,
         })),
+        getVideoElements: () => {
+          return participants.map((p) => ({
+            id: p.id,
+            name: p.name,
+            element: videoElementsRef.current.get(p.id) || null,
+            isMuted: p.isMuted,
+          }));
+        },
         onTick: (duration: number, size: number) => {
           setRecordingDuration(duration);
           setRecordingSizeBytes(size);

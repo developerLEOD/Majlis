@@ -8,7 +8,8 @@ export interface RecorderOptions {
   mode: RecordingMode;
   localStream: MediaStream | null;
   remoteStreams: MediaStream[];
-  participants: { id: string; name: string; isMuted: boolean; isVideoOff: boolean; stream?: MediaStream }[];
+  participants: { id: string; name: string; isMuted: boolean; isVideoOff: boolean; stream?: MediaStream; isScreenSharing?: boolean }[];
+  getVideoElements: () => { id: string; name: string; element: HTMLVideoElement | null; isMuted: boolean }[];
   onTick?: (durationSeconds: number, currentSizeBytes: number) => void;
   onStatusChange?: (status: 'recording' | 'paused' | 'stopped') => void;
 }
@@ -103,6 +104,22 @@ export class LocalMeetingRecorder {
         ctx.fillRect(0, 0, w, h);
 
         const participantsList = this.options.participants;
+        const domElements = this.options.getVideoElements();
+        const domMap = new Map(domElements.map((e) => [e.id, e.element]));
+
+        const getVideoForParticipant = (pId: string, isVideoOff: boolean) => {
+          if (isVideoOff) return null;
+          const domEl = domMap.get(pId);
+          if (domEl && domEl.videoWidth > 0 && domEl.videoHeight > 0) {
+            return domEl;
+          }
+          const internalEl = this.internalVideos.get(pId);
+          if (internalEl && internalEl.videoWidth > 0 && internalEl.videoHeight > 0) {
+            return internalEl;
+          }
+          return domEl || internalEl || null;
+        };
+
         const count = participantsList.length;
 
         if (count === 0) {
@@ -114,7 +131,7 @@ export class LocalMeetingRecorder {
           ctx.fillText('Majlis Session in Progress', w / 2, h / 2);
         } else if (count === 1) {
           const p = participantsList[0];
-          const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+          const video = getVideoForParticipant(p.id, p.isVideoOff);
           this.drawVideoTile(ctx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
         } else if (count === 2) {
           const tileW = (w - 60) / 2;
@@ -123,7 +140,7 @@ export class LocalMeetingRecorder {
           const p1 = participantsList[1];
           this.drawVideoTile(
             ctx,
-            p0.isVideoOff ? null : (this.internalVideos.get(p0.id) || null),
+            getVideoForParticipant(p0.id, p0.isVideoOff),
             p0.name,
             p0.isMuted,
             20,
@@ -133,7 +150,7 @@ export class LocalMeetingRecorder {
           );
           this.drawVideoTile(
             ctx,
-            p1.isVideoOff ? null : (this.internalVideos.get(p1.id) || null),
+            getVideoForParticipant(p1.id, p1.isVideoOff),
             p1.name,
             p1.isMuted,
             40 + tileW,
@@ -149,7 +166,7 @@ export class LocalMeetingRecorder {
             const col = idx % 2;
             const x = 20 + col * (tileW + 20);
             const y = 20 + row * (tileH + 20);
-            const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+            const video = getVideoForParticipant(p.id, p.isVideoOff);
             this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
           });
         } else {
@@ -162,7 +179,7 @@ export class LocalMeetingRecorder {
             const col = idx % cols;
             const x = 20 + col * (tileW + 20);
             const y = 20 + row * (tileH + 20);
-            const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+            const video = getVideoForParticipant(p.id, p.isVideoOff);
             this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
           });
         }
