@@ -153,34 +153,28 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             } ${mirrorClass}`}
           />
 
-          {/* Stained Glass Star Emblem Avatar when Camera is Off */}
+          {/* Camera Off: Only Speaker Name Centered */}
           {isVideoHidden && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#24170E] via-[#160E09] to-[#0E0704] p-4 text-center">
-              <IslamicStarRosette size={24} variant="full" className="mb-2 opacity-85" />
-
-              <div className="relative mb-2">
-                <div
-                  className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-xl font-bold transition-all shadow-xl ${
-                    isSpeaking
-                      ? 'bg-gradient-to-br from-[#075E4A] to-[#043328] text-[#FFFCF5] border-2 border-[#E9A83A] scale-105 ring-4 ring-[#E9A83A]/40'
-                      : 'bg-gradient-to-br from-[#075E4A] to-[#032920] text-[#FFFCF5] border-2 border-[#E9A83A]/70'
-                  }`}
-                >
-                  {initials}
+              <h3 className={`text-base sm:text-lg font-bold tracking-tight transition-colors ${
+                isSpeaking ? 'text-[#E9A83A]' : 'text-[#FFFCF5]'
+              }`}>
+                {participant.name}
+              </h3>
+              {isLocal && (
+                <span className="text-[11px] text-[#A8988B] font-medium mt-0.5">
+                  (You)
+                </span>
+              )}
+              <span className="mt-1.5 text-[9px] font-bold px-2 py-0.5 bg-[#E9A83A]/20 text-[#E9A83A] border border-[#E9A83A]/40 rounded-full uppercase tracking-wider">
+                Speaker
+              </span>
+              {isSpeaking && (
+                <div className="flex items-center gap-1 mt-2 text-[10px] font-semibold text-[#19A6A0] animate-pulse">
+                  <Mic className="w-3 h-3 text-[#E9A83A]" />
+                  <span>Speaking</span>
                 </div>
-
-                {isSpeaking && (
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#E9A83A] text-[#1E140C] flex items-center justify-center border-2 border-[#160E09] shadow-md animate-bounce">
-                    <Mic className="w-3.5 h-3.5" />
-                  </div>
-                )}
-              </div>
-
-              <div className="text-center">
-                <h3 className="text-sm font-bold text-[#FFFCF5] tracking-tight">
-                  {participant.name}
-                </h3>
-              </div>
+              )}
             </div>
           )}
 
@@ -271,31 +265,40 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           } ${mirrorClass}`}
         />
 
-        {/* Camera Off Avatar in Hexagon */}
+        {/* Camera Off: Only Name Centered in Hexagon */}
         {isVideoHidden && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#20150E] via-[#160E09] to-[#0F0804] p-3 text-center">
-            <IslamicStarRosette size={20} variant="full" className="mb-1 opacity-70" />
-            <div
-              className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold shadow-md ${
-                isSpeaking
-                  ? 'bg-[#075E4A] text-[#FFFCF5] border-2 border-[#E9A83A]'
-                  : 'bg-[#075E4A] text-[#FFFCF5] border border-[#19A6A0]/50'
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#20150E] via-[#160E09] to-[#0F0804] px-3 py-2 text-center">
+            <span
+              className={`text-xs sm:text-sm font-bold tracking-tight truncate max-w-[90%] transition-colors ${
+                isSpeaking ? 'text-[#E9A83A]' : 'text-[#FFFCF5]'
               }`}
             >
-              {initials}
-            </div>
+              {participant.name}
+            </span>
+            {isLocal && (
+              <span className="text-[10px] text-[#A8988B] font-medium mt-0.5">
+                (You)
+              </span>
+            )}
+            {isSpeaking && (
+              <span className="text-[9px] font-semibold text-[#19A6A0] mt-0.5 animate-pulse">
+                ● Speaking
+              </span>
+            )}
           </div>
         )}
 
-        {/* Hexagon Overlay Name & Mic Pip */}
-        <div className="absolute bottom-2.5 left-0 right-0 z-20 flex flex-col items-center justify-center px-2 pointer-events-none">
-          <div className="bg-[#140D08]/92 backdrop-blur-md px-2 py-0.5 rounded-sm border border-[#3A2619] max-w-[90%] text-center shadow-md">
-            <span className="text-[11px] font-semibold text-[#FFFCF5] truncate block">
-              {participant.name}
-              {isLocal && ' (You)'}
-            </span>
+        {/* Video Active Overlay Name Tag */}
+        {!isVideoHidden && (
+          <div className="absolute bottom-2.5 left-0 right-0 z-20 flex flex-col items-center justify-center px-2 pointer-events-none">
+            <div className="bg-[#140D08]/92 backdrop-blur-md px-2 py-0.5 rounded-sm border border-[#3A2619] max-w-[90%] text-center shadow-md">
+              <span className="text-[11px] font-semibold text-[#FFFCF5] truncate block">
+                {participant.name}
+                {isLocal && ' (You)'}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Speaker or Hand Raised Badge inside Hexagon */}
         {participant.handRaised && (
