@@ -626,6 +626,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             isMuted: p.isMuted,
             isVideoOff: p.isVideoOff,
             stream: p.stream,
+            isScreenSharing: p.isScreenSharing,
           }));
         },
         getVideoElements: () => {

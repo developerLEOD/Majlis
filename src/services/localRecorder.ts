@@ -22,6 +22,7 @@ export class LocalMeetingRecorder {
   private pauseStartTime = 0;
   private timerInterval: number | null = null;
   private canvasAnimFrame: number | null = null;
+  private canvasRenderInterval: number | null = null;
   private screenStream: MediaStream | null = null;
   private audioCleanup: (() => void) | null = null;
   private options: RecorderOptions;
@@ -32,7 +33,7 @@ export class LocalMeetingRecorder {
   // Dynamic Audio Mixing context & nodes
   private audioCtx: AudioContext | null = null;
   private audioDestination: MediaStreamAudioDestinationNode | null = null;
-  private connectedSources: Map<string, MediaStreamAudioSourceNode & { mediaStream?: MediaStream }> = new Map();
+  private connectedSources: Map<string, { source: MediaStreamAudioSourceNode; track: MediaStreamTrack }> = new Map();
 
   public status: 'idle' | 'recording' | 'paused' | 'stopped' = 'idle';
 
@@ -79,22 +80,43 @@ export class LocalMeetingRecorder {
         }
       });
     } else {
-      // Initialize dynamic AudioContext & destination node for composite recording
+      // Initialize dynamic AudioContext with forced 48kHz sample rate to prevent clock drift and audio quality deterioration over time
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      this.audioCtx = new AudioContextClass();
+      this.audioCtx = new AudioContextClass({
+        latencyHint: 'playback',
+        sampleRate: 48000,
+      });
+
+      if (this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume().catch(() => {});
+      }
+
       this.audioDestination = this.audioCtx.createMediaStreamDestination();
       this.connectedSources.clear();
+
+      // Ensure an invisible DOM container exists to force the browser to decode and keep video elements active
+      let videoContainer = document.getElementById('recording-video-container');
+      if (!videoContainer) {
+        videoContainer = document.createElement('div');
+        videoContainer.id = 'recording-video-container';
+        videoContainer.setAttribute(
+          'style',
+          'position: fixed; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; pointer-events: none; opacity: 0; z-index: -9999;'
+        );
+        document.body.appendChild(videoContainer);
+      }
 
       // Initialize internal video elements for each participant stream currently active
       this.internalVideos.clear();
       const currentParticipants = this.options.getParticipants();
       currentParticipants.forEach((p) => {
-        if (p.stream) {
+        if (p.stream && p.stream.getVideoTracks().length > 0) {
           const v = document.createElement('video');
           v.srcObject = p.stream;
           v.muted = true;
           v.playsInline = true;
           v.autoplay = true;
+          videoContainer!.appendChild(v);
           v.play().catch(() => {});
           this.internalVideos.set(p.id, v);
         }
@@ -108,65 +130,71 @@ export class LocalMeetingRecorder {
       let frameCount = 0;
 
       const drawMeetingComposite = () => {
-        if (this.status === 'stopped') return;
+        if (this.status === 'stopped' || this.status === 'paused') return;
 
         const w = this.canvas!.width;
         const h = this.canvas!.height;
 
-        // Dark background
-        ctx.fillStyle = '#090d16';
+        // Dark background with gorgeous Islamic sanctuary theme colors
+        ctx.fillStyle = '#06080d';
         ctx.fillRect(0, 0, w, h);
 
         const participantsList = this.options.getParticipants();
         const domElements = this.options.getVideoElements();
         const domMap = new Map(domElements.map((e) => [e.id, e.element]));
 
-        // Check & sync dynamic audio sources + newly joined video streams
+        // Check & sync dynamic audio tracks + newly joined video streams
         frameCount++;
         if (frameCount % 15 === 0 && this.audioCtx && this.audioDestination) {
+          const activeTrackKeys = new Set<string>();
+
           participantsList.forEach((p) => {
-            // Setup internal video element if missing
-            if (p.stream && !this.internalVideos.has(p.id)) {
+            // Setup internal video element if missing and we have a stream with video tracks
+            if (p.stream && p.stream.getVideoTracks().length > 0 && !this.internalVideos.has(p.id)) {
               const v = document.createElement('video');
               v.srcObject = p.stream;
               v.muted = true;
               v.playsInline = true;
               v.autoplay = true;
+              
+              const container = document.getElementById('recording-video-container');
+              if (container) {
+                container.appendChild(v);
+              }
+              
               v.play().catch(() => {});
               this.internalVideos.set(p.id, v);
             }
 
-            // Sync dynamic Audio mixer source
-            if (p.stream && p.stream.getAudioTracks().length > 0) {
-              const existingSource = this.connectedSources.get(p.id);
-              if (!existingSource || existingSource.mediaStream !== p.stream) {
-                if (existingSource) {
-                  try { existingSource.disconnect(); } catch {}
+            // Sync dynamic Audio mixer tracks individually to capture microphone + tab audios simultaneously
+            if (p.stream) {
+              const audioTracks = p.stream.getAudioTracks().filter((t) => t.enabled && t.readyState === 'live');
+              audioTracks.forEach((track) => {
+                const trackKey = `${p.id}_${track.id}`;
+                activeTrackKeys.add(trackKey);
+
+                const existing = this.connectedSources.get(trackKey);
+                if (!existing) {
+                  try {
+                    const singleTrackStream = new MediaStream([track]);
+                    const source = this.audioCtx!.createMediaStreamSource(singleTrackStream);
+                    source.connect(this.audioDestination!);
+                    this.connectedSources.set(trackKey, { source, track });
+                  } catch (err) {
+                    console.warn('Could not attach individual audio track in recorder:', err);
+                  }
                 }
-                try {
-                  const source = this.audioCtx!.createMediaStreamSource(p.stream);
-                  source.connect(this.audioDestination!);
-                  // Attach mediaStream property on node to track stream identity
-                  (source as any).mediaStream = p.stream;
-                  this.connectedSources.set(p.id, source);
-                } catch (err) {
-                  console.warn('Could not attach dynamic audio source in recorder:', err);
-                }
-              }
-            } else {
-              const existingSource = this.connectedSources.get(p.id);
-              if (existingSource) {
-                try { existingSource.disconnect(); } catch {}
-                this.connectedSources.delete(p.id);
-              }
+              });
             }
           });
 
-          // Disconnect audio sources of participants who left the room
-          this.connectedSources.forEach((source, pId) => {
-            if (!participantsList.some((p) => p.id === pId)) {
-              try { source.disconnect(); } catch {}
-              this.connectedSources.delete(pId);
+          // Disconnect and remove any tracks that are no longer active
+          this.connectedSources.forEach((conn, key) => {
+            if (!activeTrackKeys.has(key) || conn.track.readyState === 'ended' || !conn.track.enabled) {
+              try {
+                conn.source.disconnect();
+              } catch {}
+              this.connectedSources.delete(key);
             }
           });
         }
@@ -178,68 +206,103 @@ export class LocalMeetingRecorder {
           return this.internalVideos.get(pId) || null;
         };
 
-        const count = participantsList.length;
+        // Determine if anyone is sharing a screen to use our premium presentation layout
+        const screenSharer = participantsList.find((p) => p.isScreenSharing);
 
-        if (count === 0) {
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(40, 40, w - 80, h - 80);
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '24px system-ui, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('Majlis Session in Progress', w / 2, h / 2);
-        } else if (count === 1) {
-          const p = participantsList[0];
-          const video = getVideoForParticipant(p.id, p.isVideoOff);
-          this.drawVideoTile(ctx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
-        } else if (count === 2) {
-          const tileW = (w - 60) / 2;
-          const tileH = h - 60;
-          const p0 = participantsList[0];
-          const p1 = participantsList[1];
-          this.drawVideoTile(
-            ctx,
-            getVideoForParticipant(p0.id, p0.isVideoOff),
-            p0.name,
-            p0.isMuted,
-            20,
-            30,
-            tileW,
-            tileH
-          );
-          this.drawVideoTile(
-            ctx,
-            getVideoForParticipant(p1.id, p1.isVideoOff),
-            p1.name,
-            p1.isMuted,
-            40 + tileW,
-            30,
-            tileW,
-            tileH
-          );
-        } else if (count <= 4) {
-          const tileW = (w - 60) / 2;
-          const tileH = (h - 60) / 2;
-          participantsList.forEach((p, idx) => {
-            const row = Math.floor(idx / 2);
-            const col = idx % 2;
-            const x = 20 + col * (tileW + 20);
-            const y = 20 + row * (tileH + 20);
-            const video = getVideoForParticipant(p.id, p.isVideoOff);
-            this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
-          });
+        if (screenSharer) {
+          // CINEMATIC SPLIT PRESENTATION LAYOUT
+          const leftW = Math.floor(w * 0.75) - 30;
+          const leftH = h - 40;
+          const leftX = 20;
+          const leftY = 20;
+
+          const screenVideo = getVideoForParticipant(screenSharer.id, screenSharer.isVideoOff);
+          this.drawVideoTile(ctx, screenVideo, `${screenSharer.name} (Shared Screen)`, screenSharer.isMuted, leftX, leftY, leftW, leftH);
+
+          // Right sidebar with participant cameras stacked vertically
+          const otherParticipants = participantsList.filter((p) => p.id !== screenSharer.id);
+          const rightX = leftX + leftW + 20;
+          const rightW = w - rightX - 20;
+          const sidebarCount = otherParticipants.length;
+
+          if (sidebarCount > 0) {
+            const gap = 15;
+            const availableHeight = h - 40 - (gap * (sidebarCount - 1));
+            const tileH = Math.max(80, Math.min(180, Math.floor(availableHeight / sidebarCount)));
+
+            otherParticipants.forEach((p, idx) => {
+              const tileY = 20 + idx * (tileH + gap);
+              if (tileY + tileH <= h - 20) {
+                const pVideo = getVideoForParticipant(p.id, p.isVideoOff);
+                this.drawVideoTile(ctx, pVideo, p.name, p.isMuted, rightX, tileY, rightW, tileH);
+              }
+            });
+          }
         } else {
-          const cols = 3;
-          const rows = Math.ceil(count / cols);
-          const tileW = (w - 20 * (cols + 1)) / cols;
-          const tileH = (h - 20 * (rows + 1)) / rows;
-          participantsList.forEach((p, idx) => {
-            const row = Math.floor(idx / cols);
-            const col = idx % cols;
-            const x = 20 + col * (tileW + 20);
-            const y = 20 + row * (tileH + 20);
+          // TRADITIONAL GRID LAYOUT based on participant count
+          const count = participantsList.length;
+
+          if (count === 0) {
+            ctx.fillStyle = '#101625';
+            ctx.fillRect(40, 40, w - 80, h - 80);
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '24px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Majlis Session in Progress', w / 2, h / 2);
+          } else if (count === 1) {
+            const p = participantsList[0];
             const video = getVideoForParticipant(p.id, p.isVideoOff);
-            this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
-          });
+            this.drawVideoTile(ctx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
+          } else if (count === 2) {
+            const tileW = (w - 60) / 2;
+            const tileH = h - 60;
+            const p0 = participantsList[0];
+            const p1 = participantsList[1];
+            this.drawVideoTile(
+              ctx,
+              getVideoForParticipant(p0.id, p0.isVideoOff),
+              p0.name,
+              p0.isMuted,
+              20,
+              30,
+              tileW,
+              tileH
+            );
+            this.drawVideoTile(
+              ctx,
+              getVideoForParticipant(p1.id, p1.isVideoOff),
+              p1.name,
+              p1.isMuted,
+              40 + tileW,
+              30,
+              tileW,
+              tileH
+            );
+          } else if (count <= 4) {
+            const tileW = (w - 60) / 2;
+            const tileH = (h - 60) / 2;
+            participantsList.forEach((p, idx) => {
+              const row = Math.floor(idx / 2);
+              const col = idx % 2;
+              const x = 20 + col * (tileW + 20);
+              const y = 20 + row * (tileH + 20);
+              const video = getVideoForParticipant(p.id, p.isVideoOff);
+              this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
+            });
+          } else {
+            const cols = 3;
+            const rows = Math.ceil(count / cols);
+            const tileW = (w - 20 * (cols + 1)) / cols;
+            const tileH = (h - 20 * (rows + 1)) / rows;
+            participantsList.forEach((p, idx) => {
+              const row = Math.floor(idx / cols);
+              const col = idx % cols;
+              const x = 20 + col * (tileW + 20);
+              const y = 20 + row * (tileH + 20);
+              const video = getVideoForParticipant(p.id, p.isVideoOff);
+              this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
+            });
+          }
         }
 
         // Live Recording Overlay Watermark
@@ -261,10 +324,22 @@ export class LocalMeetingRecorder {
         const secs = String(elapsedSec % 60).padStart(2, '0');
         ctx.fillText(`REC ${mins}:${secs} • Majlis`, w - 246, 46);
 
+        lastFrameTime = Date.now();
         this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
       };
 
-      drawMeetingComposite();
+      let lastFrameTime = Date.now();
+
+      // Start primary smooth GPU-accelerated drawing
+      this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
+
+      // Add a fallback setInterval backup loop that only acts if requestAnimationFrame has been throttled/suspended in background tab
+      this.canvasRenderInterval = window.setInterval(() => {
+        if (this.status === 'recording' && Date.now() - lastFrameTime > 250) {
+          // Tab is in the background, manually trigger a frame draw to keep the video encoding stream alive
+          drawMeetingComposite();
+        }
+      }, 250);
 
       const canvasStream = this.canvas.captureStream(30);
 
@@ -443,6 +518,10 @@ export class LocalMeetingRecorder {
         cancelAnimationFrame(this.canvasAnimFrame);
         this.canvasAnimFrame = null;
       }
+      if (this.canvasRenderInterval) {
+        clearInterval(this.canvasRenderInterval);
+        this.canvasRenderInterval = null;
+      }
       if (this.audioCleanup) {
         this.audioCleanup();
         this.audioCleanup = null;
@@ -452,13 +531,18 @@ export class LocalMeetingRecorder {
         this.screenStream = null;
       }
 
+      const videoContainer = document.getElementById('recording-video-container');
+      if (videoContainer) {
+        videoContainer.remove();
+      }
+
       this.internalVideos.forEach((v) => {
         v.srcObject = null;
       });
       this.internalVideos.clear();
 
-      this.connectedSources.forEach((source) => {
-        try { source.disconnect(); } catch {}
+      this.connectedSources.forEach((conn) => {
+        try { conn.source.disconnect(); } catch {}
       });
       this.connectedSources.clear();
 

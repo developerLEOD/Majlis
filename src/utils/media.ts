@@ -215,25 +215,39 @@ export function createAudioMeter(stream: MediaStream, onVolume: (level: number) 
   };
 }
 
-// Mix multiple media streams into a single audio MediaStreamDestination
+// Mix multiple media streams into a single audio MediaStreamDestination with high-fidelity configurations
 export function createMixedAudioStream(streams: MediaStream[]): {
   audioContext: AudioContext;
   mixedStream: MediaStream;
   cleanup: () => void;
 } {
-  const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  const audioCtx = new AudioContextClass({
+    latencyHint: 'playback',
+    sampleRate: 48000, // force 48kHz studio sample rate to avoid clock drift
+  });
+
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+
   const destination = audioCtx.createMediaStreamDestination();
   const sources: MediaStreamAudioSourceNode[] = [];
 
   for (const stream of streams) {
-    if (stream && stream.getAudioTracks().length > 0) {
-      try {
-        const source = audioCtx.createMediaStreamSource(stream);
-        source.connect(destination);
-        sources.push(source);
-      } catch (err) {
-        console.warn('Could not attach stream to audio mixer:', err);
-      }
+    if (stream) {
+      stream.getAudioTracks().forEach((track) => {
+        if (track.enabled && track.readyState === 'live') {
+          try {
+            const singleTrackStream = new MediaStream([track]);
+            const source = audioCtx.createMediaStreamSource(singleTrackStream);
+            source.connect(destination);
+            sources.push(source);
+          } catch (err) {
+            console.warn('Could not attach individual audio track to audio mixer:', err);
+          }
+        }
+      });
     }
   }
 
