@@ -274,16 +274,14 @@ export class FirebaseMeetingSync {
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const d = change.doc.data();
-            if (d.senderId !== this.userId) {
-              onMessage({
-                id: d.id,
-                senderId: d.senderId,
-                senderName: d.senderName,
-                text: d.text,
-                isHost: !!d.isHost,
-                timestamp: d.timestamp,
-              });
-            }
+            onMessage({
+              id: d.id,
+              senderId: d.senderId,
+              senderName: d.senderName,
+              text: d.text,
+              isHost: !!d.isHost,
+              timestamp: d.timestamp,
+            });
           }
         });
       },
@@ -321,17 +319,15 @@ export class FirebaseMeetingSync {
         snapshot.docChanges().forEach((change) => {
           if (change.type === 'added') {
             const d = change.doc.data();
-            if (d.senderId !== this.userId) {
-              onReaction({
-                id: d.id,
-                senderId: d.senderId,
-                senderName: d.senderName,
-                emoji: d.emoji,
-              });
-              setTimeout(() => {
-                deleteDoc(change.doc.ref).catch(() => {});
-              }, 4000);
-            }
+            onReaction({
+              id: d.id,
+              senderId: d.senderId,
+              senderName: d.senderName,
+              emoji: d.emoji,
+            });
+            setTimeout(() => {
+              deleteDoc(change.doc.ref).catch(() => {});
+            }, 4000);
           }
         });
       },

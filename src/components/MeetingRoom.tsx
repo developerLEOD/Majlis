@@ -265,14 +265,20 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onChatMessage: (message) => {
-        setMessages((prev) => [...prev, message]);
-        if (activeDrawer !== 'chat') {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === message.id)) return prev;
+          return [...prev, message];
+        });
+        if (activeDrawer !== 'chat' && message.senderId !== userId) {
           setUnreadChatCount((count) => count + 1);
         }
       },
 
       onReaction: (reaction) => {
-        setActiveReactions((prev) => [...prev, reaction]);
+        setActiveReactions((prev) => {
+          if (prev.some((r) => r.id === reaction.id)) return prev;
+          return [...prev, reaction];
+        });
         setTimeout(() => {
           setActiveReactions((prev) => prev.filter((r) => r.id !== reaction.id));
         }, 3500);
@@ -1205,10 +1211,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
         {/* Center Controls Dock */}
         <div className="flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 bg-[#1F140D] border border-[#3A2619] rounded-sm shadow-inner shrink min-w-0">
-          {/* Screen Share (hidden on small mobile screens, shown on xs+) */}
+          {/* Screen Share */}
           <button
             onClick={toggleScreenShare}
-            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors hidden xs:flex items-center justify-center ${
+            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors flex items-center justify-center ${
               isScreenSharing
                 ? 'bg-[#075E4A] text-white border-[#19A6A0]'
                 : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
