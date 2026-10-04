@@ -1,3 +1,7 @@
+import { doc, getDoc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { MajlisSession } from '../types/meeting';
+
 /**
  * URL, link sharing, and session metadata utilities for InfinityMeet
  */
@@ -167,3 +171,123 @@ export function getRoomTitleLocally(roomId: string): string | null {
     return null;
   }
 }
+
+/**
+ * Extracts a normalized roomId from plain text, query string, or full meeting URL
+ */
+export function extractRoomIdFromInput(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  try {
+    if (trimmed.includes('?') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const url = new URL(trimmed.startsWith('http') ? trimmed : `https://dummy.com/${trimmed}`);
+      const roomParam = url.searchParams.get('room') || url.searchParams.get('roomId') || url.searchParams.get('r');
+      if (roomParam) {
+        return roomParam.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+      }
+      const pathParts = url.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        const lastPart = pathParts[pathParts.length - 1];
+        if (lastPart && !['join', 'room', 'majlis'].includes(lastPart.toLowerCase())) {
+          return lastPart.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  if (trimmed.startsWith('?')) {
+    const params = new URLSearchParams(trimmed);
+    const r = params.get('room') || params.get('roomId') || params.get('r');
+    if (r) return r.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  }
+
+  return trimmed.toLowerCase().replace(/[^a-z0-9-]/g, '');
+}
+
+/**
+ * Checks whether a given room code or link matches a currently active ongoing session
+ */
+export async function checkOngoingMajlis(
+  roomIdOrLink: string,
+  currentActiveList: MajlisSession[] = []
+): Promise<{ exists: boolean; roomId: string; session?: MajlisSession; message?: string }> {
+  const cleanedId = extractRoomIdFromInput(roomIdOrLink);
+  if (!cleanedId || cleanedId.length < 2) {
+    return {
+      exists: false,
+      roomId: '',
+      message: 'Please enter a valid Majlis code or invite link.',
+    };
+  }
+
+  // 1. Check in currently active client list
+  const foundInList = currentActiveList.find((s) => s.roomId.toLowerCase() === cleanedId.toLowerCase());
+  if (foundInList) {
+    return { exists: true, roomId: cleanedId, session: foundInList };
+  }
+
+  // 2. Check live server backend
+  try {
+    const res = await fetch(`/api/room/${encodeURIComponent(cleanedId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.exists) {
+        return {
+          exists: true,
+          roomId: cleanedId,
+          session: {
+            id: `live_${cleanedId}`,
+            roomId: cleanedId,
+            title: data.title || `Majlis (${cleanedId})`,
+            hostName: data.hostName || 'Moderator',
+            scheduledAt: 'Happening Now',
+            status: 'live',
+            participantCount: data.participantCount || 1,
+            startedAt: Date.now(),
+            locked: !!data.locked,
+          },
+        };
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 3. Check Firestore
+  const path = `rooms/${cleanedId}`;
+  try {
+    const docSnap = await getDoc(doc(db, 'rooms', cleanedId));
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data && !data.ended) {
+        return {
+          exists: true,
+          roomId: cleanedId,
+          session: {
+            id: `live_${cleanedId}`,
+            roomId: cleanedId,
+            title: data.title || `Majlis (${cleanedId})`,
+            hostName: data.hostName || 'Moderator',
+            scheduledAt: 'Happening Now',
+            status: 'live',
+            participantCount: data.participantCount || 1,
+            startedAt: data.createdAt ? (typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : Date.now()) : Date.now(),
+            locked: !!data.locked,
+          },
+        };
+      }
+    }
+  } catch (e) {
+    handleFirestoreError(e, OperationType.GET, path);
+  }
+
+  return {
+    exists: false,
+    roomId: cleanedId,
+    message: `No ongoing Majlis found for code "${cleanedId}". Please verify the code or start a new gathering.`,
+  };
+}
+

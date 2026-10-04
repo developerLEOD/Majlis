@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   Calendar,
   Link as LinkIcon,
+  Loader2,
   Video,
+  X,
 } from 'lucide-react';
 import { MajlisSession } from '../../types/meeting';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
+import { verifyMajlisOngoing } from '../../hooks/useActiveMajalis';
 
 interface HomeScreenProps {
   activeMajalis: MajlisSession[];
@@ -14,6 +18,8 @@ interface HomeScreenProps {
   onStartMajlis: () => void;
   onJoinMajlis: (roomId: string, title?: string) => void;
   onClearActive?: () => void;
+  externalErrorMessage?: string | null;
+  onClearExternalError?: () => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -21,13 +27,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   upcomingSessions: propUpcoming,
   onStartMajlis,
   onJoinMajlis,
+  externalErrorMessage,
+  onClearExternalError,
 }) => {
   const [inputCode, setInputCode] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleJoinSubmit = (e: React.FormEvent) => {
+  const displayError = externalErrorMessage || errorMessage;
+
+  const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputCode.trim()) return;
-    onJoinMajlis(inputCode.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''));
+    if (!inputCode.trim() || isVerifying) return;
+
+    setErrorMessage(null);
+    onClearExternalError?.();
+    setIsVerifying(true);
+
+    try {
+      const result = await verifyMajlisOngoing(inputCode, activeMajalis);
+
+      if (!result.isOngoing) {
+        setErrorMessage(
+          result.error ||
+            `No ongoing Majlis session found matching "${inputCode.trim()}". Please check the code or start a new Majlis.`
+        );
+        setIsVerifying(false);
+        return;
+      }
+
+      // Valid ongoing session found!
+      setErrorMessage(null);
+      setIsVerifying(false);
+      onJoinMajlis(result.roomId, result.title);
+    } catch (err) {
+      setErrorMessage('Unable to verify session at this moment. Please check your connection and try again.');
+      setIsVerifying(false);
+    }
+  };
+
+  const handleDirectActiveJoin = (roomId: string, title?: string) => {
+    setErrorMessage(null);
+    onClearExternalError?.();
+    onJoinMajlis(roomId, title);
   };
 
   // Curated upcoming sessions with authentic Stained Glass jewel tones
@@ -161,21 +203,65 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </p>
             </div>
 
-            <form onSubmit={handleJoinSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
-                placeholder="Majlis link or code..."
-                className="flex-1 min-w-0 bg-[#24170F] border border-[#3A2619] rounded-sm px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8A7A6D] focus:outline-none focus:border-[#E9A83A]"
-              />
-              <button
-                type="submit"
-                disabled={!inputCode.trim()}
-                className="px-5 py-2 bg-[#075E4A] hover:bg-[#05493A] disabled:opacity-40 text-[#FFFCF5] font-semibold text-xs rounded-sm transition-colors shrink-0 border border-[#19A6A0]/40"
-              >
-                Join
-              </button>
+            <form onSubmit={handleJoinSubmit} className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputCode}
+                  onChange={(e) => {
+                    setInputCode(e.target.value);
+                    if (displayError) {
+                      setErrorMessage(null);
+                      onClearExternalError?.();
+                    }
+                  }}
+                  placeholder="Majlis link or code (e.g. majlis-xyz)..."
+                  disabled={isVerifying}
+                  className="flex-1 min-w-0 bg-[#24170F] border border-[#3A2619] rounded-sm px-3.5 py-2 text-xs text-[#FFFCF5] placeholder-[#8A7A6D] focus:outline-none focus:border-[#E9A83A] disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputCode.trim() || isVerifying}
+                  className="px-5 py-2 bg-[#075E4A] hover:bg-[#05493A] disabled:opacity-40 text-[#FFFCF5] font-semibold text-xs rounded-sm transition-colors shrink-0 border border-[#19A6A0]/40 flex items-center justify-center gap-1.5"
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#E9A83A]" />
+                      <span>Checking...</span>
+                    </>
+                  ) : (
+                    <span>Join</span>
+                  )}
+                </button>
+              </div>
+
+              {/* Error Notification when no matching ongoing session exists */}
+              {displayError && (
+                <div className="p-3 bg-[#331114] border border-[#7E1C2C] rounded-sm text-xs text-[#FCA5A5] flex items-start justify-between gap-2.5 shadow-md animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 text-[#F87171] shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <strong className="block text-[#FECDD3] font-semibold text-[11px]">
+                        Session Not Found
+                      </strong>
+                      <span className="text-[11px] leading-relaxed text-[#FCA5A5] break-words">
+                        {displayError}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMessage(null);
+                      onClearExternalError?.();
+                    }}
+                    className="text-[#F87171] hover:text-[#FECDD3] p-0.5 shrink-0"
+                    title="Dismiss"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -251,7 +337,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       </div>
 
                       <button
-                        onClick={() => onJoinMajlis(session.roomId, session.title)}
+                        onClick={() => handleDirectActiveJoin(session.roomId, session.title)}
                         className="px-4 py-1.5 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] text-xs font-semibold rounded-sm transition-colors shrink-0 border border-[#19A6A0]/40 self-start sm:self-auto"
                       >
                         Join

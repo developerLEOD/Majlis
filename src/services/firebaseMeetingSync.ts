@@ -94,7 +94,7 @@ export class FirebaseMeetingSync {
         if (snap.exists()) {
           const data = snap.data();
           if (data?.ended) {
-            onUpdate(null);
+            onUpdate({ ...data, ended: true });
           } else {
             onUpdate(data);
           }

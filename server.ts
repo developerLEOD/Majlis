@@ -36,6 +36,8 @@ interface Room {
 
 // Store ONLY real, active rooms created by users
 const rooms = new Map<string, Room>();
+// Grace period timers for reconnecting users
+const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function getActiveRoomsList() {
   return Array.from(rooms.values())
@@ -104,6 +106,12 @@ wss.on('connection', (ws: WebSocket) => {
           const { roomId, userId, userName, isHost, title } = message;
           currentRoomId = roomId;
           currentUserId = userId;
+
+          // If there was a pending disconnect timer for this user, cancel it immediately
+          if (pendingDisconnects.has(userId)) {
+            clearTimeout(pendingDisconnects.get(userId)!);
+            pendingDisconnects.delete(userId);
+          }
 
           let room = rooms.get(roomId);
           if (!room) {
@@ -524,6 +532,20 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'leave': {
+          const { roomId, userId } = message;
+          const targetRoomId = roomId || currentRoomId;
+          const targetUserId = userId || currentUserId;
+          if (targetRoomId && targetUserId) {
+            if (pendingDisconnects.has(targetUserId)) {
+              clearTimeout(pendingDisconnects.get(targetUserId)!);
+              pendingDisconnects.delete(targetUserId);
+            }
+            performParticipantRemoval(targetRoomId, targetUserId);
+          }
+          break;
+        }
+
         case 'host-end-session': {
           if (!currentRoomId || !currentUserId) return;
           const room = rooms.get(currentRoomId);
@@ -545,53 +567,68 @@ wss.on('connection', (ws: WebSocket) => {
     }
   });
 
+  function performParticipantRemoval(roomId: string, userId: string) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const leavingUser = room.participants.get(userId);
+    room.participants.delete(userId);
+
+    broadcastToRoom(roomId, null, {
+      type: 'user-left',
+      userId,
+      name: leavingUser?.name || 'A participant',
+    });
+
+    // If host leaves and there are participants left, assign next host
+    if (room.hostId === userId && room.participants.size > 0) {
+      const nextHost = room.participants.values().next().value;
+      if (nextHost) {
+        nextHost.isHost = true;
+        room.hostId = nextHost.id;
+        room.hostName = nextHost.name;
+        if (nextHost.socket.readyState === WebSocket.OPEN) {
+          nextHost.socket.send(
+            JSON.stringify({
+              type: 'promoted-to-host',
+              message: 'You are now the meeting host.',
+            })
+          );
+        }
+        broadcastToRoom(roomId, null, {
+          type: 'new-host',
+          hostId: nextHost.id,
+          hostName: nextHost.name,
+        });
+      }
+    }
+
+    if (room.participants.size === 0) {
+      // Keep room open for 5 minutes to allow reconnects
+      setTimeout(() => {
+        const currentR = rooms.get(roomId);
+        if (currentR && currentR.participants.size === 0) {
+          rooms.delete(roomId);
+          broadcastActiveRooms();
+        }
+      }, 1000 * 60 * 5);
+    }
+
+    broadcastActiveRooms();
+  }
+
   const cleanup = () => {
     if (currentRoomId && currentUserId) {
-      const room = rooms.get(currentRoomId);
-      if (room) {
-        const leavingUser = room.participants.get(currentUserId);
-        room.participants.delete(currentUserId);
+      const rId = currentRoomId;
+      const uId = currentUserId;
 
-        broadcastToRoom(currentRoomId, null, {
-          type: 'user-left',
-          userId: currentUserId,
-          name: leavingUser?.name || 'A participant',
-        });
+      // Set a grace period timer (8 seconds) to allow brief network reconnection without dropping from room
+      const timer = setTimeout(() => {
+        pendingDisconnects.delete(uId);
+        performParticipantRemoval(rId, uId);
+      }, 8000);
 
-        // If host leaves and there are participants left, assign next host
-        if (room.hostId === currentUserId && room.participants.size > 0) {
-          const nextHost = room.participants.values().next().value;
-          if (nextHost) {
-            nextHost.isHost = true;
-            room.hostId = nextHost.id;
-            room.hostName = nextHost.name;
-            if (nextHost.socket.readyState === WebSocket.OPEN) {
-              nextHost.socket.send(JSON.stringify({
-                type: 'promoted-to-host',
-                message: 'You are now the meeting host.',
-              }));
-            }
-            broadcastToRoom(currentRoomId, null, {
-              type: 'new-host',
-              hostId: nextHost.id,
-              hostName: nextHost.name,
-            });
-          }
-        }
-
-        if (room.participants.size === 0) {
-          // Keep room open for 5 minutes to allow reconnects
-          setTimeout(() => {
-            const currentR = rooms.get(currentRoomId!);
-            if (currentR && currentR.participants.size === 0) {
-              rooms.delete(currentRoomId!);
-              broadcastActiveRooms();
-            }
-          }, 1000 * 60 * 5);
-        }
-
-        broadcastActiveRooms();
-      }
+      pendingDisconnects.set(uId, timer);
     }
   };
 

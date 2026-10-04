@@ -16,7 +16,7 @@ import {
   saveRoomTitleLocally,
   getRoomTitleLocally,
 } from './utils/urlHelper';
-import { useActiveMajalis } from './hooks/useActiveMajalis';
+import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis';
 
 function MainAppContent() {
   const { user, isModerator } = useAuth();
@@ -60,27 +60,34 @@ function MainAppContent() {
     isVideoOff: boolean;
   } | null>(null);
 
+  const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
+
   // Live ongoing majalis fetched and synced via WebSocket & REST
   const { activeMajalis, addOptimisticMajlis, clearAllActive } = useActiveMajalis(!!activeMeeting);
-
-  // Clear current ongoing majalis on user request
-  useEffect(() => {
-    clearAllActive();
-  }, [clearAllActive]);
 
   useEffect(() => {
     fetchAppConfig();
 
-    const handleLocationChange = () => {
+    const handleLocationChange = async () => {
       const info = getRoomInfoFromCurrentLocation();
       if (info && info.roomId && !activeMeeting) {
-        const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === info.roomId.toLowerCase());
-        const localTitle = getRoomTitleLocally(info.roomId);
-        setPreJoinTarget({
-          roomId: info.roomId,
-          title: info.title || existing?.title || localTitle || `Majlis (${info.roomId})`,
-          isHost: false,
-        });
+        const cleanedId = info.roomId.toLowerCase().replace(/[^a-z0-9-]/g, '');
+        // Verify whether the room from URL is an active ongoing session
+        const verifyResult = await verifyMajlisOngoing(cleanedId, activeMajalis);
+        if (verifyResult.isOngoing) {
+          const localTitle = getRoomTitleLocally(cleanedId);
+          setJoinErrorMessage(null);
+          setPreJoinTarget({
+            roomId: cleanedId,
+            title: info.title || verifyResult.title || localTitle || `Majlis (${cleanedId})`,
+            isHost: false,
+          });
+        } else {
+          setJoinErrorMessage(
+            `No active Majlis found for "${cleanedId}". The session may have ended or the link is expired.`
+          );
+          window.history.replaceState({}, '', window.location.pathname);
+        }
       }
     };
 
@@ -236,6 +243,8 @@ function MainAppContent() {
             onStartMajlis={() => setIsStartModalOpen(true)}
             onJoinMajlis={handleInitiateJoin}
             onClearActive={clearAllActive}
+            externalErrorMessage={joinErrorMessage}
+            onClearExternalError={() => setJoinErrorMessage(null)}
           />
         )}
 
