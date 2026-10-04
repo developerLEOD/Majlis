@@ -11,6 +11,7 @@ import {
 import { MajlisSession } from '../../types/meeting';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 import { verifyMajlisOngoing } from '../../hooks/useActiveMajalis';
+import { SanctuaryLoader } from '../common/SanctuaryLoader';
 import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
 import wisdomPortraitImg from '../../assets/images/wisdom_portrait_glass_1791101565686.jpg';
 
@@ -115,7 +116,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#120B07] text-[#FFFCF5] select-none flex flex-col min-h-screen">
+    <div className="flex-1 overflow-y-auto bg-[#120B07] text-[#FFFCF5] select-none flex flex-col min-h-screen relative">
+      {isVerifying && (
+        <SanctuaryLoader message="Verifying Majlis..." subMessage="Checking active sanctuary session in cloud" />
+      )}
       {/* 1. HERO SECTION WITH STAINED GLASS BACKGROUND */}
       <div className="relative w-full bg-[#180F09] overflow-hidden pt-8 pb-10 px-6 sm:px-10 lg:px-12 shrink-0 border-b border-[#2A1B12]">
         {/* Photographic Mosque Stained Glass Background */}

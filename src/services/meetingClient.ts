@@ -148,8 +148,18 @@ export class MeetingClient {
 
       // Listen to participants from Firebase
       this.firebaseSync.subscribeToParticipants((participants) => {
-        if (!participants || participants.length === 0) return;
+        if (!participants) return;
         const remoteParticipants = participants.filter((p) => p.id !== this.userId);
+        const currentRemoteIds = new Set(remoteParticipants.map((p) => p.id));
+
+        // Detect participants who left (in knownParticipants but missing from snapshot)
+        for (const knownId of this.knownParticipants.keys()) {
+          if (!currentRemoteIds.has(knownId)) {
+            this.knownParticipants.delete(knownId);
+            this.closePeerConnection(knownId);
+            this.events.onUserLeft(knownId);
+          }
+        }
 
         // Add or update active participants in real-time
         for (const p of remoteParticipants) {

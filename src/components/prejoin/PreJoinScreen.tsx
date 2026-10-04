@@ -3,6 +3,7 @@ import { Crown, Key, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 import { useAuth } from '../../context/AuthContext';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
+import { SanctuaryLoader } from '../common/SanctuaryLoader';
 import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
 
 interface PreJoinScreenProps {
@@ -41,6 +42,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   const [micVolume, setMicVolume] = useState(0);
   const [isHost, setIsHost] = useState(isHostDefault && isModerator);
   const [showHostNotice, setShowHostNotice] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -116,18 +118,23 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isConnecting) return;
+    setIsConnecting(true);
+
     const finalName = userName.trim() || (isHost ? 'Moderator' : 'Seeker');
     localStorage.setItem('infinitymeet_username', finalName);
 
-    onEnterMeeting({
-      roomId: roomId.trim().toLowerCase(),
-      userName: finalName,
-      isHost: isHost && isModerator,
-      stream,
-      isMuted: !isMicOn,
-      isVideoOff: !isCameraOn,
-      title: displayTitle,
-    });
+    setTimeout(() => {
+      onEnterMeeting({
+        roomId: roomId.trim().toLowerCase(),
+        userName: finalName,
+        isHost: isHost && isModerator,
+        stream,
+        isMuted: !isMicOn,
+        isVideoOff: !isCameraOn,
+        title: displayTitle,
+      });
+    }, 400);
   };
 
   const handleCancel = () => {
@@ -139,6 +146,9 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
 
   return (
     <div className="min-h-screen bg-[#140D08] text-[#1C1917] flex flex-col items-center justify-center p-4 select-none relative overflow-hidden">
+      {isConnecting && (
+        <SanctuaryLoader message="Entering Sanctuary..." subMessage={`Joining "${displayTitle}"`} />
+      )}
       {/* Ambient Stained Glass Sanctuary Background */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
         <img
