@@ -3,6 +3,7 @@ import { Crown, Hand, Maximize2, Mic, MicOff, Minimize2, MonitorUp, Sparkles, Vi
 import { Participant } from '../types/meeting';
 import { createAudioMeter } from '../utils/media';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
+import { getStainedGlassTheme } from '../utils/stainedGlass';
 
 interface VideoTileProps {
   participant: Participant;
@@ -10,6 +11,7 @@ interface VideoTileProps {
   mirror?: boolean;
   isPinned?: boolean;
   forceShape?: 'star-medallion' | 'arc-door' | 'honeycomb' | 'standard';
+  themeIndex?: number;
   onTogglePin?: () => void;
   onToggleSpeaker?: () => void;
   videoRefCallback?: (element: HTMLVideoElement | null) => void;
@@ -21,6 +23,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   mirror = false,
   isPinned = false,
   forceShape,
+  themeIndex,
   onTogglePin,
   onToggleSpeaker,
   videoRefCallback,
@@ -210,18 +213,21 @@ export const VideoTile: React.FC<VideoTileProps> = ({
     );
   }
 
+  const stainedTheme = getStainedGlassTheme(participant.id || participant.name, themeIndex ?? 0);
+
   // HONEYCOMB HEXAGONAL JOINT SHAPE FOR REGULAR PARTICIPANTS
   return (
     <div className="relative w-full aspect-square flex items-center justify-center group select-none transition-all duration-300">
-      {/* Outer Hexagon Outer Glow Frame */}
+      {/* Outer Hexagon Outer Glow Frame with Stained Glass Leaded Rim */}
       <div
         className={`absolute inset-0 transition-all duration-300 ${
           isSpeaking
-            ? 'bg-gradient-to-b from-[#E9A83A] via-[#075E4A] to-[#E9A83A] opacity-100 scale-105'
-            : 'bg-gradient-to-b from-[#3A2619] via-[#24170E] to-[#3A2619] group-hover:from-[#E9A83A]/60'
+            ? `bg-gradient-to-b ${stainedTheme.speakingBorder} opacity-100 scale-105`
+            : `bg-gradient-to-b ${stainedTheme.borderGradient} opacity-90 group-hover:opacity-100 group-hover:scale-102`
         }`}
         style={{
           clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+          boxShadow: isSpeaking ? `0 0 25px ${stainedTheme.glowColor}` : undefined,
         }}
       />
 
@@ -265,23 +271,58 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           } ${mirrorClass}`}
         />
 
-        {/* Camera Off: Only Name Centered in Hexagon */}
+        {/* Camera Off: Stained Glass Facet Decor & Name */}
         {isVideoHidden && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#20150E] via-[#160E09] to-[#0F0804] px-3 py-2 text-center">
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b ${stainedTheme.glassGradient} px-3 py-2 text-center relative overflow-hidden`}
+          >
+            {/* Stained Glass Light Sheen / Texture Overlay */}
+            <div
+              className="absolute inset-0 pointer-events-none opacity-60 mix-blend-screen"
+              style={{ background: stainedTheme.glassSheen }}
+            />
+            {/* Stained Glass Geometric Top-Light Refraction */}
+            <div
+              className="absolute inset-0 pointer-events-none opacity-25"
+              style={{
+                backgroundImage: 'radial-gradient(circle at 50% 20%, rgba(255,255,255,0.6) 0%, transparent 60%)',
+              }}
+            />
+
+            {/* Glowing Gem Facet Center Accent */}
+            <div
+              className="w-1.5 h-1.5 rounded-full mb-1 transition-all"
+              style={{
+                backgroundColor: stainedTheme.rimColor,
+                boxShadow: `0 0 8px ${stainedTheme.rimColor}`,
+              }}
+            />
+
             <span
-              className={`text-xs sm:text-sm font-bold tracking-tight truncate max-w-[90%] transition-colors ${
-                isSpeaking ? 'text-[#E9A83A]' : 'text-[#FFFCF5]'
-              }`}
+              className="text-xs sm:text-sm font-bold tracking-tight truncate max-w-[90%] transition-colors z-10"
+              style={{
+                color: isSpeaking ? '#FFFFFF' : stainedTheme.textColor,
+                textShadow: `0 1px 3px rgba(0,0,0,0.9), 0 0 10px ${stainedTheme.glowColor}`,
+              }}
             >
               {participant.name}
             </span>
+
             {isLocal && (
-              <span className="text-[10px] text-[#A8988B] font-medium mt-0.5">
+              <span className="text-[10px] text-[#EAD8C7]/80 font-medium mt-0.5 z-10">
                 (You)
               </span>
             )}
+
             {isSpeaking && (
-              <span className="text-[9px] font-semibold text-[#19A6A0] mt-0.5 animate-pulse">
+              <span
+                className="text-[9px] font-bold mt-1 animate-pulse px-2 py-0.5 rounded-full border z-10 uppercase tracking-wider text-white"
+                style={{
+                  backgroundColor: stainedTheme.rimColor,
+                  borderColor: 'rgba(255,255,255,0.6)',
+                  boxShadow: `0 0 10px ${stainedTheme.rimColor}`,
+                }}
+              >
                 ● Speaking
               </span>
             )}
@@ -291,7 +332,10 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         {/* Video Active Overlay Name Tag */}
         {!isVideoHidden && (
           <div className="absolute bottom-2.5 left-0 right-0 z-20 flex flex-col items-center justify-center px-2 pointer-events-none">
-            <div className="bg-[#140D08]/92 backdrop-blur-md px-2 py-0.5 rounded-sm border border-[#3A2619] max-w-[90%] text-center shadow-md">
+            <div
+              className="bg-[#140D08]/92 backdrop-blur-md px-2.5 py-0.5 rounded-sm border max-w-[90%] text-center shadow-md"
+              style={{ borderColor: `${stainedTheme.rimColor}60` }}
+            >
               <span className="text-[11px] font-semibold text-[#FFFCF5] truncate block">
                 {participant.name}
                 {isLocal && ' (You)'}

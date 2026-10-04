@@ -70,24 +70,30 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
             rowIndex > 0 ? overlapClass : ''
           }`}
         >
-          {row.map((p) => (
-            <div
-              key={p.id}
-              className={`${sizeClasses} shrink-0 transition-transform duration-200 hover:scale-105 hover:z-30 relative`}
-            >
-              <VideoTile
-                participant={p}
-                isLocal={p.isLocal}
-                mirror={mirrorVideo}
-                forceShape="honeycomb"
-                onTogglePin={() => onPinUser(p.id)}
-                videoRefCallback={(el) => {
-                  if (el) videoElementsRef.current.set(p.id, el);
-                  else videoElementsRef.current.delete(p.id);
-                }}
-              />
-            </div>
-          ))}
+          {row.map((p, colIndex) => {
+            const overallIndex = participants.findIndex((item) => item.id === p.id);
+            const themeIndex = overallIndex >= 0 ? overallIndex : rowIndex * 3 + colIndex;
+
+            return (
+              <div
+                key={p.id}
+                className={`${sizeClasses} shrink-0 transition-transform duration-200 hover:scale-105 hover:z-30 relative`}
+              >
+                <VideoTile
+                  participant={p}
+                  isLocal={p.isLocal}
+                  mirror={mirrorVideo}
+                  forceShape="honeycomb"
+                  themeIndex={themeIndex}
+                  onTogglePin={() => onPinUser(p.id)}
+                  videoRefCallback={(el) => {
+                    if (el) videoElementsRef.current.set(p.id, el);
+                    else videoElementsRef.current.delete(p.id);
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
