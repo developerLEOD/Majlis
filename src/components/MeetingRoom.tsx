@@ -814,58 +814,58 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       `}</style>
 
       {/* TOP COMPACT HEADER */}
-      <header className="h-13 px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md">
-        <div className="flex items-center gap-3.5">
-          <IslamicStarRosette size={26} variant="full" />
-          <div className="flex items-center gap-2.5">
-            <span className="text-[10px] uppercase font-bold tracking-[0.22em] text-[#D9C6B0] hidden sm:flex items-center gap-1.5">
+      <header className="h-12 sm:h-13 px-2.5 sm:px-4 md:px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md gap-1.5 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+          <IslamicStarRosette size={22} variant="full" className="shrink-0" />
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <span className="text-[10px] uppercase font-bold tracking-[0.22em] text-[#D9C6B0] hidden md:flex items-center gap-1.5 shrink-0">
               <span>THE WISDOM LOUNGE</span>
               <span className="text-[#E9A83A]">✦</span>
             </span>
-            <span className="text-xs font-bold text-[#FFFCF5]">Majlis</span>
+            <span className="text-xs font-bold text-[#FFFCF5] shrink-0">Majlis</span>
             <button
               onClick={copyMeetingLink}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#20150E] hover:bg-[#2B1C13] text-[#E9A83A] rounded-sm border border-[#3A2619] text-xs font-mono transition-colors shadow-xs"
+              className="flex items-center gap-1 px-2 py-1 bg-[#20150E] hover:bg-[#2B1C13] text-[#E9A83A] rounded-sm border border-[#3A2619] text-[11px] font-mono transition-colors shadow-xs shrink-0"
               title="Copy Majlis Link"
             >
-              <span>{roomId}</span>
+              <span className="whitespace-nowrap">{roomId}</span>
               {copiedLink ? <Check className="w-3 h-3 text-[#19A6A0]" /> : <Copy className="w-3 h-3 text-[#8A7A6D]" />}
             </button>
           </div>
 
           {currentTitle && (
-            <div className="hidden md:flex items-center gap-2 pl-3 border-l border-[#302116]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#E9A83A]" />
-              <span className="text-xs font-semibold text-[#FFFCF5] bg-[#22160E] border border-[#3A2619] px-2.5 py-0.5 rounded-sm max-w-xs truncate">
+            <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-[#302116] min-w-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E9A83A] shrink-0" />
+              <span className="text-xs font-semibold text-[#FFFCF5] bg-[#22160E] border border-[#3A2619] px-2 py-0.5 rounded-sm max-w-[180px] truncate">
                 {currentTitle}
               </span>
             </div>
           )}
 
           {isLocked && (
-            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#A83245]/20 text-[#E9A83A] border border-[#A83245]/60 rounded-sm flex items-center gap-1">
-              <Lock className="w-3 h-3 text-[#E9A83A]" /> Locked
+            <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#A83245]/20 text-[#E9A83A] border border-[#A83245]/60 rounded-sm flex items-center gap-1 shrink-0">
+              <Lock className="w-2.5 h-2.5 text-[#E9A83A]" /> <span className="hidden xs:inline">Locked</span>
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2.5 text-xs">
+        <div className="flex items-center gap-1 sm:gap-2 text-xs shrink-0">
           {/* Moderator Hub Quick Badge */}
           {isHost && (
             <button
               onClick={() => setShowModeratorHub(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm text-[#FFFCF5] font-semibold transition-colors shadow-xs"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm text-[#FFFCF5] font-semibold transition-colors shadow-xs shrink-0"
               title="Open Moderator Control Center"
             >
               <Crown className="w-3.5 h-3.5 text-[#E9A83A]" />
-              <span className="text-xs">Moderator Hub</span>
+              <span className="text-xs hidden sm:inline whitespace-nowrap">Moderator Hub</span>
             </button>
           )}
 
           {/* Participant Count */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#20150E] hover:bg-[#2B1C13] border border-[#3A2619] rounded-sm text-[#FFFCF5] text-xs font-mono transition-colors shadow-xs"
+            className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 bg-[#20150E] hover:bg-[#2B1C13] border border-[#3A2619] rounded-sm text-[#FFFCF5] text-xs font-mono transition-colors shadow-xs shrink-0"
             title="View participants"
           >
             <Users className="w-3.5 h-3.5 text-[#E9A83A]" />
@@ -873,21 +873,21 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           </button>
 
           {/* Duration & Status */}
-          <div className="flex items-center gap-1.5 text-[#E9A83A] font-mono text-xs px-2.5 py-1.5 bg-[#20150E] border border-[#3A2619] rounded-sm shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-[#19A6A0] animate-pulse" />
+          <div className="flex items-center gap-1 text-[#E9A83A] font-mono text-[11px] sm:text-xs px-2 py-1 sm:px-2.5 sm:py-1.5 bg-[#20150E] border border-[#3A2619] rounded-sm shadow-xs shrink-0">
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#19A6A0] animate-pulse" />
             <span>{formatTime(meetingSeconds)}</span>
           </div>
 
           {/* Recording Badge */}
           {recordingStatus !== 'idle' && (
-            <div className="flex items-center gap-1.5 bg-[#A83245] border border-[#C44056] px-2.5 py-1.5 rounded-sm text-white font-mono text-xs shadow-xs">
-              <span className={`w-2 h-2 rounded-full bg-white ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`} />
+            <div className="flex items-center gap-1 bg-[#A83245] border border-[#C44056] px-2 py-1 rounded-sm text-white font-mono text-[10px] sm:text-xs shadow-xs shrink-0">
+              <span className={`w-1.5 h-1.5 rounded-full bg-white ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`} />
               <span>REC {formatTime(recordingDuration)}</span>
             </div>
           )}
 
           {/* Layout Toggle */}
-          <div className="flex bg-[#160E09] border border-[#302116] rounded-sm p-0.5 shadow-xs">
+          <div className="hidden sm:flex bg-[#160E09] border border-[#302116] rounded-sm p-0.5 shadow-xs shrink-0">
             <button
               onClick={() => { setLayout('honeycomb'); setPinnedUserId(null); }}
               className={`p-1.5 rounded-sm transition-colors ${layout === 'honeycomb' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
@@ -1064,25 +1064,25 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                 return (
                   <>
                     {/* LEFT SIDE: ELEVATED SPEAKER STAGE AREA */}
-                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-[360px] p-2">
-                      <div className="flex items-center gap-2 mb-3 shrink-0">
-                        <IslamicStarRosette variant="full" size={18} />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#E9A83A] bg-[#2A1B12]/85 px-3 py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
+                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 shrink-0">
+                        <IslamicStarRosette variant="full" size={16} />
+                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-[#E9A83A] bg-[#2A1B12]/85 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
                           ✦ SPEAKER STAGE ({speakersOnStage.length}) ✦
                         </span>
                       </div>
 
                       {/* Star Medallion Portals on Left Side */}
-                      <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-4 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
+                      <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
                         {speakersOnStage.map((speaker) => (
                           <div
                             key={speaker.id}
                             className={`transition-all duration-300 flex items-center justify-center ${
                               speakersOnStage.length === 1
-                                ? 'w-56 sm:w-64 md:w-72 lg:w-80 aspect-square'
+                                ? 'w-40 sm:w-56 md:w-72 lg:w-80 aspect-square'
                                 : speakersOnStage.length === 2
-                                ? 'w-44 sm:w-52 md:w-60 aspect-square'
-                                : 'w-36 sm:w-44 aspect-square'
+                                ? 'w-32 sm:w-44 md:w-60 aspect-square'
+                                : 'w-28 sm:w-36 aspect-square'
                             }`}
                           >
                             <VideoTile
@@ -1108,17 +1108,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                       <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
                     </div>
 
-                    <div className="lg:hidden w-full flex items-center justify-center gap-3 my-2 shrink-0">
+                    <div className="lg:hidden w-full flex items-center justify-center gap-3 my-1.5 sm:my-2 shrink-0">
                       <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
-                      <IslamicStarRosette variant="gold-outline" size={16} />
+                      <IslamicStarRosette variant="gold-outline" size={14} />
                       <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
                     </div>
 
                     {/* RIGHT SIDE: REGULAR PARTICIPANTS HONEYCOMB ASSEMBLY */}
-                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-[360px] p-2">
-                      <div className="flex items-center gap-2 mb-3 shrink-0">
-                        <IslamicStarRosette variant="gold-outline" size={18} />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9C6B0] bg-[#1E130B]/85 px-3 py-1 rounded-full border border-[#3A2619] shadow-md">
+                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3 shrink-0">
+                        <IslamicStarRosette variant="gold-outline" size={16} />
+                        <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] text-[#D9C6B0] bg-[#1E130B]/85 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-[#3A2619] shadow-md">
                           ✦ SANCTUARY HONEYCOMB ({regularHoneycombParticipants.length}) ✦
                         </span>
                       </div>
@@ -1182,63 +1182,64 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       </div>
 
       {/* BOTTOM CONTROL BAR */}
-      <footer className="h-16 bg-[#160E09]/95 backdrop-blur-lg border-t border-[#302116] px-6 flex items-center justify-between z-30 shrink-0 shadow-2xl">
-        <div className="flex items-center gap-2.5">
-          {/* Audio */}
+      <footer className="h-14 sm:h-16 bg-[#160E09]/95 backdrop-blur-lg border-t border-[#302116] px-2 sm:px-4 md:px-6 flex items-center justify-between z-30 shrink-0 shadow-2xl gap-1 sm:gap-2">
+        {/* Left Audio & Video Controls */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={toggleAudio}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
+            className={`flex items-center justify-center gap-1.5 p-2 sm:px-3.5 sm:py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
               isMuted
                 ? 'bg-[#A83245] hover:bg-[#8B2334] text-white border border-[#C44056]'
                 : 'bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] border border-[#19A6A0]/50'
             }`}
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-[#19A6A0]" />}
-            <span className="hidden sm:inline">{isMuted ? 'Unmute' : 'Mute'}</span>
+            <span className="hidden md:inline">{isMuted ? 'Unmute' : 'Mute'}</span>
           </button>
 
-          {/* Video */}
           <button
             onClick={toggleVideo}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
+            className={`flex items-center justify-center gap-1.5 p-2 sm:px-3.5 sm:py-2.5 rounded-sm text-xs font-semibold transition-all shadow-xs ${
               isVideoOff
                 ? 'bg-[#A83245] hover:bg-[#8B2334] text-white border border-[#C44056]'
                 : 'bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] border border-[#19A6A0]/50'
             }`}
+            title={isVideoOff ? 'Start Video' : 'Stop Video'}
           >
             {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4 text-[#19A6A0]" />}
-            <span className="hidden sm:inline">{isVideoOff ? 'Start Video' : 'Stop Video'}</span>
+            <span className="hidden md:inline">{isVideoOff ? 'Start Video' : 'Stop Video'}</span>
           </button>
         </div>
 
         {/* Center Controls Dock */}
-        <div className="flex items-center gap-1.5 p-1 bg-[#1F140D] border border-[#3A2619] rounded-sm shadow-inner">
-          {/* Screen Share */}
+        <div className="flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 bg-[#1F140D] border border-[#3A2619] rounded-sm shadow-inner shrink min-w-0">
+          {/* Screen Share (hidden on small mobile screens, shown on xs+) */}
           <button
             onClick={toggleScreenShare}
-            className={`p-2.5 rounded-sm border text-xs transition-colors ${
+            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors hidden xs:flex items-center justify-center ${
               isScreenSharing
                 ? 'bg-[#075E4A] text-white border-[#19A6A0]'
                 : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
-            title={!isHost && !screenShareEnabled ? 'Screen share disabled by facilitator' : 'Screen Share'}
+            title={!isHost && !screenShareEnabled ? 'Screen share disabled by moderator' : 'Screen Share'}
           >
-            <MonitorUp className="w-4 h-4" />
+            <MonitorUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           {/* Emoji Reactions */}
           <div className="relative">
             <button
               onClick={() => setShowReactionPicker((prev) => !prev)}
-              className={`p-2.5 rounded-sm border text-xs transition-colors flex items-center gap-1.5 ${
+              className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors flex items-center justify-center gap-1 ${
                 showReactionPicker
                   ? 'bg-[#075E4A] text-[#E9A83A] border-[#E9A83A]'
                   : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
               }`}
               title="Reactions"
             >
-              <Smile className="w-4 h-4 text-[#E9A83A]" />
-              <span className="hidden md:inline font-medium text-xs">React</span>
+              <Smile className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E9A83A]" />
+              <span className="hidden lg:inline font-medium text-xs">React</span>
             </button>
 
             {showReactionPicker && (
@@ -1258,44 +1259,44 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Hand Raise */}
           <button
             onClick={toggleHandRaise}
-            className={`p-2.5 rounded-sm border text-xs transition-all ${
+            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-all flex items-center justify-center ${
               handRaised
                 ? 'bg-[#E9A83A] text-[#1E140C] border-[#D4982E] font-bold shadow-[0_0_15px_rgba(233,168,58,0.5)]'
                 : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title={handRaised ? 'Lower Hand' : 'Raise Hand'}
           >
-            <Hand className="w-4 h-4" />
+            <Hand className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
           {/* Moderator Hub Toolbar Button */}
           {isHost && (
             <button
               onClick={() => setShowModeratorHub(true)}
-              className="p-2.5 rounded-sm bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 text-[#FFFCF5] text-xs font-medium transition-colors flex items-center gap-1.5 shadow-xs"
+              className="p-2 sm:p-2.5 rounded-sm bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 text-[#FFFCF5] text-xs font-medium transition-colors flex items-center justify-center gap-1 shadow-xs"
               title="Moderator Control Center"
             >
-              <Crown className="w-4 h-4 text-[#E9A83A]" />
+              <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E9A83A]" />
               <span className="hidden lg:inline text-xs font-semibold">Hub</span>
             </button>
           )}
 
-          {/* Recording */}
+          {/* Recording (Host only, hidden on very narrow screens) */}
           {isHost && (
             recordingStatus === 'idle' ? (
               <button
                 onClick={startRecording}
-                className="p-2.5 rounded-sm bg-transparent text-[#FAF8F5] hover:bg-[#2B1B12] transition-colors"
+                className="p-2 sm:p-2.5 rounded-sm bg-transparent text-[#FAF8F5] hover:bg-[#2B1B12] transition-colors hidden sm:flex items-center justify-center"
                 title="Record Session"
               >
-                <Square className="w-4 h-4 text-[#A83245]" />
+                <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#A83245]" />
               </button>
             ) : (
               <button
                 onClick={stopRecording}
-                className="px-3 py-1.5 bg-[#A83245] text-white text-xs font-bold rounded-sm border border-[#C44056] animate-pulse"
+                className="px-2 py-1 bg-[#A83245] text-white text-[10px] font-bold rounded-sm border border-[#C44056] animate-pulse"
               >
-                Stop REC
+                REC
               </button>
             )
           )}
@@ -1303,13 +1304,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Participants */}
           <button
             onClick={() => setActiveDrawer(activeDrawer === 'participants' ? null : 'participants')}
-            className={`p-2.5 rounded-sm border text-xs transition-colors relative flex items-center justify-center ${
+            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors relative flex items-center justify-center ${
               activeDrawer === 'participants' ? 'bg-[#075E4A] text-white border-[#19A6A0]' : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title="Participants List"
           >
-            <Users className="w-4 h-4 text-[#E9A83A]" />
-            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[10px] font-mono font-bold flex items-center justify-center shadow-xs">
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#E9A83A]" />
+            <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[9px] font-mono font-bold flex items-center justify-center shadow-xs">
               {participants.length}
             </span>
           </button>
@@ -1317,14 +1318,14 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Chat */}
           <button
             onClick={() => { setActiveDrawer(activeDrawer === 'chat' ? null : 'chat'); setUnreadChatCount(0); }}
-            className={`p-2.5 rounded-sm border text-xs transition-colors relative ${
+            className={`p-2 sm:p-2.5 rounded-sm border text-xs transition-colors relative flex items-center justify-center ${
               activeDrawer === 'chat' ? 'bg-[#075E4A] text-white border-[#19A6A0]' : 'bg-transparent text-[#FAF8F5] border-transparent hover:bg-[#2B1B12]'
             }`}
             title="Chat"
           >
-            <MessageSquare className="w-4 h-4 text-[#19A6A0]" />
+            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#19A6A0]" />
             {unreadChatCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#E9A83A] text-[#1E140C] rounded-sm text-[8px] font-bold flex items-center justify-center">
                 {unreadChatCount}
               </span>
             )}
@@ -1332,12 +1333,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         </div>
 
         {/* Leave Action — Jewel Ruby Button */}
-        <div>
+        <div className="shrink-0">
           <button
             onClick={() => setShowLeaveConfirmDialog(true)}
-            className="px-5 py-2.5 bg-[#A83245] hover:bg-[#8B2334] text-white rounded-sm text-xs font-bold transition-all border border-[#7E1C2C] shadow-xs"
+            className="px-2.5 sm:px-4 py-2 sm:py-2.5 bg-[#A83245] hover:bg-[#8B2334] text-white rounded-sm text-[11px] sm:text-xs font-bold transition-all border border-[#7E1C2C] shadow-xs whitespace-nowrap"
           >
-            {isHost ? 'End Majlis' : 'Leave Majlis'}
+            {isHost ? 'End' : 'Leave'}
           </button>
         </div>
       </footer>

@@ -21,25 +21,25 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
 
   // Determine ideal row pattern & tile size based on total participant count
   let maxPerRow = 3;
-  let sizeClasses = 'w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36';
-  let overlapClass = '-mt-6 sm:-mt-7 md:-mt-8';
+  let sizeClasses = 'w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36';
+  let overlapClass = '-mt-5 sm:-mt-7 md:-mt-8';
 
   if (participants.length <= 2) {
     maxPerRow = 2;
-    sizeClasses = 'w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48';
-    overlapClass = '-mt-8 sm:-mt-10 md:-mt-11';
+    sizeClasses = 'w-28 h-28 sm:w-40 sm:h-40 md:w-44 md:h-44';
+    overlapClass = '-mt-6 sm:-mt-9 md:-mt-10';
   } else if (participants.length <= 4) {
     maxPerRow = 2;
-    sizeClasses = 'w-32 h-32 sm:w-36 sm:h-36 md:w-40 md:h-40';
-    overlapClass = '-mt-7 sm:-mt-8 md:-mt-9';
+    sizeClasses = 'w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36';
+    overlapClass = '-mt-5 sm:-mt-7 md:-mt-8';
   } else if (participants.length <= 7) {
     maxPerRow = 3;
-    sizeClasses = 'w-28 h-28 sm:w-32 sm:h-32 md:w-36 md:h-36';
-    overlapClass = '-mt-6 sm:-mt-7 md:-mt-8';
+    sizeClasses = 'w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32';
+    overlapClass = '-mt-4 sm:-mt-6 md:-mt-7';
   } else {
     maxPerRow = 4;
-    sizeClasses = 'w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32';
-    overlapClass = '-mt-5 sm:-mt-6 md:-mt-7';
+    sizeClasses = 'w-18 h-18 sm:w-24 sm:h-24 md:w-28 md:h-28';
+    overlapClass = '-mt-3 sm:-mt-5 md:-mt-6';
   }
 
   // Build rows that alternate between maxPerRow and (maxPerRow - 1)
