@@ -15,6 +15,7 @@ import {
   Tv,
   ArrowRightLeft,
   Sliders,
+  Sparkles,
 } from 'lucide-react';
 import { Participant } from '../types/meeting';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
@@ -30,6 +31,7 @@ interface ParticipantsDrawerProps {
   onMuteUser?: (userId: string) => void;
   onLowerHand?: (userId: string) => void;
   onSpotlightUser?: (userId: string | null) => void;
+  onToggleSpeaker?: (userId: string) => void;
   onTransferHost?: (userId: string) => void;
   onKickUser: (userId: string) => void;
   onOpenFacilitatorHub?: () => void;
@@ -48,6 +50,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   onMuteUser,
   onLowerHand,
   onSpotlightUser,
+  onToggleSpeaker,
   onTransferHost,
   onKickUser,
   onOpenFacilitatorHub,
@@ -68,7 +71,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
         <div className="flex items-center gap-2.5">
           <IslamicStarRosette size={20} variant="full" />
           <h3 className="text-xs font-bold text-[#FFFCF5]">
-            Majlis Seekers
+            Majlis Seekers & Speakers
           </h3>
           <span className="text-[10px] bg-[#22160E] text-[#E9A83A] px-1.5 py-0.5 rounded-sm font-mono border border-[#3A2619]">
             {participants.length}
@@ -79,10 +82,10 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
             <button
               onClick={onOpenFacilitatorHub}
               className="p-1 px-2 text-[#E9A83A] bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm transition-colors text-xs font-semibold flex items-center gap-1 shadow-xs"
-              title="Facilitator Control Center"
+              title="Moderator Control Center"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span className="text-[10px]">Hub</span>
+              <span className="text-[10px]">Mod Hub</span>
             </button>
           )}
           <button
@@ -94,7 +97,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
         </div>
       </div>
 
-      {/* Host Quick Bar */}
+      {/* Host / Moderator Quick Bar */}
       {isHost && (
         <div className="p-3 bg-[#1F140D] border-b border-[#2E1E14] flex items-center justify-between gap-2 text-xs">
           <button
@@ -146,7 +149,11 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
             <div
               key={p.id}
               className={`flex items-center justify-between p-2.5 rounded-sm transition-colors ${
-                isSpotlighted ? 'bg-[#075E4A]/40 border border-[#E9A83A]' : 'hover:bg-[#1F140D]'
+                p.isSpeaker
+                  ? 'bg-[#281A11] border border-[#E9A83A]/60'
+                  : isSpotlighted
+                  ? 'bg-[#075E4A]/40 border border-[#E9A83A]'
+                  : 'hover:bg-[#1F140D]'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -165,10 +172,15 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                     </span>
                     {isMe && <span className="text-[10px] text-[#8A7A6D]">(You)</span>}
                   </div>
-                  <div className="flex items-center gap-1 mt-0.5">
+                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                     {p.isHost && (
                       <span className="flex items-center gap-1 text-[9px] font-bold text-[#1E140C] bg-[#E9A83A] px-1 py-0.2 rounded-sm">
-                        <Crown className="w-2.5 h-2.5" /> Facilitator
+                        <Crown className="w-2.5 h-2.5" /> Moderator
+                      </span>
+                    )}
+                    {p.isSpeaker && (
+                      <span className="flex items-center gap-1 text-[9px] font-bold text-[#FFFCF5] bg-[#075E4A] px-1 py-0.2 rounded-sm border border-[#19A6A0]/50">
+                        <Sparkles className="w-2.5 h-2.5 text-[#E9A83A]" /> Speaker
                       </span>
                     )}
                     {isSpotlighted && (
@@ -197,26 +209,39 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                   {p.isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
                 </div>
 
-                {isHost && !isMe && (
+                {isHost && (
                   <div className="relative">
                     <button
                       onClick={() =>
                         setActiveMenuId(activeMenuId === p.id ? null : p.id)
                       }
-                      className="p-1 text-[#8A7A6D] hover:text-[#FAF8F5] rounded-sm transition-colors"
+                      className="p-1 text-[#8A7A6D] hover:text-[#FFFCF5] rounded-sm transition-colors"
                     >
                       <MoreVertical className="w-3.5 h-3.5" />
                     </button>
 
                     {activeMenuId === p.id && (
-                      <div className="absolute right-0 top-7 z-50 w-44 bg-[#1F140D] border border-[#3A2619] rounded-sm py-1 text-xs text-[#FAF8F5] shadow-2xl">
+                      <div className="absolute right-0 top-7 z-50 w-48 bg-[#1F140D] border border-[#3A2619] rounded-sm py-1 text-xs text-[#FFFCF5] shadow-2xl">
+                        {onToggleSpeaker && (
+                          <button
+                            onClick={() => {
+                              onToggleSpeaker(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#E9A83A]"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" />
+                            {p.isSpeaker ? 'Remove Speaker Role' : 'Assign as Speaker'}
+                          </button>
+                        )}
+
                         {!p.isMuted && onMuteUser && (
                           <button
                             onClick={() => {
                               onMuteUser(p.id);
                               setActiveMenuId(null);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#FAF8F5]"
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#FFFCF5]"
                           >
                             <MicOff className="w-3.5 h-3.5 text-[#A83245]" /> Mute Microphone
                           </button>
@@ -247,29 +272,31 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                           </button>
                         )}
 
-                        {onTransferHost && (
+                        {onTransferHost && !isMe && (
                           <button
                             onClick={() => {
-                              if (confirm(`Appoint ${p.name} as the new facilitator?`)) {
+                              if (confirm(`Transfer Moderator role to ${p.name}?`)) {
                                 onTransferHost(p.id);
                               }
                               setActiveMenuId(null);
                             }}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#E9A83A] border-t border-[#3A2619]"
                           >
-                            <ArrowRightLeft className="w-3.5 h-3.5" /> Transfer Facilitator Role
+                            <ArrowRightLeft className="w-3.5 h-3.5" /> Transfer Moderator Role
                           </button>
                         )}
 
-                        <button
-                          onClick={() => {
-                            onKickUser(p.id);
-                            setActiveMenuId(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[#A83245] hover:bg-[#A83245]/20 border-t border-[#3A2619]"
-                        >
-                          <UserMinus className="w-3.5 h-3.5" /> Dismiss
-                        </button>
+                        {!isMe && (
+                          <button
+                            onClick={() => {
+                              onKickUser(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[#A83245] hover:bg-[#A83245]/20 border-t border-[#3A2619]"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" /> Dismiss
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

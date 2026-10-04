@@ -31,14 +31,14 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   onCancel,
   onOpenAuthModal,
 }) => {
-  const { user, isFacilitator } = useAuth();
+  const { user, isModerator } = useAuth();
   const [userName, setUserName] = useState(defaultUserName || user?.displayName || '');
   const [displayTitle, setDisplayTitle] = useState(sessionTitle || `Majlis (${roomId})`);
   const [isCameraOn, setIsCameraOn] = useState(true);
   const [isMicOn, setIsMicOn] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [micVolume, setMicVolume] = useState(0);
-  const [isHost, setIsHost] = useState(isHostDefault && isFacilitator);
+  const [isHost, setIsHost] = useState(isHostDefault && isModerator);
   const [showHostNotice, setShowHostNotice] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -104,7 +104,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   }, [stream, isMicOn]);
 
   const handleToggleHostMode = () => {
-    if (!isFacilitator) {
+    if (!isModerator) {
       setShowHostNotice(true);
       setIsHost(false);
     } else {
@@ -115,13 +115,13 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = userName.trim() || (isHost ? 'Facilitator' : 'Seeker');
+    const finalName = userName.trim() || (isHost ? 'Moderator' : 'Seeker');
     localStorage.setItem('infinitymeet_username', finalName);
 
     onEnterMeeting({
       roomId: roomId.trim().toLowerCase(),
       userName: finalName,
-      isHost: isHost && isFacilitator,
+      isHost: isHost && isModerator,
       stream,
       isMuted: !isMicOn,
       isVideoOff: !isCameraOn,
@@ -252,7 +252,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5">
               <Crown className={`w-3.5 h-3.5 ${isHost ? 'text-[#E9A83A]' : 'text-[#8E7E73]'}`} />
-              <span className="font-semibold text-[#1C1917]">Enter as Facilitator</span>
+              <span className="font-semibold text-[#1C1917]">Enter as Moderator</span>
             </div>
             <button
               type="button"
@@ -269,16 +269,16 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
             </button>
           </div>
 
-          {showHostNotice && !isFacilitator && (
+          {showHostNotice && !isModerator && (
             <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-sm text-[11px] text-[#302116] space-y-1.5">
-              <p>Facilitator privileges require an authorized moderator account.</p>
+              <p>Moderator privileges require an authorized moderator account.</p>
               {onOpenAuthModal && (
                 <button
                   type="button"
                   onClick={onOpenAuthModal}
                   className="text-xs font-bold text-[#075E4A] underline flex items-center gap-1"
                 >
-                  <Key className="w-3 h-3 text-[#E9A83A]" /> Sign in as Facilitator
+                  <Key className="w-3 h-3 text-[#E9A83A]" /> Sign in as Moderator
                 </button>
               )}
             </div>

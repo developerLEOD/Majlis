@@ -102,7 +102,7 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
                     </h3>
 
                     <div className="flex items-center gap-3 text-xs text-[#A8988B]">
-                      <span>Facilitator: <strong className="text-[#E9A83A] font-semibold">{session.hostName}</strong></span>
+                      <span>Moderator: <strong className="text-[#E9A83A] font-semibold">{session.hostName}</strong></span>
                       <span aria-hidden="true" className="text-[#8A7A6D]">·</span>
                       <span className="flex items-center gap-1 font-medium text-[#19A6A0]">
                         <Users className="w-3.5 h-3.5" />
@@ -150,7 +150,7 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
                   <div className="flex items-center gap-2 text-xs text-[#8A7A6D] mt-0.5">
                     <span>{session.scheduledAt}</span>
                     <span aria-hidden="true">·</span>
-                    <span>Facilitator: {session.hostName}</span>
+                    <span>Moderator: {session.hostName}</span>
                   </div>
                 </div>
 

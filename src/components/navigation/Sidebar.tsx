@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { user, isFacilitator } = useAuth();
+  const { user, isModerator } = useAuth();
 
   const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalIsCollapsed;
 
@@ -184,12 +184,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ? 'p-1.5 flex items-center justify-center'
               : 'flex items-center justify-between p-2'
           }`}
-          title={isCollapsed ? `${displayName} (${isFacilitator ? 'Facilitator' : 'Member'}) · Account` : 'Account / Sign in'}
+          title={isCollapsed ? `${displayName} (${isModerator ? 'Moderator' : 'Member'}) · Account` : 'Account / Sign in'}
         >
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
             <div className="w-8 h-8 rounded-full bg-[#20150F] text-[#FAF8F5] flex items-center justify-center font-bold text-xs shrink-0 tracking-wider shadow-xs relative border border-[#3A2619]">
               {initials}
-              {isFacilitator && (
+              {isModerator && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#E9A83A] rounded-full border-2 border-[#160E09]" />
               )}
             </div>
@@ -199,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {displayName}
                 </div>
                 <div className="text-xs text-[#E9A83A] leading-none mt-0.5">
-                  {isFacilitator ? 'Facilitator' : 'Member'}
+                  {isModerator ? 'Moderator' : 'Member'}
                 </div>
               </div>
             )}
@@ -290,7 +290,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {displayName}
               </div>
               <div className="text-xs text-[#E9A83A] leading-none mt-0.5">
-                {isFacilitator ? 'Facilitator' : 'Member'}
+                {isModerator ? 'Moderator' : 'Member'}
               </div>
             </div>
           </div>

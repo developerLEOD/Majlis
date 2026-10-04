@@ -245,7 +245,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                             {session.title}
                           </h4>
                           <div className="text-xs text-[#A8988B] mt-0.5 truncate">
-                            Room #{session.roomId} · Facilitator: <strong className="text-[#E9A83A]">{session.hostName}</strong>
+                            Room #{session.roomId} · Moderator: <strong className="text-[#E9A83A]">{session.hostName}</strong>
                           </div>
                         </div>
                       </div>

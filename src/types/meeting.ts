@@ -7,6 +7,7 @@ export interface Participant {
   isVideoOff: boolean;
   isScreenSharing: boolean;
   handRaised: boolean;
+  isSpeaker?: boolean;
   stream?: MediaStream;
 }
 
@@ -36,7 +37,7 @@ export interface RecordingResult {
   title?: string;
 }
 
-export type MeetingLayout = 'grid' | 'speaker';
+export type MeetingLayout = 'grid' | 'speaker' | 'honeycomb';
 
 export interface MajlisSession {
   id: string;

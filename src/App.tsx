@@ -19,7 +19,7 @@ import {
 import { useActiveMajalis } from './hooks/useActiveMajalis';
 
 function MainAppContent() {
-  const { user, isFacilitator } = useAuth();
+  const { user, isModerator } = useAuth();
   const [currentTab, setCurrentTab] = useState<NavTab>('home');
   const [userName, setUserName] = useState<string>(() => {
     return localStorage.getItem('infinitymeet_username') || 'Araiz Hasan';
@@ -124,8 +124,8 @@ function MainAppContent() {
     localStorage.setItem('infinitymeet_username', chosenName);
     setPreJoinTarget(null);
 
-    // Strict check: only grant host status if the user's account is an authorized facilitator!
-    const effectiveIsHost = params.isHost && isFacilitator;
+    // Strict check: only grant host status if the user's account is an authorized moderator!
+    const effectiveIsHost = params.isHost && isModerator;
 
     setActiveMeeting({
       roomId: params.roomId,

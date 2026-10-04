@@ -10,20 +10,25 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase';
 
-export const ALLOWED_FACILITATORS = [
+export const ALLOWED_MODERATORS = [
   'araizhasan00@gmail.com',
   'thewisdomlounge1@gmail.com',
+  'developertwl@gmail.com',
 ];
+
+export const ALLOWED_FACILITATORS = ALLOWED_MODERATORS;
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isModerator: boolean;
   isFacilitator: boolean;
   allowedEmails: string[];
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (e: string, p: string) => Promise<void>;
   signUpWithEmail: (e: string, p: string) => Promise<void>;
   signOutUser: () => Promise<void>;
+  checkEmailIsModerator: (email: string) => boolean;
   checkEmailIsFacilitator: (email: string) => boolean;
 }
 
@@ -41,13 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsub();
   }, []);
 
-  const checkEmailIsFacilitator = (email: string): boolean => {
+  const checkEmailIsModerator = (email: string): boolean => {
     if (!email) return false;
     const lower = email.trim().toLowerCase();
-    return ALLOWED_FACILITATORS.map((e) => e.toLowerCase()).includes(lower);
+    return ALLOWED_MODERATORS.map((e) => e.toLowerCase()).includes(lower);
   };
 
-  const isFacilitator = !!user?.email && checkEmailIsFacilitator(user.email);
+  const isModerator = !!user?.email && checkEmailIsModerator(user.email);
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
@@ -72,13 +77,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         loading,
-        isFacilitator,
-        allowedEmails: ALLOWED_FACILITATORS,
+        isModerator,
+        isFacilitator: isModerator,
+        allowedEmails: ALLOWED_MODERATORS,
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
         signOutUser,
-        checkEmailIsFacilitator,
+        checkEmailIsModerator,
+        checkEmailIsFacilitator: checkEmailIsModerator,
       }}
     >
       {children}

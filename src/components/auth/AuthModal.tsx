@@ -16,7 +16,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const {
     user,
-    isFacilitator,
+    isModerator,
     signInWithGoogle,
     signInWithEmail,
     signUpWithEmail,
@@ -80,7 +80,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </h2>
               <p className="text-[11px] text-[#8E7E73]">
                 {requiredForFacilitator
-                  ? 'Facilitator privileges require a moderator account'
+                  ? 'Moderator privileges require an authorized moderator account'
                   : 'Sign in to access hosting features'}
               </p>
             </div>
@@ -110,9 +110,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <div className="text-[10px] text-[#8E7E73]">Authenticated</div>
                   </div>
                 </div>
-                {isFacilitator ? (
+                {isModerator ? (
                   <span className="px-2 py-0.5 text-[10px] font-medium bg-[#EFECE4] text-[#3C230B] border border-[#D9D0C3] rounded-sm flex items-center gap-1">
-                    <Crown className="w-3 h-3 text-[#D4AF37]" /> Facilitator
+                    <Crown className="w-3 h-3 text-[#D4AF37]" /> Moderator
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 text-[10px] font-medium bg-[#EFECE4] text-[#8E7E73] border border-[#D9D0C3] rounded-sm">
@@ -121,11 +121,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 )}
               </div>
 
-              {!isFacilitator && (
+              {!isModerator && (
                 <div className="p-2 rounded-sm bg-[#EFECE4] border border-[#D9D0C3] text-[#3C230B] text-[11px] flex items-start gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5 text-[#D4AF37] shrink-0 mt-0.5" />
                   <span>
-                    Signed in as <strong>{user.email}</strong>. Facilitator role active on moderator accounts.
+                    Signed in as <strong>{user.email}</strong>. Moderator features active on authorized accounts.
                   </span>
                 </div>
               )}

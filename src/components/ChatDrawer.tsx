@@ -95,7 +95,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
                   </span>
                   {msg.isHost && (
                     <span className="flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-bold bg-[#E9A83A] text-[#1E140C] rounded-sm">
-                      <Crown className="w-2.5 h-2.5" /> Facilitator
+                      <Crown className="w-2.5 h-2.5" /> Moderator
                     </span>
                   )}
                   <span className="text-[10px] text-[#8A7A6D] font-mono ml-1">

@@ -39,7 +39,7 @@ import { ReactionPicker } from './ReactionPicker';
 import { InviteModal } from './InviteModal';
 import { SettingsModal } from './SettingsModal';
 import { RecordingModal } from './RecordingModal';
-import { FacilitatorHubModal } from './FacilitatorHubModal';
+import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
 import {
   buildMeetingInviteUrl,
@@ -83,7 +83,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [screenShareEnabled, setScreenShareEnabled] = useState(true);
 
   // Layout & UI
-  const [layout, setLayout] = useState<MeetingLayout>('grid');
+  const [layout, setLayout] = useState<MeetingLayout>('honeycomb');
   const [pinnedUserId, setPinnedUserId] = useState<string | null>(null);
   const [activeDrawer, setActiveDrawer] = useState<'chat' | 'participants' | null>(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -92,7 +92,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showFacilitatorHub, setShowFacilitatorHub] = useState(false);
+  const [showModeratorHub, setShowModeratorHub] = useState(false);
   const [showLeaveConfirmDialog, setShowLeaveConfirmDialog] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -677,6 +677,20 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.hostSpotlight(targetUserId);
   };
 
+  const handleToggleSpeaker = (targetUserId: string) => {
+    setParticipants((prev) =>
+      prev.map((p) => (p.id === targetUserId ? { ...p, isSpeaker: !p.isSpeaker } : p))
+    );
+    const target = participants.find((p) => p.id === targetUserId);
+    if (target) {
+      showNotification(
+        target.isSpeaker
+          ? `${target.name} removed from Speaker Stage`
+          : `${target.name} assigned as Speaker`
+      );
+    }
+  };
+
   const handleToggleLock = () => {
     clientRef.current?.hostToggleLock();
   };
@@ -835,15 +849,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5 text-xs">
-          {/* Facilitator Hub Quick Badge */}
+          {/* Moderator Hub Quick Badge */}
           {isHost && (
             <button
-              onClick={() => setShowFacilitatorHub(true)}
+              onClick={() => setShowModeratorHub(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm text-[#FFFCF5] font-semibold transition-colors shadow-xs"
-              title="Open Facilitator Control Center"
+              title="Open Moderator Control Center"
             >
               <Crown className="w-3.5 h-3.5 text-[#E9A83A]" />
-              <span className="text-xs">Facilitator Hub</span>
+              <span className="text-xs">Moderator Hub</span>
             </button>
           )}
 
@@ -874,6 +888,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           {/* Layout Toggle */}
           <div className="flex bg-[#160E09] border border-[#302116] rounded-sm p-0.5 shadow-xs">
             <button
+              onClick={() => { setLayout('honeycomb'); setPinnedUserId(null); }}
+              className={`p-1.5 rounded-sm transition-colors ${layout === 'honeycomb' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
+              title="Honeycomb & Speaker Stage"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" />
+            </button>
+            <button
               onClick={() => { setLayout('grid'); setPinnedUserId(null); }}
               className={`p-1.5 rounded-sm transition-colors ${layout === 'grid' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
               title="Grid View"
@@ -897,7 +918,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           <div className="flex items-center gap-2.5 text-xs text-[#FFFCF5]">
             <Radio className="w-4 h-4 text-[#E9A83A] shrink-0 animate-pulse" />
             <span className="font-bold text-[#E9A83A] uppercase text-[10px] tracking-wider">
-              {stageAnnouncement.senderName ? `${stageAnnouncement.senderName}:` : 'Facilitator Notice:'}
+              {stageAnnouncement.senderName ? `${stageAnnouncement.senderName}:` : 'Moderator Notice:'}
             </span>
             <span className="font-medium text-[#FFFCF5]">{stageAnnouncement.text}</span>
           </div>
@@ -999,7 +1020,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                 />
               </div>
             </div>
-          ) : (
+          ) : layout === 'grid' ? (
             <div
               className={`w-full flex items-center justify-center ${
                 participants.length === 1
@@ -1017,6 +1038,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                     participant={p}
                     isLocal={p.isLocal}
                     mirror={mirrorVideo}
+                    forceShape="standard"
                     onTogglePin={() => setPinnedUserId(p.id)}
                     videoRefCallback={(el) => {
                       if (el) videoElementsRef.current.set(p.id, el);
@@ -1025,6 +1047,103 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   />
                 </div>
               ))}
+            </div>
+          ) : (
+            /* Honeycomb Stage View (Arc Door Speakers at top, Honeycomb Grid below with distance) */
+            <div className="w-full h-full flex flex-col items-center justify-between overflow-y-auto py-2 px-2 sm:px-4 max-w-6xl mx-auto space-y-6 scrollbar-thin">
+              {(() => {
+                const assignedSpeakers = participants.filter((p) => p.isSpeaker);
+                const speakersOnStage = assignedSpeakers.length > 0
+                  ? assignedSpeakers
+                  : participants.filter((p) => p.isHost);
+                const regularHoneycombParticipants = participants.filter(
+                  (p) => !speakersOnStage.some((s) => s.id === p.id)
+                );
+
+                return (
+                  <>
+                    {/* ELEVATED SPEAKER STAGE AREA */}
+                    <div className="w-full flex flex-col items-center justify-center">
+                      <div className="flex items-center gap-2 mb-3">
+                        <IslamicStarRosette variant="full" size={18} />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#E9A83A] bg-[#2A1B12]/80 px-3 py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
+                          ✦ SPEAKER STAGE ({speakersOnStage.length}) ✦
+                        </span>
+                      </div>
+
+                      {/* Speaker Arc Door Portals Container with distance from Honeycomb */}
+                      <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 w-full max-w-4xl py-2">
+                        {speakersOnStage.map((speaker) => (
+                          <div
+                            key={speaker.id}
+                            className={`transition-all duration-300 ${
+                              speakersOnStage.length === 1
+                                ? 'w-64 h-80 sm:w-80 sm:h-96 md:w-96 md:h-[380px]'
+                                : speakersOnStage.length === 2
+                                ? 'w-56 h-72 sm:w-72 sm:h-88'
+                                : 'w-48 h-64 sm:w-56 sm:h-72'
+                            }`}
+                          >
+                            <VideoTile
+                              participant={speaker}
+                              isLocal={speaker.isLocal}
+                              mirror={mirrorVideo}
+                              forceShape="arc-door"
+                              onTogglePin={() => setPinnedUserId(speaker.id)}
+                              videoRefCallback={(el) => {
+                                if (el) videoElementsRef.current.set(speaker.id, el);
+                                else videoElementsRef.current.delete(speaker.id);
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Distance Architectural Separator Line */}
+                      <div className="w-full max-w-2xl flex items-center justify-center gap-3 mt-6 mb-2">
+                        <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                        <IslamicStarRosette variant="gold-outline" size={16} />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#D9C6B0]/80">
+                          SANCTUARY HONEYCOMB ASSEMBLY
+                        </span>
+                        <IslamicStarRosette variant="gold-outline" size={16} />
+                        <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                      </div>
+                    </div>
+
+                    {/* REGULAR PARTICIPANTS HONEYCOMB HIVE GRID */}
+                    <div className="w-full flex flex-col items-center justify-center flex-1">
+                      {regularHoneycombParticipants.length > 0 ? (
+                        <div className="flex flex-wrap items-center justify-center -space-x-3 -space-y-4 sm:-space-x-4 sm:-space-y-5 max-w-4xl mx-auto py-2">
+                          {regularHoneycombParticipants.map((p) => (
+                            <div
+                              key={p.id}
+                              className="w-32 h-32 sm:w-40 sm:h-40 md:w-44 md:h-44 shrink-0 transition-transform hover:scale-105 hover:z-30"
+                            >
+                              <VideoTile
+                                participant={p}
+                                isLocal={p.isLocal}
+                                mirror={mirrorVideo}
+                                forceShape="honeycomb"
+                                onTogglePin={() => setPinnedUserId(p.id)}
+                                videoRefCallback={(el) => {
+                                  if (el) videoElementsRef.current.set(p.id, el);
+                                  else videoElementsRef.current.delete(p.id);
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-sm bg-[#1A110B]/80 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-md">
+                          <p className="font-semibold text-[#D9C6B0]">All attendees are currently on the Speaker Stage</p>
+                          <p className="text-[11px] mt-1">New seekers entering the sanctuary will join this Honeycomb grid automatically.</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
         </main>
@@ -1053,9 +1172,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             onMuteUser={handleMuteUser}
             onLowerHand={handleLowerHand}
             onSpotlightUser={handleSpotlightUser}
+            onToggleSpeaker={handleToggleSpeaker}
             onTransferHost={handleTransferHost}
             onKickUser={handleKickUser}
-            onOpenFacilitatorHub={() => setShowFacilitatorHub(true)}
+            onOpenFacilitatorHub={() => setShowModeratorHub(true)}
             onOpenInvite={() => setShowInviteModal(true)}
             onClose={() => setActiveDrawer(null)}
           />
@@ -1149,12 +1269,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             <Hand className="w-4 h-4" />
           </button>
 
-          {/* Facilitator Hub Toolbar Button */}
+          {/* Moderator Hub Toolbar Button */}
           {isHost && (
             <button
-              onClick={() => setShowFacilitatorHub(true)}
+              onClick={() => setShowModeratorHub(true)}
               className="p-2.5 rounded-sm bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 text-[#FFFCF5] text-xs font-medium transition-colors flex items-center gap-1.5 shadow-xs"
-              title="Facilitator Control Center"
+              title="Moderator Control Center"
             >
               <Crown className="w-4 h-4 text-[#E9A83A]" />
               <span className="hidden lg:inline text-xs font-semibold">Hub</span>
@@ -1253,13 +1373,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         </div>
       )}
 
-      {/* Facilitator Hub Modal */}
-      {showFacilitatorHub && (
-        <FacilitatorHubModal
+      {/* Moderator Hub Modal */}
+      {showModeratorHub && (
+        <ModeratorHubModal
           isLocked={isLocked}
           chatEnabled={chatEnabled}
           screenShareEnabled={screenShareEnabled}
-          participantCount={participants.length}
+          participants={participants}
           spotlightUserId={pinnedUserId}
           onToggleLock={handleToggleLock}
           onMuteAll={handleMuteAll}
@@ -1267,9 +1387,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           onToggleChatPermission={handleToggleChatPermission}
           onToggleScreenSharePermission={handleToggleScreenSharePermission}
           onClearSpotlight={() => handleSpotlightUser(null)}
+          onToggleSpeaker={handleToggleSpeaker}
           onBroadcastAnnouncement={handleBroadcastAnnouncement}
           onEndMeetingForAll={handleEndMeetingForAll}
-          onClose={() => setShowFacilitatorHub(false)}
+          onClose={() => setShowModeratorHub(false)}
         />
       )}
 
