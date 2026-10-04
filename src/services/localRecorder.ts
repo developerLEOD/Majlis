@@ -229,9 +229,36 @@ export class LocalMeetingRecorder {
     }, 1000);
   }
 
+  private drawAvatarPlaceholder(
+    ctx: CanvasRenderingContext2D,
+    name: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number
+  ) {
+    const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+    grad.addColorStop(0, '#075E4A');
+    grad.addColorStop(1, '#174A83');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    const initial = (name || 'M').charAt(0).toUpperCase();
+    ctx.fillStyle = 'rgba(233, 168, 58, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h / 2 - 12, 38, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFCF5';
+    ctx.font = '700 28px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(initial, x + w / 2, y + h / 2 - 12);
+  }
+
   private drawVideoTile(
     ctx: CanvasRenderingContext2D,
-    video: HTMLVideoElement,
+    video: HTMLVideoElement | null,
     name: string,
     isMuted: boolean,
     x: number,
@@ -244,12 +271,11 @@ export class LocalMeetingRecorder {
     ctx.roundRect(x, y, w, h, [12]);
     ctx.clip();
 
-    // Check if video is loaded and ready
-    if (video.readyState >= 2) {
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       try {
         // Aspect ratio cover calculation
-        const vW = video.videoWidth || 640;
-        const vH = video.videoHeight || 480;
+        const vW = video.videoWidth;
+        const vH = video.videoHeight;
         const videoRatio = vW / vH;
         const targetRatio = w / h;
 
@@ -268,12 +294,10 @@ export class LocalMeetingRecorder {
 
         ctx.drawImage(video, offsetX, offsetY, renderW, renderH);
       } catch {
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(x, y, w, h);
+        this.drawAvatarPlaceholder(ctx, name, x, y, w, h);
       }
     } else {
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(x, y, w, h);
+      this.drawAvatarPlaceholder(ctx, name, x, y, w, h);
     }
 
     // Bottom name badge gradient
