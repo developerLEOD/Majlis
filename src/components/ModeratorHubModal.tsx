@@ -106,12 +106,12 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" /> Assign Stage Speakers ({speakers.length})
               </h3>
               <span className="text-[10px] text-[#075E4A] font-semibold bg-[#075E4A]/10 px-2 py-0.5 rounded-sm">
-                Arc Door Portals
+                Star Medallion Portals
               </span>
             </div>
 
             <p className="text-[11px] text-[#68594E]">
-              Assigned speakers appear in the elevated Arc Door portals above the honeycomb grid.
+              Assigned speakers appear in the 8-sided Star Medallion portals on the left side of the sanctuary.
             </p>
 
             <div className="space-y-1.5 max-h-36 overflow-y-auto pt-1">

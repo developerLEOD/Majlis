@@ -9,7 +9,7 @@ interface VideoTileProps {
   isLocal: boolean;
   mirror?: boolean;
   isPinned?: boolean;
-  forceShape?: 'arc-door' | 'honeycomb' | 'standard';
+  forceShape?: 'star-medallion' | 'arc-door' | 'honeycomb' | 'standard';
   onTogglePin?: () => void;
   onToggleSpeaker?: () => void;
   videoRefCallback?: (element: HTMLVideoElement | null) => void;
@@ -97,29 +97,49 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
   const shape = forceShape || (participant.isSpeaker ? 'arc-door' : 'honeycomb');
 
-  // ARC DOOR SPEAKER PORTAL SHAPE
-  if (shape === 'arc-door') {
+  // STAR MEDALLION / OCTAGONAL SPEAKER PORTAL SHAPE (Wisdom Lounge Star Emblem)
+  if (shape === 'arc-door' || shape === 'star-medallion') {
     return (
-      <div
-        className={`relative w-full h-full bg-gradient-to-b from-[#2A1B12] via-[#1A110A] to-[#120B06] rounded-t-[70px] sm:rounded-t-[90px] rounded-b-sm border-2 transition-all duration-300 select-none group flex items-center justify-center shadow-2xl overflow-hidden ${
-          isSpeaking
-            ? 'border-[#E9A83A] shadow-[0_0_35px_rgba(233,168,58,0.45)] ring-2 ring-[#075E4A]'
-            : 'border-[#E9A83A]/70 hover:border-[#E9A83A]'
-        }`}
-      >
-        {/* Top Arch Keystone Logo / Rosette Emblem */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-[#180F09]/95 border border-[#E9A83A]/80 shadow-md">
-          <IslamicStarRosette variant="full" size={16} />
-          <span className="text-[9px] font-bold uppercase tracking-widest text-[#E9A83A]">
-            SPEAKER
-          </span>
-        </div>
+      <div className="relative w-full aspect-square max-w-xs flex items-center justify-center group select-none transition-all duration-300">
+        {/* Outer 8-Sided Star Medallion Glow Frame */}
+        <div
+          className={`absolute inset-0 transition-all duration-300 ${
+            isSpeaking
+              ? 'bg-gradient-to-br from-[#E9A83A] via-[#19A6A0] to-[#E9A83A] opacity-100 scale-105 shadow-[0_0_35px_rgba(233,168,58,0.6)]'
+              : 'bg-gradient-to-br from-[#E9A83A] via-[#3A2619] to-[#E9A83A]/80 opacity-90 group-hover:opacity-100'
+          }`}
+          style={{
+            clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+          }}
+        />
 
-        {/* Remote audio player */}
-        {!isLocal && (
-          <audio
+        {/* Inner Octagonal Portal Stage */}
+        <div
+          className="absolute inset-[3.5px] bg-[#160E09] flex items-center justify-center overflow-hidden z-10 transition-colors"
+          style={{
+            clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
+          }}
+        >
+          {/* Remote audio player */}
+          {!isLocal && (
+            <audio
+              ref={(el) => {
+                audioRef.current = el;
+                if (el && participant.stream && el.srcObject !== participant.stream) {
+                  el.srcObject = participant.stream;
+                  el.play().catch(() => {});
+                }
+              }}
+              autoPlay
+              playsInline
+            />
+          )}
+
+          {/* Video Element */}
+          <video
             ref={(el) => {
-              audioRef.current = el;
+              videoRef.current = el;
+              if (videoRefCallback) videoRefCallback(el);
               if (el && participant.stream && el.srcObject !== participant.stream) {
                 el.srcObject = participant.stream;
                 el.play().catch(() => {});
@@ -127,44 +147,23 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             }}
             autoPlay
             playsInline
+            muted={isLocal}
+            className={`w-full h-full ${objectFitClass} transition-opacity duration-300 ${
+              isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            } ${mirrorClass}`}
           />
-        )}
 
-        {/* Video Element */}
-        <video
-          ref={(el) => {
-            videoRef.current = el;
-            if (videoRefCallback) videoRefCallback(el);
-            if (el && participant.stream && el.srcObject !== participant.stream) {
-              el.srcObject = participant.stream;
-              el.play().catch(() => {});
-            }
-          }}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          className={`w-full h-full ${objectFitClass} transition-opacity duration-300 ${
-            isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
-          } ${mirrorClass}`}
-        />
+          {/* Stained Glass Star Emblem Avatar when Camera is Off */}
+          {isVideoHidden && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#24170E] via-[#160E09] to-[#0E0704] p-4 text-center">
+              <IslamicStarRosette size={24} variant="full" className="mb-2 opacity-85" />
 
-        {/* Moorish Arch Stained Glass Avatar Portal when Camera is Off */}
-        {isVideoHidden && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-[#24170E] via-[#1A110B] to-[#100A05] pt-6">
-            <div className="absolute -top-10 -right-10 w-56 h-56 bg-[#E9A83A]/15 rounded-full blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-10 -left-10 w-56 h-56 bg-[#075E4A]/25 rounded-full blur-2xl pointer-events-none" />
-
-            <div className="relative z-10 flex flex-col items-center justify-center p-5 rounded-t-full rounded-b-sm border border-[#E9A83A]/40 bg-gradient-to-b from-[#2C1C12]/90 via-[#1F140D]/95 to-[#120B06] shadow-2xl min-w-[200px] max-w-[280px]">
-              <div className="mb-2 mt-2">
-                <IslamicStarRosette variant="full" size={26} />
-              </div>
-
-              <div className="relative my-2">
+              <div className="relative mb-2">
                 <div
-                  className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-lg sm:text-xl font-bold transition-all shadow-xl ${
+                  className={`w-18 h-18 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-xl font-bold transition-all shadow-xl ${
                     isSpeaking
                       ? 'bg-gradient-to-br from-[#075E4A] to-[#043328] text-[#FFFCF5] border-2 border-[#E9A83A] scale-105 ring-4 ring-[#E9A83A]/40'
-                      : 'bg-gradient-to-br from-[#075E4A] to-[#032920] text-[#FFFCF5] border-2 border-[#E9A83A]/60'
+                      : 'bg-gradient-to-br from-[#075E4A] to-[#032920] text-[#FFFCF5] border-2 border-[#E9A83A]/70'
                   }`}
                 >
                   {initials}
@@ -177,58 +176,41 @@ export const VideoTile: React.FC<VideoTileProps> = ({
                 )}
               </div>
 
-              <div className="text-center mt-2 space-y-1">
+              <div className="text-center">
                 <h3 className="text-sm font-bold text-[#FFFCF5] tracking-tight">
                   {participant.name}
                 </h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] font-bold text-[10px]">
-                  <Sparkles className="w-2.5 h-2.5" /> Assigned Speaker
+              </div>
+            </div>
+          )}
+
+          {/* Hand Raised Badge inside Star */}
+          {participant.handRaised && (
+            <div className="absolute top-4 z-20 flex items-center gap-1 px-2 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[10px] font-bold border border-[#D4982E] shadow-md">
+              <Hand className="w-3 h-3 text-[#1E140C]" /> Hand Raised
+            </div>
+          )}
+
+          {/* Speaker Overlay Name Tag when video is on */}
+          {!isVideoHidden && (
+            <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center pointer-events-none px-3">
+              <div className="flex items-center gap-1.5 bg-[#140D08]/92 backdrop-blur-md px-2.5 py-0.5 rounded-sm border border-[#3A2619] max-w-[85%] text-center shadow-md">
+                <span className="text-[11px] font-semibold text-[#FFFCF5] truncate">
+                  {participant.name} {isLocal && '(You)'}
+                </span>
+                <span className="text-[8px] font-bold px-1 py-0.2 bg-[#E9A83A] text-[#1E140C] rounded-xs uppercase">
+                  Speaker
                 </span>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Hand Raised Badge */}
-        {participant.handRaised && (
-          <div className="absolute top-10 left-3 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-[#E9A83A] text-[#1E140C] text-xs font-bold border border-[#D4982E] shadow-lg">
-            <Hand className="w-3.5 h-3.5 text-[#1E140C]" /> Hand Raised
-          </div>
-        )}
-
-        {/* Pin Button */}
-        {onTogglePin && (
-          <button
-            onClick={onTogglePin}
-            className="absolute top-10 right-3 z-20 p-1.5 rounded-sm bg-[#160E09]/90 text-[#D9D0C3] hover:text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[#2A1B12] border border-[#3A2619] shadow-md"
-            title={isPinned ? 'Unpin view' : 'Pin to spotlight'}
-          >
-            {isPinned ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-          </button>
-        )}
-
-        {/* Bottom Cartouche */}
-        <div className="absolute bottom-2.5 left-2.5 right-2.5 z-20 flex items-center justify-between pointer-events-none">
-          <div className="flex items-center gap-2 bg-[#160E09]/90 backdrop-blur-md px-2.5 py-1 rounded-sm border border-[#3A2619] max-w-[80%] shadow-md">
-            <span className="text-xs font-semibold text-[#FFFCF5] truncate">
-              {participant.name} {isLocal && '(You)'}
-            </span>
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[9px] font-bold bg-[#E9A83A] text-[#1E140C]">
-              Speaker
-            </span>
-          </div>
-
-          <div
-            className={`p-1.5 rounded-sm border flex items-center justify-center shadow-md ${
-              participant.isMuted
-                ? 'bg-[#A83245] text-white border-[#C44056]/70'
-                : isSpeaking
-                ? 'bg-[#075E4A] text-[#E9A83A] border-[#E9A83A]'
-                : 'bg-[#160E09]/90 backdrop-blur-md text-[#8E7E73] border-[#3A2619]'
-            }`}
-          >
-            {participant.isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3 text-[#19A6A0]" />}
-          </div>
+          {/* Mic Muted indicator */}
+          {participant.isMuted && (
+            <div className="absolute bottom-4 right-4 z-20 p-1 rounded-sm bg-[#A83245] text-white border border-[#C44056]/70 shadow-md">
+              <MicOff className="w-3 h-3" />
+            </div>
+          )}
         </div>
       </div>
     );

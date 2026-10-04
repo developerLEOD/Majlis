@@ -1071,24 +1071,24 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                         </span>
                       </div>
 
-                      {/* Speaker Arc Door Portals on Left Side */}
+                      {/* Star Medallion Portals on Left Side */}
                       <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-4 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
                         {speakersOnStage.map((speaker) => (
                           <div
                             key={speaker.id}
-                            className={`transition-all duration-300 ${
+                            className={`transition-all duration-300 flex items-center justify-center ${
                               speakersOnStage.length === 1
-                                ? 'w-full max-w-sm sm:max-w-md h-[380px] sm:h-[460px] lg:h-[500px]'
+                                ? 'w-56 sm:w-64 md:w-72 lg:w-80 aspect-square'
                                 : speakersOnStage.length === 2
-                                ? 'w-48 sm:w-56 lg:w-60 h-64 sm:h-76 lg:h-80'
-                                : 'w-40 sm:w-48 h-56 sm:h-64'
+                                ? 'w-44 sm:w-52 md:w-60 aspect-square'
+                                : 'w-36 sm:w-44 aspect-square'
                             }`}
                           >
                             <VideoTile
                               participant={speaker}
                               isLocal={speaker.isLocal}
                               mirror={mirrorVideo}
-                              forceShape="arc-door"
+                              forceShape="star-medallion"
                               onTogglePin={() => setPinnedUserId(speaker.id)}
                               videoRefCallback={(el) => {
                                 if (el) videoElementsRef.current.set(speaker.id, el);
