@@ -12,8 +12,8 @@ import { MajlisSession } from '../../types/meeting';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 import { verifyMajlisOngoing } from '../../hooks/useActiveMajalis';
 import { SanctuaryLoader } from '../common/SanctuaryLoader';
-import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
-import wisdomPortraitImg from '../../assets/images/wisdom_portrait_glass_1791101565686.jpg';
+import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791132771042.jpg';
+import wisdomPortraitImg from '../../assets/images/wisdom_portrait_1791132806800.jpg';
 
 interface HomeScreenProps {
   activeMajalis: MajlisSession[];

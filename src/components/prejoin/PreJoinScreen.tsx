@@ -4,7 +4,7 @@ import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 import { useAuth } from '../../context/AuthContext';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 import { SanctuaryLoader } from '../common/SanctuaryLoader';
-import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
+import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791132771042.jpg';
 
 interface PreJoinScreenProps {
   roomId: string;

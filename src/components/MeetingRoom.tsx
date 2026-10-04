@@ -42,7 +42,7 @@ import { RecordingModal } from './RecordingModal';
 import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
 import { HoneycombGrid } from './common/HoneycombGrid';
-import heroStainedGlassImg from '../assets/images/hero_stained_glass_1791101546981.jpg';
+import heroStainedGlassImg from '../assets/images/hero_stained_glass_1791132771042.jpg';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
