@@ -8,7 +8,7 @@ export interface RecorderOptions {
   mode: RecordingMode;
   localStream: MediaStream | null;
   remoteStreams: MediaStream[];
-  getVideoElements: () => { id: string; name: string; element: HTMLVideoElement | null; isMuted: boolean }[];
+  participants: { id: string; name: string; isMuted: boolean; isVideoOff: boolean; stream?: MediaStream }[];
   onTick?: (durationSeconds: number, currentSizeBytes: number) => void;
   onStatusChange?: (status: 'recording' | 'paused' | 'stopped') => void;
 }
@@ -26,6 +26,7 @@ export class LocalMeetingRecorder {
   private options: RecorderOptions;
   private canvas: HTMLCanvasElement | null = null;
   private currentSizeBytes = 0;
+  private internalVideos: Map<string, HTMLVideoElement> = new Map();
 
   public status: 'idle' | 'recording' | 'paused' | 'stopped' = 'idle';
 
@@ -42,7 +43,6 @@ export class LocalMeetingRecorder {
     let recordingStream: MediaStream;
 
     if (this.options.mode === 'screen') {
-      // Record Screen + Microphone
       try {
         this.screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: { displaySurface: 'monitor' },
@@ -53,7 +53,6 @@ export class LocalMeetingRecorder {
         throw new Error('Screen capture was cancelled or not permitted.');
       }
 
-      // Mix screen audio (if available) with local mic and remote audio
       const audioStreamsToMix: MediaStream[] = [];
       if (this.options.localStream) audioStreamsToMix.push(this.options.localStream);
       this.options.remoteStreams.forEach((s) => audioStreamsToMix.push(s));
@@ -68,20 +67,31 @@ export class LocalMeetingRecorder {
       this.screenStream.getVideoTracks().forEach((track) => recordingStream.addTrack(track));
       mixedStream.getAudioTracks().forEach((track) => recordingStream.addTrack(track));
 
-      // Handle user stopping screen share from browser banner
       this.screenStream.getVideoTracks()[0].addEventListener('ended', () => {
         if (this.status === 'recording' || this.status === 'paused') {
           this.stop();
         }
       });
     } else {
-      // Composite Canvas Recording (captures meeting video tiles + all participant audio)
+      // Initialize internal video elements for each participant stream
+      this.internalVideos.clear();
+      this.options.participants.forEach((p) => {
+        if (p.stream) {
+          const v = document.createElement('video');
+          v.srcObject = p.stream;
+          v.muted = true;
+          v.playsInline = true;
+          v.autoplay = true;
+          v.play().catch(() => {});
+          this.internalVideos.set(p.id, v);
+        }
+      });
+
       this.canvas = document.createElement('canvas');
       this.canvas.width = 1280;
       this.canvas.height = 720;
       const ctx = this.canvas.getContext('2d')!;
 
-      // Start canvas continuous drawing loop
       const drawMeetingComposite = () => {
         if (this.status === 'stopped') return;
 
@@ -92,50 +102,68 @@ export class LocalMeetingRecorder {
         ctx.fillStyle = '#090d16';
         ctx.fillRect(0, 0, w, h);
 
-        const videoTiles = this.options.getVideoElements().filter((t) => !!t.element);
-        const count = videoTiles.length;
+        const participantsList = this.options.participants;
+        const count = participantsList.length;
 
         if (count === 0) {
-          // Placeholder
           ctx.fillStyle = '#1e293b';
           ctx.fillRect(40, 40, w - 80, h - 80);
           ctx.fillStyle = '#94a3b8';
           ctx.font = '24px system-ui, sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText('InfinityMeet Session in Progress', w / 2, h / 2);
+          ctx.fillText('Majlis Session in Progress', w / 2, h / 2);
         } else if (count === 1) {
-          // Single participant full stage
-          const tile = videoTiles[0];
-          this.drawVideoTile(ctx, tile.element!, tile.name, tile.isMuted, 20, 20, w - 40, h - 40);
+          const p = participantsList[0];
+          const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+          this.drawVideoTile(ctx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
         } else if (count === 2) {
-          // 2 participants side-by-side
           const tileW = (w - 60) / 2;
           const tileH = h - 60;
-          this.drawVideoTile(ctx, videoTiles[0].element!, videoTiles[0].name, videoTiles[0].isMuted, 20, 30, tileW, tileH);
-          this.drawVideoTile(ctx, videoTiles[1].element!, videoTiles[1].name, videoTiles[1].isMuted, 40 + tileW, 30, tileW, tileH);
+          const p0 = participantsList[0];
+          const p1 = participantsList[1];
+          this.drawVideoTile(
+            ctx,
+            p0.isVideoOff ? null : (this.internalVideos.get(p0.id) || null),
+            p0.name,
+            p0.isMuted,
+            20,
+            30,
+            tileW,
+            tileH
+          );
+          this.drawVideoTile(
+            ctx,
+            p1.isVideoOff ? null : (this.internalVideos.get(p1.id) || null),
+            p1.name,
+            p1.isMuted,
+            40 + tileW,
+            30,
+            tileW,
+            tileH
+          );
         } else if (count <= 4) {
-          // 2x2 grid
           const tileW = (w - 60) / 2;
           const tileH = (h - 60) / 2;
-          videoTiles.forEach((tile, idx) => {
+          participantsList.forEach((p, idx) => {
             const row = Math.floor(idx / 2);
             const col = idx % 2;
             const x = 20 + col * (tileW + 20);
             const y = 20 + row * (tileH + 20);
-            this.drawVideoTile(ctx, tile.element!, tile.name, tile.isMuted, x, y, tileW, tileH);
+            const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+            this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
           });
         } else {
-          // 3x2 grid (up to 6)
           const cols = 3;
           const rows = Math.ceil(count / cols);
           const tileW = (w - 20 * (cols + 1)) / cols;
           const tileH = (h - 20 * (rows + 1)) / rows;
-          videoTiles.forEach((tile, idx) => {
+          participantsList.forEach((p, idx) => {
             const row = Math.floor(idx / cols);
             const col = idx % cols;
             const x = 20 + col * (tileW + 20);
             const y = 20 + row * (tileH + 20);
-            this.drawVideoTile(ctx, tile.element!, tile.name, tile.isMuted, x, y, tileW, tileH);
+            const video = p.isVideoOff ? null : (this.internalVideos.get(p.id) || null);
+            this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
           });
         }
 
@@ -145,7 +173,6 @@ export class LocalMeetingRecorder {
         ctx.roundRect(w - 280, 24, 256, 36, [8]);
         ctx.fill();
 
-        // Pulsing red dot
         ctx.fillStyle = Math.floor(Date.now() / 600) % 2 === 0 ? '#ef4444' : '#f87171';
         ctx.beginPath();
         ctx.arc(w - 262, 42, 6, 0, Math.PI * 2);
@@ -157,7 +184,7 @@ export class LocalMeetingRecorder {
         const elapsedSec = Math.floor((Date.now() - this.startTime - this.pausedDuration) / 1000);
         const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
         const secs = String(elapsedSec % 60).padStart(2, '0');
-        ctx.fillText(`REC ${mins}:${secs} • InfinityMeet`, w - 246, 46);
+        ctx.fillText(`REC ${mins}:${secs} • Majlis`, w - 246, 46);
 
         this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
       };
@@ -166,7 +193,6 @@ export class LocalMeetingRecorder {
 
       const canvasStream = this.canvas.captureStream(30);
 
-      // Mix all audio sources (moderator + participants)
       const audioStreamsToMix: MediaStream[] = [];
       if (this.options.localStream) audioStreamsToMix.push(this.options.localStream);
       this.options.remoteStreams.forEach((s) => audioStreamsToMix.push(s));
@@ -179,7 +205,6 @@ export class LocalMeetingRecorder {
       mixedStream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
     }
 
-    // Determine supported mime type
     const mimeTypes = [
       'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
@@ -214,7 +239,7 @@ export class LocalMeetingRecorder {
       }
     };
 
-    this.mediaRecorder.start(1000); // 1-second chunks for resilient recording
+    this.mediaRecorder.start(1000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
@@ -273,7 +298,6 @@ export class LocalMeetingRecorder {
 
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       try {
-        // Aspect ratio cover calculation
         const vW = video.videoWidth;
         const vH = video.videoHeight;
         const videoRatio = vW / vH;
@@ -355,6 +379,11 @@ export class LocalMeetingRecorder {
         this.screenStream = null;
       }
 
+      this.internalVideos.forEach((v) => {
+        v.srcObject = null;
+      });
+      this.internalVideos.clear();
+
       if (!this.mediaRecorder) {
         resolve({
           blob: new Blob([], { type: 'video/webm' }),
@@ -362,7 +391,7 @@ export class LocalMeetingRecorder {
           durationSeconds: 0,
           sizeBytes: 0,
           createdAt: Date.now(),
-          fileName: `infinitymeet_${this.options.roomId}.webm`,
+          fileName: `majlis_${this.options.roomId}.webm`,
         });
         return;
       }
@@ -378,7 +407,7 @@ export class LocalMeetingRecorder {
 
         const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const ext = finalType.includes('mp4') ? 'mp4' : 'webm';
-        const fileName = `infinitymeet_${this.options.roomId}_${dateStr}.${ext}`;
+        const fileName = `majlis_${this.options.roomId}_${dateStr}.${ext}`;
 
         resolve({
           blob: finalBlob,
