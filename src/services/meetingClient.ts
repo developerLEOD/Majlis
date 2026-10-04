@@ -125,7 +125,9 @@ export class MeetingClient {
 
       // Listen to room metadata changes from Firebase
       this.firebaseSync.subscribeToRoom((roomData) => {
-        if (!roomData || roomData.ended) {
+        if (!roomData) return;
+        // Only trigger session ended if explicitly concluded by host with ended === true
+        if (roomData.ended === true) {
           if (!this.isHost && this.events.onSessionEnded) {
             this.events.onSessionEnded('The facilitator has concluded this Majlis session.');
           }
@@ -144,21 +146,12 @@ export class MeetingClient {
         });
       });
 
-      // Listen to participants from Firebase with two-way join/leave detection
+      // Listen to participants from Firebase
       this.firebaseSync.subscribeToParticipants((participants) => {
+        if (!participants || participants.length === 0) return;
         const remoteParticipants = participants.filter((p) => p.id !== this.userId);
-        const currentPeerIds = new Set(remoteParticipants.map((p) => p.id));
 
-        // 1. Detect and clean up members who left the meeting
-        for (const [peerId, cachedP] of Array.from(this.knownParticipants.entries())) {
-          if (!currentPeerIds.has(peerId)) {
-            this.knownParticipants.delete(peerId);
-            this.closePeerConnection(peerId);
-            this.events.onUserLeft(peerId, cachedP.name);
-          }
-        }
-
-        // 2. Add or update active participants
+        // Add or update active participants in real-time
         for (const p of remoteParticipants) {
           const isNew = !this.knownParticipants.has(p.id);
           this.knownParticipants.set(p.id, p);
@@ -368,6 +361,11 @@ export class MeetingClient {
     }
 
     // 3. Local WebSocket Server Connection
+    this.initWebSocket();
+  }
+
+  private initWebSocket() {
+    if (this.isClosed) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -383,11 +381,12 @@ export class MeetingClient {
           userId: this.userId,
           userName: this.userName,
           isHost: this.isHost,
-          title: this.sessionTitle || (isHost ? `${this.userName}'s Majlis` : 'Live Majlis'),
+          title: this.sessionTitle || (this.isHost ? `${this.userName}'s Majlis` : 'Live Majlis'),
           isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
           isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
         });
 
+        if (this.pingInterval) clearInterval(this.pingInterval);
         this.pingInterval = window.setInterval(() => {
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify({ type: 'ping' }));
@@ -409,8 +408,17 @@ export class MeetingClient {
       };
 
       this.ws.onclose = () => {
+        if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = null;
+        }
         if (!this.isClosed) {
-          console.log('WebSocket closed.');
+          console.log('WebSocket connection closed. Reconnecting in 2s...');
+          setTimeout(() => {
+            if (!this.isClosed) {
+              this.initWebSocket();
+            }
+          }, 2000);
         }
       };
     } catch (err) {

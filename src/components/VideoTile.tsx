@@ -103,7 +103,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   // STAR MEDALLION / OCTAGONAL SPEAKER PORTAL SHAPE (Wisdom Lounge Star Emblem)
   if (shape === 'arc-door' || shape === 'star-medallion') {
     return (
-      <div className="relative w-full aspect-square max-w-xs flex items-center justify-center group select-none transition-all duration-300">
+      <div className="relative w-full h-full flex items-center justify-center group select-none transition-all duration-300">
         {/* Outer 8-Sided Star Medallion Glow Frame */}
         <div
           className={`absolute inset-0 transition-all duration-300 ${
@@ -151,29 +151,29 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             autoPlay
             playsInline
             muted={isLocal}
-            className={`w-full h-full ${objectFitClass} transition-opacity duration-300 ${
+            className={`absolute inset-0 w-full h-full ${objectFitClass} transition-opacity duration-300 ${
               isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
             } ${mirrorClass}`}
           />
 
           {/* Camera Off: Only Speaker Name Centered */}
           {isVideoHidden && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-[#24170E] via-[#160E09] to-[#0E0704] p-4 text-center">
-              <h3 className={`text-base sm:text-lg font-bold tracking-tight transition-colors ${
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b from-[#24170E] via-[#160E09] to-[#0E0704] p-3 text-center overflow-hidden">
+              <h3 className={`text-sm sm:text-base md:text-lg font-bold tracking-tight transition-colors truncate max-w-[90%] ${
                 isSpeaking ? 'text-[#E9A83A]' : 'text-[#FFFCF5]'
               }`}>
                 {participant.name}
               </h3>
               {isLocal && (
-                <span className="text-[11px] text-[#A8988B] font-medium mt-0.5">
+                <span className="text-[10px] text-[#A8988B] font-medium mt-0.5">
                   (You)
                 </span>
               )}
-              <span className="mt-1.5 text-[9px] font-bold px-2 py-0.5 bg-[#E9A83A]/20 text-[#E9A83A] border border-[#E9A83A]/40 rounded-full uppercase tracking-wider">
+              <span className="mt-1.5 text-[8px] sm:text-[9px] font-bold px-2 py-0.5 bg-[#E9A83A]/20 text-[#E9A83A] border border-[#E9A83A]/40 rounded-full uppercase tracking-wider">
                 Speaker
               </span>
               {isSpeaking && (
-                <div className="flex items-center gap-1 mt-2 text-[10px] font-semibold text-[#19A6A0] animate-pulse">
+                <div className="flex items-center gap-1 mt-1.5 text-[9px] sm:text-[10px] font-semibold text-[#19A6A0] animate-pulse">
                   <Mic className="w-3 h-3 text-[#E9A83A]" />
                   <span>Speaking</span>
                 </div>
@@ -183,16 +183,16 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
           {/* Hand Raised Badge inside Star */}
           {participant.handRaised && (
-            <div className="absolute top-4 z-20 flex items-center gap-1 px-2 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[10px] font-bold border border-[#D4982E] shadow-md">
-              <Hand className="w-3 h-3 text-[#1E140C]" /> Hand Raised
+            <div className="absolute top-3 sm:top-4 z-20 flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[9px] sm:text-[10px] font-bold border border-[#D4982E] shadow-md">
+              <Hand className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#1E140C]" /> Hand Raised
             </div>
           )}
 
           {/* Speaker Overlay Name Tag when video is on */}
           {!isVideoHidden && (
-            <div className="absolute bottom-4 left-0 right-0 z-20 flex justify-center pointer-events-none px-3">
-              <div className="flex items-center gap-1.5 bg-[#140D08]/92 backdrop-blur-md px-2.5 py-0.5 rounded-sm border border-[#3A2619] max-w-[85%] text-center shadow-md">
-                <span className="text-[11px] font-semibold text-[#FFFCF5] truncate">
+            <div className="absolute bottom-3 sm:bottom-4 left-0 right-0 z-20 flex justify-center pointer-events-none px-2 sm:px-3">
+              <div className="flex items-center gap-1.5 bg-[#140D08]/92 backdrop-blur-md px-2 sm:px-2.5 py-0.5 rounded-sm border border-[#3A2619] max-w-[85%] text-center shadow-md">
+                <span className="text-[10px] sm:text-[11px] font-semibold text-[#FFFCF5] truncate">
                   {participant.name} {isLocal && '(You)'}
                 </span>
                 <span className="text-[8px] font-bold px-1 py-0.2 bg-[#E9A83A] text-[#1E140C] rounded-xs uppercase">
@@ -204,8 +204,8 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
           {/* Mic Muted indicator */}
           {participant.isMuted && (
-            <div className="absolute bottom-4 right-4 z-20 p-1 rounded-sm bg-[#A83245] text-white border border-[#C44056]/70 shadow-md">
-              <MicOff className="w-3 h-3" />
+            <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-20 p-1 rounded-sm bg-[#A83245] text-white border border-[#C44056]/70 shadow-md">
+              <MicOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
             </div>
           )}
         </div>
@@ -217,7 +217,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
   // HONEYCOMB HEXAGONAL JOINT SHAPE FOR REGULAR PARTICIPANTS
   return (
-    <div className="relative w-full aspect-square flex items-center justify-center group select-none transition-all duration-300">
+    <div className="relative w-full h-full flex items-center justify-center group select-none transition-all duration-300">
       {/* Outer Hexagon Outer Glow Frame with Stained Glass Leaded Rim */}
       <div
         className={`absolute inset-0 transition-all duration-300 ${
@@ -266,7 +266,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className={`w-full h-full ${objectFitClass} transition-opacity duration-300 ${
+          className={`absolute inset-0 w-full h-full ${objectFitClass} transition-opacity duration-300 ${
             isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
           } ${mirrorClass}`}
         />
@@ -274,7 +274,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         {/* Camera Off: Stained Glass Facet Decor & Name */}
         {isVideoHidden && (
           <div
-            className={`absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b ${stainedTheme.glassGradient} px-3 py-2 text-center relative overflow-hidden`}
+            className={`absolute inset-0 z-10 flex flex-col items-center justify-center bg-gradient-to-b ${stainedTheme.glassGradient} px-2 py-1 text-center overflow-hidden`}
           >
             {/* Stained Glass Light Sheen / Texture Overlay */}
             <div
@@ -291,7 +291,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
             {/* Glowing Gem Facet Center Accent */}
             <div
-              className="w-1.5 h-1.5 rounded-full mb-1 transition-all"
+              className="w-1.5 h-1.5 rounded-full mb-1 transition-all z-10"
               style={{
                 backgroundColor: stainedTheme.rimColor,
                 boxShadow: `0 0 8px ${stainedTheme.rimColor}`,
@@ -299,7 +299,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             />
 
             <span
-              className="text-xs sm:text-sm font-bold tracking-tight truncate max-w-[90%] transition-colors z-10"
+              className="text-xs sm:text-sm font-bold tracking-tight truncate max-w-[88%] transition-colors z-10 block"
               style={{
                 color: isSpeaking ? '#FFFFFF' : stainedTheme.textColor,
                 textShadow: `0 1px 3px rgba(0,0,0,0.9), 0 0 10px ${stainedTheme.glowColor}`,
@@ -309,14 +309,14 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             </span>
 
             {isLocal && (
-              <span className="text-[10px] text-[#EAD8C7]/80 font-medium mt-0.5 z-10">
+              <span className="text-[9px] sm:text-[10px] text-[#EAD8C7]/80 font-medium mt-0.5 z-10 block">
                 (You)
               </span>
             )}
 
             {isSpeaking && (
               <span
-                className="text-[9px] font-bold mt-1 animate-pulse px-2 py-0.5 rounded-full border z-10 uppercase tracking-wider text-white"
+                className="text-[8px] sm:text-[9px] font-bold mt-1 animate-pulse px-1.5 sm:px-2 py-0.5 rounded-full border z-10 uppercase tracking-wider text-white whitespace-nowrap"
                 style={{
                   backgroundColor: stainedTheme.rimColor,
                   borderColor: 'rgba(255,255,255,0.6)',
@@ -331,12 +331,12 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
         {/* Video Active Overlay Name Tag */}
         {!isVideoHidden && (
-          <div className="absolute bottom-2.5 left-0 right-0 z-20 flex flex-col items-center justify-center px-2 pointer-events-none">
+          <div className="absolute bottom-2 left-0 right-0 z-20 flex flex-col items-center justify-center px-1.5 pointer-events-none">
             <div
-              className="bg-[#140D08]/92 backdrop-blur-md px-2.5 py-0.5 rounded-sm border max-w-[90%] text-center shadow-md"
+              className="bg-[#140D08]/92 backdrop-blur-md px-2 py-0.5 rounded-sm border max-w-[90%] text-center shadow-md"
               style={{ borderColor: `${stainedTheme.rimColor}60` }}
             >
-              <span className="text-[11px] font-semibold text-[#FFFCF5] truncate block">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-[#FFFCF5] truncate block">
                 {participant.name}
                 {isLocal && ' (You)'}
               </span>
@@ -346,13 +346,13 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
         {/* Speaker or Hand Raised Badge inside Hexagon */}
         {participant.handRaised && (
-          <div className="absolute top-3 z-20 px-1.5 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[9px] font-bold border border-[#D4982E] shadow-md flex items-center gap-1">
+          <div className="absolute top-2.5 z-20 px-1.5 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[8px] sm:text-[9px] font-bold border border-[#D4982E] shadow-md flex items-center gap-1">
             <Hand className="w-2.5 h-2.5 text-[#1E140C]" /> Hand
           </div>
         )}
 
         {participant.isHost && (
-          <div className="absolute top-3 z-20 px-1.5 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[9px] font-bold shadow-md flex items-center gap-1">
+          <div className="absolute top-2.5 z-20 px-1.5 py-0.5 rounded-sm bg-[#E9A83A] text-[#1E140C] text-[8px] sm:text-[9px] font-bold shadow-md flex items-center gap-1">
             <Crown className="w-2.5 h-2.5" /> Mod
           </div>
         )}

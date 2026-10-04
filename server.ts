@@ -580,7 +580,14 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         if (room.participants.size === 0) {
-          rooms.delete(currentRoomId);
+          // Keep room open for 5 minutes to allow reconnects
+          setTimeout(() => {
+            const currentR = rooms.get(currentRoomId!);
+            if (currentR && currentR.participants.size === 0) {
+              rooms.delete(currentRoomId!);
+              broadcastActiveRooms();
+            }
+          }, 1000 * 60 * 5);
         }
 
         broadcastActiveRooms();
