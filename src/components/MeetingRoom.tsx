@@ -42,6 +42,7 @@ import { RecordingModal } from './RecordingModal';
 import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
 import { HoneycombGrid } from './common/HoneycombGrid';
+import heroStainedGlassImg from '../assets/images/hero_stained_glass_1791101546981.jpg';
 import {
   buildMeetingInviteUrl,
   copyTextToClipboard,
@@ -938,7 +939,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         {/* Atmospheric Stained Glass Architectural Background with Clear Sanctuary View */}
         <div className="absolute inset-0 z-0 pointer-events-none select-none overflow-hidden">
           <img
-            src="/src/assets/images/hero_stained_glass_1791101546981.jpg"
+            src={heroStainedGlassImg}
             alt="Majlis Sanctuary"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover brightness-[0.70] contrast-[1.08] filter blur-[0.5px]"
@@ -1007,39 +1008,43 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                   ))}
                 </div>
               )}
-              <div className="flex-1 rounded-sm overflow-hidden relative">
-                <VideoTile
-                  participant={pinnedParticipant}
-                  isLocal={pinnedParticipant.isLocal}
-                  mirror={mirrorVideo}
-                  isPinned={true}
-                  onTogglePin={() => setPinnedUserId(null)}
-                  videoRefCallback={(el) => {
-                    if (el) videoElementsRef.current.set(pinnedParticipant.id, el);
-                    else videoElementsRef.current.delete(pinnedParticipant.id);
-                  }}
-                />
+              <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+                <div className="h-full max-h-[75vh] aspect-square flex items-center justify-center relative">
+                  <VideoTile
+                    participant={pinnedParticipant}
+                    isLocal={pinnedParticipant.isLocal}
+                    mirror={mirrorVideo}
+                    isPinned={true}
+                    onTogglePin={() => setPinnedUserId(null)}
+                    videoRefCallback={(el) => {
+                      if (el) videoElementsRef.current.set(pinnedParticipant.id, el);
+                      else videoElementsRef.current.delete(pinnedParticipant.id);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           ) : layout === 'grid' ? (
             <div
-              className={`w-full flex items-center justify-center ${
-                participants.length === 1
-                  ? 'max-w-4xl w-full aspect-video max-h-[72vh] my-auto'
-                  : participants.length === 2
-                  ? 'grid grid-cols-1 sm:grid-cols-2 max-w-5xl w-full gap-4 max-h-[72vh] my-auto'
-                  : participants.length <= 4
-                  ? 'grid grid-cols-2 max-w-5xl w-full gap-4 max-h-[78vh] my-auto'
-                  : 'grid grid-cols-2 sm:grid-cols-3 max-w-6xl w-full gap-4 max-h-[82vh] my-auto'
-              }`}
+              className={`w-full flex flex-wrap items-center justify-center gap-4 sm:gap-6 max-h-[82vh] overflow-y-auto p-4 my-auto`}
             >
-              {participants.map((p) => (
-                <div key={p.id} className="w-full h-full min-h-0 min-w-0 overflow-hidden relative rounded-sm flex items-center justify-center shadow-2xl">
+              {participants.map((p, pIndex) => (
+                <div
+                  key={p.id}
+                  className={`aspect-square shrink-0 flex items-center justify-center relative ${
+                    participants.length === 1
+                      ? 'w-64 sm:w-80 md:w-96'
+                      : participants.length <= 4
+                      ? 'w-44 sm:w-56 md:w-64'
+                      : 'w-36 sm:w-44 md:w-52'
+                  }`}
+                >
                   <VideoTile
                     participant={p}
                     isLocal={p.isLocal}
                     mirror={mirrorVideo}
-                    forceShape="standard"
+                    forceShape="honeycomb"
+                    themeIndex={pIndex}
                     onTogglePin={() => setPinnedUserId(p.id)}
                     videoRefCallback={(el) => {
                       if (el) videoElementsRef.current.set(p.id, el);

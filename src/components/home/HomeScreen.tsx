@@ -11,6 +11,8 @@ import {
 import { MajlisSession } from '../../types/meeting';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 import { verifyMajlisOngoing } from '../../hooks/useActiveMajalis';
+import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
+import wisdomPortraitImg from '../../assets/images/wisdom_portrait_glass_1791101565686.jpg';
 
 interface HomeScreenProps {
   activeMajalis: MajlisSession[];
@@ -119,7 +121,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Photographic Mosque Stained Glass Background */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <img
-            src="/src/assets/images/hero_stained_glass_1791101546981.jpg"
+            src={heroStainedGlassImg}
             alt="Stained glass windows"
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover object-right brightness-[0.7] contrast-[1.05]"
@@ -427,7 +429,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="relative rounded-sm overflow-hidden shadow-2xl flex-1 min-h-[380px] flex flex-col justify-between p-7 bg-[#180F09] text-[#FFFCF5] border border-[#302116]">
               {/* Background Stained Glass Light Photograph */}
               <img
-                src="/src/assets/images/wisdom_portrait_glass_1791101565686.jpg"
+                src={wisdomPortraitImg}
                 alt="Stained glass sunlight"
                 referrerPolicy="no-referrer"
                 className="absolute inset-0 w-full h-full object-cover brightness-[0.75]"

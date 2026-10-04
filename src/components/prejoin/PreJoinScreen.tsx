@@ -3,6 +3,7 @@ import { Crown, Key, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 import { useAuth } from '../../context/AuthContext';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
+import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791101546981.jpg';
 
 interface PreJoinScreenProps {
   roomId: string;
@@ -141,7 +142,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
       {/* Ambient Stained Glass Sanctuary Background */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
         <img
-          src="/src/assets/images/hero_stained_glass_1791101546981.jpg"
+          src={heroStainedGlassImg}
           alt="Majlis Sanctuary"
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover filter blur-xs brightness-[0.6] contrast-[1.05]"

@@ -22,24 +22,24 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
   // Determine ideal row pattern & tile size based on total participant count
   let maxPerRow = 3;
   let sizeClasses = 'w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36';
-  let overlapClass = '-mt-5 sm:-mt-7 md:-mt-8';
+  let overlapClass = '-mt-4 sm:-mt-6 md:-mt-7';
 
   if (participants.length <= 2) {
     maxPerRow = 2;
-    sizeClasses = 'w-28 h-28 sm:w-40 sm:h-40 md:w-44 md:h-44';
-    overlapClass = '-mt-6 sm:-mt-9 md:-mt-10';
+    sizeClasses = 'w-28 h-28 sm:w-40 sm:h-40 md:w-48 md:h-48';
+    overlapClass = '-mt-5 sm:-mt-8 md:-mt-9';
   } else if (participants.length <= 4) {
     maxPerRow = 2;
-    sizeClasses = 'w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36';
-    overlapClass = '-mt-5 sm:-mt-7 md:-mt-8';
+    sizeClasses = 'w-24 h-24 sm:w-32 sm:h-32 md:w-38 md:h-38';
+    overlapClass = '-mt-4 sm:-mt-6 md:-mt-7';
   } else if (participants.length <= 7) {
     maxPerRow = 3;
     sizeClasses = 'w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32';
-    overlapClass = '-mt-4 sm:-mt-6 md:-mt-7';
+    overlapClass = '-mt-4 sm:-mt-5 md:-mt-6';
   } else {
     maxPerRow = 4;
     sizeClasses = 'w-18 h-18 sm:w-24 sm:h-24 md:w-28 md:h-28';
-    overlapClass = '-mt-3 sm:-mt-5 md:-mt-6';
+    overlapClass = '-mt-3 sm:-mt-4 md:-mt-5';
   }
 
   // Build rows that alternate between maxPerRow and (maxPerRow - 1)
@@ -69,6 +69,7 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
           className={`flex items-center justify-center gap-2 sm:gap-3 transition-all ${
             rowIndex > 0 ? overlapClass : ''
           }`}
+          style={{ zIndex: rows.length - rowIndex }}
         >
           {row.map((p, colIndex) => {
             const overallIndex = participants.findIndex((item) => item.id === p.id);
@@ -77,7 +78,7 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
             return (
               <div
                 key={p.id}
-                className={`${sizeClasses} shrink-0 transition-transform duration-200 hover:scale-105 hover:z-30 relative`}
+                className={`${sizeClasses} shrink-0 aspect-square transition-transform duration-200 hover:scale-105 hover:z-50 relative`}
               >
                 <VideoTile
                   participant={p}
