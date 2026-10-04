@@ -98,6 +98,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const [showLeaveConfirmDialog, setShowLeaveConfirmDialog] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isScreenMaximized, setIsScreenMaximized] = useState(false);
   const [mirrorVideo, setMirrorVideo] = useState(true);
   const [appUrl, setAppUrl] = useState<string>(getCachedPublicAppUrl());
 
@@ -892,31 +893,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               <span>REC {formatTime(recordingDuration)}</span>
             </div>
           )}
-
-          {/* Layout Toggle */}
-          <div className="hidden sm:flex bg-[#160E09] border border-[#302116] rounded-sm p-0.5 shadow-xs shrink-0">
-            <button
-              onClick={() => { setLayout('honeycomb'); setPinnedUserId(null); }}
-              className={`p-1.5 rounded-sm transition-colors ${layout === 'honeycomb' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
-              title="Honeycomb & Speaker Stage"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" />
-            </button>
-            <button
-              onClick={() => { setLayout('grid'); setPinnedUserId(null); }}
-              className={`p-1.5 rounded-sm transition-colors ${layout === 'grid' && !pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
-              title="Grid View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => { setLayout('speaker'); if (participants.length > 0 && !pinnedUserId) setPinnedUserId(participants[0].id); }}
-              className={`p-1.5 rounded-sm transition-colors ${layout === 'speaker' || pinnedUserId ? 'bg-[#075E4A] text-[#FFFCF5]' : 'text-[#8A7A6D]'}`}
-              title="Speaker Spotlight"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
       </header>
 
@@ -994,154 +970,142 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         </div>
 
         <main className="flex-1 p-4 sm:p-6 flex items-center justify-center overflow-hidden relative z-10">
-          {pinnedParticipant ? (
-            <div className="w-full h-full flex flex-col gap-3">
-              {otherParticipants.length > 0 && (
-                <div className="h-28 flex gap-2.5 overflow-x-auto pb-1 shrink-0">
-                  {otherParticipants.map((p) => (
-                    <div key={p.id} className="w-44 h-full shrink-0">
-                      <VideoTile
-                        participant={p}
-                        isLocal={p.isLocal}
-                        mirror={mirrorVideo}
-                        onTogglePin={() => setPinnedUserId(p.id)}
-                        videoRefCallback={(el) => {
-                          if (el) videoElementsRef.current.set(p.id, el);
-                          else videoElementsRef.current.delete(p.id);
-                        }}
-                      />
+          {(() => {
+            const screenSharer = participants.find((p) => p.isScreenSharing);
+            if (screenSharer) {
+              const otherParticipants = participants.filter((p) => p.id !== screenSharer.id);
+              return (
+                <div className={`flex flex-col gap-3 ${isScreenMaximized ? 'fixed inset-0 z-50 bg-[#120B07] p-6' : 'w-full h-full'}`}>
+                  <div className="flex items-center justify-between bg-[#1C130C] border border-[#3A2619] px-4 py-2 rounded-sm shrink-0 shadow-md">
+                    <div className="flex items-center gap-2 text-xs text-[#FFFCF5]">
+                      <MonitorUp className="w-4 h-4 text-[#19A6A0]" />
+                      <span className="font-bold text-[#FFFCF5]">{screenSharer.name}'s Screen Share</span>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsScreenMaximized(!isScreenMaximized)}
+                        className="p-1.5 px-3 rounded-sm bg-[#075E4A] hover:bg-[#05493A] text-white transition-colors flex items-center gap-1.5 text-xs font-semibold"
+                        title={isScreenMaximized ? 'Minimize Screen Share' : 'Maximize Screen Share'}
+                      >
+                        {isScreenMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                        <span>{isScreenMaximized ? 'Minimize' : 'Maximize'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {otherParticipants.length > 0 && !isScreenMaximized && (
+                    <div className="h-28 flex gap-2.5 overflow-x-auto pb-1 shrink-0">
+                      {otherParticipants.map((p) => (
+                        <div key={p.id} className="w-44 h-full shrink-0">
+                          <VideoTile
+                            participant={p}
+                            isLocal={p.isLocal}
+                            mirror={mirrorVideo}
+                            videoRefCallback={(el) => {
+                              if (el) videoElementsRef.current.set(p.id, el);
+                              else videoElementsRef.current.delete(p.id);
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex-1 bg-black rounded-sm overflow-hidden relative border border-[#3A2619] shadow-2xl flex items-center justify-center">
+                    <video
+                      ref={(el) => {
+                        if (el && screenSharer.stream && el.srcObject !== screenSharer.stream) {
+                          el.srcObject = screenSharer.stream;
+                          el.play().catch(() => {});
+                        }
+                        if (el) videoElementsRef.current.set(screenSharer.id, el);
+                      }}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-contain bg-black"
+                    />
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 flex items-center justify-center relative overflow-hidden">
-                <div className="h-full max-h-[75vh] aspect-square flex items-center justify-center relative">
-                  <VideoTile
-                    participant={pinnedParticipant}
-                    isLocal={pinnedParticipant.isLocal}
-                    mirror={mirrorVideo}
-                    isPinned={true}
-                    onTogglePin={() => setPinnedUserId(null)}
-                    videoRefCallback={(el) => {
-                      if (el) videoElementsRef.current.set(pinnedParticipant.id, el);
-                      else videoElementsRef.current.delete(pinnedParticipant.id);
-                    }}
-                  />
+              );
+            }
+
+            const assignedSpeakers = participants.filter((p) => p.isSpeaker);
+            const speakersOnStage = assignedSpeakers.length > 0
+              ? assignedSpeakers
+              : participants.filter((p) => p.isHost);
+            const regularHoneycombParticipants = participants.filter(
+              (p) => !speakersOnStage.some((s) => s.id === p.id)
+            );
+
+            return (
+               /* Side-by-Side Honeycomb Stage View (Left: Arc Door Speakers | Right: Honeycomb Assembly) */
+              <div className="w-full h-full flex flex-col lg:flex-row items-center justify-between overflow-y-auto py-2 px-2 sm:px-4 max-w-7xl mx-auto gap-4 lg:gap-6 scrollbar-thin">
+                {/* LEFT SIDE: ELEVATED SPEAKER STAGE AREA */}
+                <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
+                  {/* Star Medallion Portals on Left Side */}
+                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
+                    {speakersOnStage.map((speaker) => (
+                      <div
+                        key={speaker.id}
+                        className={`transition-all duration-300 flex items-center justify-center ${
+                          speakersOnStage.length === 1
+                            ? 'w-40 sm:w-56 md:w-72 lg:w-80 aspect-square'
+                            : speakersOnStage.length === 2
+                            ? 'w-32 sm:w-44 md:w-60 aspect-square'
+                            : 'w-28 sm:w-36 aspect-square'
+                        }`}
+                      >
+                        <VideoTile
+                          participant={speaker}
+                          isLocal={speaker.isLocal}
+                          mirror={mirrorVideo}
+                          forceShape="star-medallion"
+                          onTogglePin={() => {}}
+                          videoRefCallback={(el) => {
+                            if (el) videoElementsRef.current.set(speaker.id, el);
+                            else videoElementsRef.current.delete(speaker.id);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ARCHITECTURAL DIVIDER (Vertical on Desktop, Horizontal on Mobile) */}
+                <div className="hidden lg:flex flex-col items-center justify-center gap-3 self-stretch shrink-0 px-2 py-4">
+                  <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
+                  <IslamicStarRosette variant="gold-outline" size={18} />
+                  <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
+                </div>
+
+                <div className="lg:hidden w-full flex items-center justify-center gap-3 my-1.5 sm:my-2 shrink-0">
+                  <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                  <IslamicStarRosette variant="gold-outline" size={14} />
+                  <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                </div>
+
+                {/* RIGHT SIDE: REGULAR PARTICIPANTS HONEYCOMB ASSEMBLY */}
+                <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
+                  <div className="flex-1 w-full flex items-center justify-center max-h-[75vh] overflow-y-auto p-1">
+                    {regularHoneycombParticipants.length > 0 ? (
+                      <HoneycombGrid
+                        participants={regularHoneycombParticipants}
+                        mirrorVideo={mirrorVideo}
+                        onPinUser={() => {}}
+                        videoElementsRef={videoElementsRef}
+                      />
+                    ) : (
+                      <div className="p-5 rounded-sm bg-[#1A110B]/85 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-sm shadow-lg">
+                        <IslamicStarRosette size={24} variant="gold-outline" className="mx-auto mb-2 opacity-75" />
+                        <p className="font-semibold text-[#D9C6B0]">All attendees are currently on the Speaker Stage</p>
+                        <p className="text-[11px] text-[#8A7A6D] mt-1.5">New seekers entering the sanctuary will populate this honeycomb assembly on the right.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : layout === 'grid' ? (
-            <div
-              className={`w-full flex flex-wrap items-center justify-center gap-4 sm:gap-6 max-h-[82vh] overflow-y-auto p-4 my-auto`}
-            >
-              {participants.map((p, pIndex) => (
-                <div
-                  key={p.id}
-                  className={`aspect-square shrink-0 flex items-center justify-center relative ${
-                    participants.length === 1
-                      ? 'w-64 sm:w-80 md:w-96'
-                      : participants.length <= 4
-                      ? 'w-44 sm:w-56 md:w-64'
-                      : 'w-36 sm:w-44 md:w-52'
-                  }`}
-                >
-                  <VideoTile
-                    participant={p}
-                    isLocal={p.isLocal}
-                    mirror={mirrorVideo}
-                    forceShape="honeycomb"
-                    themeIndex={pIndex}
-                    onTogglePin={() => setPinnedUserId(p.id)}
-                    videoRefCallback={(el) => {
-                      if (el) videoElementsRef.current.set(p.id, el);
-                      else videoElementsRef.current.delete(p.id);
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Side-by-Side Honeycomb Stage View (Left: Arc Door Speakers | Right: Honeycomb Assembly) */
-            <div className="w-full h-full flex flex-col lg:flex-row items-center justify-between overflow-y-auto py-2 px-2 sm:px-4 max-w-7xl mx-auto gap-4 lg:gap-6 scrollbar-thin">
-              {(() => {
-                const assignedSpeakers = participants.filter((p) => p.isSpeaker);
-                const speakersOnStage = assignedSpeakers.length > 0
-                  ? assignedSpeakers
-                  : participants.filter((p) => p.isHost);
-                const regularHoneycombParticipants = participants.filter(
-                  (p) => !speakersOnStage.some((s) => s.id === p.id)
-                );
-
-                return (
-                  <>
-                    {/* LEFT SIDE: ELEVATED SPEAKER STAGE AREA */}
-                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
-                      {/* Star Medallion Portals on Left Side */}
-                      <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-3 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
-                        {speakersOnStage.map((speaker) => (
-                          <div
-                            key={speaker.id}
-                            className={`transition-all duration-300 flex items-center justify-center ${
-                              speakersOnStage.length === 1
-                                ? 'w-40 sm:w-56 md:w-72 lg:w-80 aspect-square'
-                                : speakersOnStage.length === 2
-                                ? 'w-32 sm:w-44 md:w-60 aspect-square'
-                                : 'w-28 sm:w-36 aspect-square'
-                            }`}
-                          >
-                            <VideoTile
-                              participant={speaker}
-                              isLocal={speaker.isLocal}
-                              mirror={mirrorVideo}
-                              forceShape="star-medallion"
-                              onTogglePin={() => setPinnedUserId(speaker.id)}
-                              videoRefCallback={(el) => {
-                                if (el) videoElementsRef.current.set(speaker.id, el);
-                                else videoElementsRef.current.delete(speaker.id);
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ARCHITECTURAL DIVIDER (Vertical on Desktop, Horizontal on Mobile) */}
-                    <div className="hidden lg:flex flex-col items-center justify-center gap-3 self-stretch shrink-0 px-2 py-4">
-                      <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
-                      <IslamicStarRosette variant="gold-outline" size={18} />
-                      <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
-                    </div>
-
-                    <div className="lg:hidden w-full flex items-center justify-center gap-3 my-1.5 sm:my-2 shrink-0">
-                      <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
-                      <IslamicStarRosette variant="gold-outline" size={14} />
-                      <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
-                    </div>
-
-                    {/* RIGHT SIDE: REGULAR PARTICIPANTS HONEYCOMB ASSEMBLY */}
-                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-0 sm:min-h-[240px] lg:min-h-[360px] p-1 sm:p-2">
-                      <div className="flex-1 w-full flex items-center justify-center max-h-[75vh] overflow-y-auto p-1">
-                        {regularHoneycombParticipants.length > 0 ? (
-                          <HoneycombGrid
-                            participants={regularHoneycombParticipants}
-                            mirrorVideo={mirrorVideo}
-                            onPinUser={(id) => setPinnedUserId(id)}
-                            videoElementsRef={videoElementsRef}
-                          />
-                        ) : (
-                          <div className="p-5 rounded-sm bg-[#1A110B]/85 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-sm shadow-lg">
-                            <IslamicStarRosette size={24} variant="gold-outline" className="mx-auto mb-2 opacity-75" />
-                            <p className="font-semibold text-[#D9C6B0]">All attendees are currently on the Speaker Stage</p>
-                            <p className="text-[11px] text-[#8A7A6D] mt-1.5">New seekers entering the sanctuary will populate this honeycomb assembly on the right.</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+            );
+          })()}
         </main>
 
         {/* Side Panels */}
