@@ -1049,8 +1049,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               ))}
             </div>
           ) : (
-            /* Honeycomb Stage View (Arc Door Speakers at top, Honeycomb Grid below with distance) */
-            <div className="w-full h-full flex flex-col items-center justify-between overflow-y-auto py-2 px-2 sm:px-4 max-w-6xl mx-auto space-y-6 scrollbar-thin">
+            /* Side-by-Side Honeycomb Stage View (Left: Arc Door Speakers | Right: Honeycomb Assembly) */
+            <div className="w-full h-full flex flex-col lg:flex-row items-center justify-between overflow-y-auto py-2 px-2 sm:px-4 max-w-7xl mx-auto gap-4 lg:gap-6 scrollbar-thin">
               {(() => {
                 const assignedSpeakers = participants.filter((p) => p.isSpeaker);
                 const speakersOnStage = assignedSpeakers.length > 0
@@ -1062,26 +1062,26 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
                 return (
                   <>
-                    {/* ELEVATED SPEAKER STAGE AREA */}
-                    <div className="w-full flex flex-col items-center justify-center">
-                      <div className="flex items-center gap-2 mb-3">
+                    {/* LEFT SIDE: ELEVATED SPEAKER STAGE AREA */}
+                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-[360px] p-2">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
                         <IslamicStarRosette variant="full" size={18} />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#E9A83A] bg-[#2A1B12]/80 px-3 py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#E9A83A] bg-[#2A1B12]/85 px-3 py-1 rounded-full border border-[#E9A83A]/40 shadow-md">
                           ✦ SPEAKER STAGE ({speakersOnStage.length}) ✦
                         </span>
                       </div>
 
-                      {/* Speaker Arc Door Portals Container with distance from Honeycomb */}
-                      <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 w-full max-w-4xl py-2">
+                      {/* Speaker Arc Door Portals on Left Side */}
+                      <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-4 sm:gap-6 max-h-[75vh] overflow-y-auto p-1">
                         {speakersOnStage.map((speaker) => (
                           <div
                             key={speaker.id}
                             className={`transition-all duration-300 ${
                               speakersOnStage.length === 1
-                                ? 'w-64 h-80 sm:w-80 sm:h-96 md:w-96 md:h-[380px]'
+                                ? 'w-full max-w-sm sm:max-w-md h-[380px] sm:h-[460px] lg:h-[500px]'
                                 : speakersOnStage.length === 2
-                                ? 'w-56 h-72 sm:w-72 sm:h-88'
-                                : 'w-48 h-64 sm:w-56 sm:h-72'
+                                ? 'w-48 sm:w-56 lg:w-60 h-64 sm:h-76 lg:h-80'
+                                : 'w-40 sm:w-48 h-56 sm:h-64'
                             }`}
                           >
                             <VideoTile
@@ -1098,48 +1098,60 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                           </div>
                         ))}
                       </div>
-
-                      {/* Distance Architectural Separator Line */}
-                      <div className="w-full max-w-2xl flex items-center justify-center gap-3 mt-6 mb-2">
-                        <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
-                        <IslamicStarRosette variant="gold-outline" size={16} />
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-[#D9C6B0]/80">
-                          SANCTUARY HONEYCOMB ASSEMBLY
-                        </span>
-                        <IslamicStarRosette variant="gold-outline" size={16} />
-                        <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
-                      </div>
                     </div>
 
-                    {/* REGULAR PARTICIPANTS HONEYCOMB HIVE GRID */}
-                    <div className="w-full flex flex-col items-center justify-center flex-1">
-                      {regularHoneycombParticipants.length > 0 ? (
-                        <div className="flex flex-wrap items-center justify-center -space-x-3 -space-y-4 sm:-space-x-4 sm:-space-y-5 max-w-4xl mx-auto py-2">
-                          {regularHoneycombParticipants.map((p) => (
-                            <div
-                              key={p.id}
-                              className="w-32 h-32 sm:w-40 sm:h-40 md:w-44 md:h-44 shrink-0 transition-transform hover:scale-105 hover:z-30"
-                            >
-                              <VideoTile
-                                participant={p}
-                                isLocal={p.isLocal}
-                                mirror={mirrorVideo}
-                                forceShape="honeycomb"
-                                onTogglePin={() => setPinnedUserId(p.id)}
-                                videoRefCallback={(el) => {
-                                  if (el) videoElementsRef.current.set(p.id, el);
-                                  else videoElementsRef.current.delete(p.id);
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-sm bg-[#1A110B]/80 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-md">
-                          <p className="font-semibold text-[#D9C6B0]">All attendees are currently on the Speaker Stage</p>
-                          <p className="text-[11px] mt-1">New seekers entering the sanctuary will join this Honeycomb grid automatically.</p>
-                        </div>
-                      )}
+                    {/* ARCHITECTURAL DIVIDER (Vertical on Desktop, Horizontal on Mobile) */}
+                    <div className="hidden lg:flex flex-col items-center justify-center gap-3 self-stretch shrink-0 px-2 py-4">
+                      <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
+                      <IslamicStarRosette variant="gold-outline" size={18} />
+                      <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#E9A83A]/50 to-transparent" />
+                    </div>
+
+                    <div className="lg:hidden w-full flex items-center justify-center gap-3 my-2 shrink-0">
+                      <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                      <IslamicStarRosette variant="gold-outline" size={16} />
+                      <div className="h-0.5 flex-1 bg-gradient-to-r from-transparent via-[#E9A83A]/50 to-transparent" />
+                    </div>
+
+                    {/* RIGHT SIDE: REGULAR PARTICIPANTS HONEYCOMB ASSEMBLY */}
+                    <div className="w-full lg:w-1/2 h-full flex flex-col items-center justify-center min-h-[360px] p-2">
+                      <div className="flex items-center gap-2 mb-3 shrink-0">
+                        <IslamicStarRosette variant="gold-outline" size={18} />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#D9C6B0] bg-[#1E130B]/85 px-3 py-1 rounded-full border border-[#3A2619] shadow-md">
+                          ✦ SANCTUARY HONEYCOMB ({regularHoneycombParticipants.length}) ✦
+                        </span>
+                      </div>
+
+                      <div className="flex-1 w-full flex items-center justify-center max-h-[75vh] overflow-y-auto p-1">
+                        {regularHoneycombParticipants.length > 0 ? (
+                          <div className="flex flex-wrap items-center justify-center -space-x-3 -space-y-4 sm:-space-x-4 sm:-space-y-5 max-w-lg mx-auto py-2">
+                            {regularHoneycombParticipants.map((p) => (
+                              <div
+                                key={p.id}
+                                className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 shrink-0 transition-transform hover:scale-105 hover:z-30"
+                              >
+                                <VideoTile
+                                  participant={p}
+                                  isLocal={p.isLocal}
+                                  mirror={mirrorVideo}
+                                  forceShape="honeycomb"
+                                  onTogglePin={() => setPinnedUserId(p.id)}
+                                  videoRefCallback={(el) => {
+                                    if (el) videoElementsRef.current.set(p.id, el);
+                                    else videoElementsRef.current.delete(p.id);
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-5 rounded-sm bg-[#1A110B]/85 border border-[#302116] text-center text-xs text-[#8E7E73] max-w-sm shadow-lg">
+                            <IslamicStarRosette size={24} variant="gold-outline" className="mx-auto mb-2 opacity-75" />
+                            <p className="font-semibold text-[#D9C6B0]">All attendees are currently on the Speaker Stage</p>
+                            <p className="text-[11px] text-[#8A7A6D] mt-1.5">New seekers entering the sanctuary will populate this honeycomb assembly on the right.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </>
                 );
