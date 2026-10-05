@@ -23,6 +23,8 @@ export class LocalMeetingRecorder {
   private timerInterval: number | null = null;
   private canvasAnimFrame: number | null = null;
   private canvasRenderInterval: number | null = null;
+  private timerWorker: Worker | null = null;
+  private audioSyncInterval: number | null = null;
   private screenStream: MediaStream | null = null;
   private audioCleanup: (() => void) | null = null;
   private options: RecorderOptions;
@@ -94,127 +96,110 @@ export class LocalMeetingRecorder {
       this.audioDestination = this.audioCtx.createMediaStreamDestination();
       this.connectedSources.clear();
 
-      // Ensure an invisible DOM container exists to force the browser to decode and keep video elements active
+      // Ensure an active DOM container exists to force the browser to decode and keep video elements active.
+      // Must have visible dimensions (320x240) and opacity > 0 (0.001) in viewport so Chromium never halts or suspends the decoder pipeline.
       let videoContainer = document.getElementById('recording-video-container');
       if (!videoContainer) {
         videoContainer = document.createElement('div');
         videoContainer.id = 'recording-video-container';
         videoContainer.setAttribute(
           'style',
-          'position: fixed; left: -9999px; top: -9999px; width: 1px; height: 1px; overflow: hidden; pointer-events: none; opacity: 0; z-index: -9999;'
+          'position: fixed; bottom: 0; right: 0; width: 320px; height: 240px; overflow: hidden; pointer-events: none; opacity: 0.001; z-index: -9999;'
         );
         document.body.appendChild(videoContainer);
       }
+
+      const createInternalVideo = (stream: MediaStream) => {
+        const v = document.createElement('video');
+        v.srcObject = stream;
+        v.muted = true;
+        v.playsInline = true;
+        v.autoplay = true;
+        v.style.width = '320px';
+        v.style.height = '240px';
+        v.style.display = 'block';
+        videoContainer!.appendChild(v);
+        v.play().catch(() => {});
+        return v;
+      };
 
       // Initialize internal video elements for each participant stream currently active
       this.internalVideos.clear();
       const currentParticipants = this.options.getParticipants();
       currentParticipants.forEach((p) => {
         if (p.stream && p.stream.getVideoTracks().length > 0) {
-          const v = document.createElement('video');
-          v.srcObject = p.stream;
-          v.muted = true;
-          v.playsInline = true;
-          v.autoplay = true;
-          videoContainer!.appendChild(v);
-          v.play().catch(() => {});
+          const v = createInternalVideo(p.stream);
           this.internalVideos.set(p.id, v);
         }
       });
 
-      this.canvas = document.createElement('canvas');
-      this.canvas.width = 1920;
-      this.canvas.height = 1080;
-      const ctx = this.canvas.getContext('2d')!;
+      // Synchronize dynamic audio mixer tracks and video elements decoupled from the 30 FPS render loop
+      const syncTracks = () => {
+        if (this.status !== 'recording' || !this.audioCtx || !this.audioDestination) return;
+        const participants = this.options.getParticipants();
+        const activeTrackKeys = new Set<string>();
 
-      let frameCount = 0;
-      const fps = 30;
-      const frameDelay = 1000 / fps; // 33.33ms
-      let lastDrawTime = Date.now();
+        participants.forEach((p) => {
+          if (p.stream && p.stream.getVideoTracks().length > 0 && !this.internalVideos.has(p.id)) {
+            const v = createInternalVideo(p.stream);
+            this.internalVideos.set(p.id, v);
+          }
+
+          if (p.stream) {
+            const audioTracks = p.stream.getAudioTracks().filter((t) => t.enabled && t.readyState === 'live');
+            audioTracks.forEach((track) => {
+              const trackKey = `${p.id}_${track.id}`;
+              activeTrackKeys.add(trackKey);
+
+              const existing = this.connectedSources.get(trackKey);
+              if (!existing) {
+                try {
+                  const singleTrackStream = new MediaStream([track]);
+                  const source = this.audioCtx!.createMediaStreamSource(singleTrackStream);
+                  source.connect(this.audioDestination!);
+                  this.connectedSources.set(trackKey, { source, track });
+                } catch (err) {
+                  console.warn('Could not attach individual audio track in recorder:', err);
+                }
+              }
+            });
+          }
+        });
+
+        this.connectedSources.forEach((conn, key) => {
+          if (!activeTrackKeys.has(key) || conn.track.readyState === 'ended' || !conn.track.enabled) {
+            try {
+              conn.source.disconnect();
+            } catch {}
+            this.connectedSources.delete(key);
+          }
+        });
+      };
+
+      syncTracks();
+      this.audioSyncInterval = window.setInterval(syncTracks, 1000);
+
+      // 720p HD (1280x720) canvas: optimal resolution providing crisp text and graphics while consuming 55% less bandwidth
+      // than 1080p, allowing both hardware and software encoders to maintain steady 30 FPS without dropping frames.
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = 1280;
+      this.canvas.height = 720;
+      const ctx = this.canvas.getContext('2d', { alpha: false, desynchronized: true })!;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'medium';
 
       const drawMeetingComposite = () => {
         if (this.status === 'stopped' || this.status === 'paused') return;
 
-        // Request next frame immediately to maintain smooth GPU updates
-        this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
-
-        const now = Date.now();
-        const elapsed = now - lastDrawTime;
-
-        // Only render the composite frame if the target interval (30 FPS) has been reached
-        if (elapsed < frameDelay - 2) {
-          return;
-        }
-
-        // Align lastDrawTime with frame boundaries, incorporating any timer drift
-        lastDrawTime = now - (elapsed % frameDelay);
-
         const w = this.canvas!.width;
         const h = this.canvas!.height;
 
-        // Dark background with gorgeous Islamic sanctuary theme colors
         ctx.fillStyle = '#06080d';
         ctx.fillRect(0, 0, w, h);
 
         const participantsList = this.options.getParticipants();
         const domElements = this.options.getVideoElements();
         const domMap = new Map(domElements.map((e) => [e.id, e.element]));
-
-        // Check & sync dynamic audio tracks + newly joined video streams
-        frameCount++;
-        if (frameCount % 15 === 0 && this.audioCtx && this.audioDestination) {
-          const activeTrackKeys = new Set<string>();
-
-          participantsList.forEach((p) => {
-            // Setup internal video element if missing and we have a stream with video tracks
-            if (p.stream && p.stream.getVideoTracks().length > 0 && !this.internalVideos.has(p.id)) {
-              const v = document.createElement('video');
-              v.srcObject = p.stream;
-              v.muted = true;
-              v.playsInline = true;
-              v.autoplay = true;
-              
-              const container = document.getElementById('recording-video-container');
-              if (container) {
-                container.appendChild(v);
-              }
-              
-              v.play().catch(() => {});
-              this.internalVideos.set(p.id, v);
-            }
-
-            // Sync dynamic Audio mixer tracks individually to capture microphone + tab audios simultaneously
-            if (p.stream) {
-              const audioTracks = p.stream.getAudioTracks().filter((t) => t.enabled && t.readyState === 'live');
-              audioTracks.forEach((track) => {
-                const trackKey = `${p.id}_${track.id}`;
-                activeTrackKeys.add(trackKey);
-
-                const existing = this.connectedSources.get(trackKey);
-                if (!existing) {
-                  try {
-                    const singleTrackStream = new MediaStream([track]);
-                    const source = this.audioCtx!.createMediaStreamSource(singleTrackStream);
-                    source.connect(this.audioDestination!);
-                    this.connectedSources.set(trackKey, { source, track });
-                  } catch (err) {
-                    console.warn('Could not attach individual audio track in recorder:', err);
-                  }
-                }
-              });
-            }
-          });
-
-          // Disconnect and remove any tracks that are no longer active
-          this.connectedSources.forEach((conn, key) => {
-            if (!activeTrackKeys.has(key) || conn.track.readyState === 'ended' || !conn.track.enabled) {
-              try {
-                conn.source.disconnect();
-              } catch {}
-              this.connectedSources.delete(key);
-            }
-          });
-        }
 
         const getVideoForParticipant = (pId: string, isVideoOff: boolean) => {
           if (isVideoOff) return null;
@@ -223,18 +208,12 @@ export class LocalMeetingRecorder {
           return this.internalVideos.get(pId) || null;
         };
 
-        // Determine if anyone is sharing a screen
         const screenSharer = participantsList.find((p) => p.isScreenSharing);
 
         if (screenSharer) {
-          // Dedicated full-frame shared screen recording:
-          // 1. Completely remove side panel so the shared screen utilizes the full canvas
-          // 2. Strict aspect ratio preservation (contain letterbox/pillarbox) without cropping or distortion
-          // 3. No obscuring labels or badges that degrade resolution or block screen content
           const screenVideo = getVideoForParticipant(screenSharer.id, screenSharer.isVideoOff);
           this.drawSharedScreen(ctx, screenVideo, screenSharer.name, w, h);
         } else {
-          // TRADITIONAL GRID LAYOUT based on participant count
           const count = participantsList.length;
 
           if (count === 0) {
@@ -299,22 +278,39 @@ export class LocalMeetingRecorder {
             });
           }
         }
-
-        lastFrameTime = Date.now();
       };
 
-      let lastFrameTime = Date.now();
+      // Unthrottled Web Worker timer:
+      // Browsers aggressively throttle requestAnimationFrame and window.setInterval to 0-1 FPS
+      // when the user is sharing another window or viewing another tab.
+      // Web Workers run in a background thread and are never throttled, ensuring steady 30 FPS encoding.
+      const workerScript = `
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (timer) clearInterval(timer);
+            timer = setInterval(function() {
+              self.postMessage('tick');
+            }, 33.33);
+          } else if (e.data === 'stop') {
+            if (timer) clearInterval(timer);
+            timer = null;
+          }
+        };
+      `;
 
-      // Start primary smooth GPU-accelerated drawing
-      this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
-
-      // Add a fallback setInterval backup loop that only acts if requestAnimationFrame has been throttled/suspended in background tab
-      this.canvasRenderInterval = window.setInterval(() => {
-        if (this.status === 'recording' && Date.now() - lastFrameTime > 250) {
-          // Tab is in the background, manually trigger a frame draw to keep the video encoding stream alive
+      try {
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        this.timerWorker = new Worker(workerUrl);
+        this.timerWorker.onmessage = () => {
           drawMeetingComposite();
-        }
-      }, 250);
+        };
+        this.timerWorker.postMessage('start');
+      } catch (e) {
+        console.warn('Web Worker timer unavailable, falling back to interval:', e);
+        this.canvasRenderInterval = window.setInterval(drawMeetingComposite, 33);
+      }
 
       const canvasStream = this.canvas.captureStream(30);
 
@@ -323,22 +319,25 @@ export class LocalMeetingRecorder {
       this.audioDestination.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
     }
 
-    // Preferred container and codecs for smooth encoding and universal playback
-    const preferredMimeType = 'video/webm;codecs=vp8,opus';
-    const fallbackMimeTypes = [
+    // Evaluate hardware-accelerated MP4 MIME type first, falling back to WebM
+    const candidateMimeTypes = [
+      'video/mp4;codecs=avc1.424028,mp4a.40.2',
+      'video/mp4;codecs=avc1.4d401f,mp4a.40.2',
+      'video/mp4;codecs=avc1,mp4a.40.2',
+      'video/mp4;codecs=h264,aac',
+      'video/mp4',
+      'video/webm;codecs=h264,opus',
       'video/webm;codecs=vp8,opus',
       'video/webm;codecs=vp9,opus',
       'video/webm',
-      'video/mp4',
     ];
 
     let selectedMimeType = '';
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(preferredMimeType)) {
-      selectedMimeType = preferredMimeType;
-    } else {
-      for (const type of fallbackMimeTypes) {
-        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+    if (typeof MediaRecorder !== 'undefined') {
+      for (const type of candidateMimeTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
           selectedMimeType = type;
+          console.info(`[LocalMeetingRecorder] Selected hardware/supported MIME type: ${type}`);
           break;
         }
       }
@@ -368,8 +367,8 @@ export class LocalMeetingRecorder {
       }
     };
 
-    // Use a higher timeSlice value of 5000ms to allow smooth chunk encoding and prevent frame skipping during long recordings
-    this.mediaRecorder.start(10000);
+    // Use 2000ms timeSlice: balances steady keyframe pacing with regular cluster emission, preventing frame skip
+    this.mediaRecorder.start(2000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
@@ -548,6 +547,7 @@ export class LocalMeetingRecorder {
       this.mediaRecorder.pause();
       this.pauseStartTime = Date.now();
       this.status = 'paused';
+      try { this.timerWorker?.postMessage('stop'); } catch {}
       this.options.onStatusChange?.('paused');
     }
   }
@@ -557,6 +557,7 @@ export class LocalMeetingRecorder {
       this.mediaRecorder.resume();
       this.pausedDuration += Date.now() - this.pauseStartTime;
       this.status = 'recording';
+      try { this.timerWorker?.postMessage('start'); } catch {}
       this.options.onStatusChange?.('recording');
     }
   }
@@ -566,6 +567,17 @@ export class LocalMeetingRecorder {
       this.status = 'stopped';
       this.options.onStatusChange?.('stopped');
 
+      if (this.audioSyncInterval) {
+        clearInterval(this.audioSyncInterval);
+        this.audioSyncInterval = null;
+      }
+      if (this.timerWorker) {
+        try {
+          this.timerWorker.postMessage('stop');
+          this.timerWorker.terminate();
+        } catch {}
+        this.timerWorker = null;
+      }
       if (this.timerInterval) {
         clearInterval(this.timerInterval);
         this.timerInterval = null;
@@ -610,18 +622,18 @@ export class LocalMeetingRecorder {
 
       if (!this.mediaRecorder) {
         resolve({
-          blob: new Blob([], { type: 'video/webm' }),
+          blob: new Blob([], { type: 'video/mp4' }),
           url: '',
           durationSeconds: 0,
           sizeBytes: 0,
           createdAt: Date.now(),
-          fileName: `majlis_${this.options.roomId}.webm`,
+          fileName: `majlis_${this.options.roomId}.mp4`,
         });
         return;
       }
 
       const finish = () => {
-        const finalType = this.mediaRecorder?.mimeType || 'video/webm';
+        const finalType = this.mediaRecorder?.mimeType || 'video/mp4';
         const finalBlob = new Blob(this.recordedChunks, { type: finalType });
         const finalUrl = URL.createObjectURL(finalBlob);
         const finalDuration = Math.max(
@@ -630,7 +642,7 @@ export class LocalMeetingRecorder {
         );
 
         const dateStr = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        const ext = finalType.includes('mp4') ? 'mp4' : 'webm';
+        const ext = finalType.toLowerCase().includes('mp4') ? 'mp4' : 'webm';
         const fileName = `majlis_${this.options.roomId}_${dateStr}.${ext}`;
 
         resolve({
