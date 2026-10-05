@@ -26,6 +26,7 @@ interface ModeratorHubModalProps {
   screenShareEnabled: boolean;
   participants: Participant[];
   spotlightUserId: string | null;
+  isPrimaryHost?: boolean;
   onToggleLock: () => void;
   onMuteAll: () => void;
   onLowerAllHands: () => void;
@@ -33,6 +34,7 @@ interface ModeratorHubModalProps {
   onToggleScreenSharePermission: (enabled: boolean) => void;
   onClearSpotlight: () => void;
   onToggleSpeaker: (userId: string) => void;
+  onToggleCoModerator?: (userId: string) => void;
   onBroadcastAnnouncement: (text: string) => void;
   onEndMeetingForAll: () => void;
   onClose: () => void;
@@ -44,6 +46,7 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
   screenShareEnabled,
   participants,
   spotlightUserId,
+  isPrimaryHost = true,
   onToggleLock,
   onMuteAll,
   onLowerAllHands,
@@ -51,6 +54,7 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
   onToggleScreenSharePermission,
   onClearSpotlight,
   onToggleSpeaker,
+  onToggleCoModerator,
   onBroadcastAnnouncement,
   onEndMeetingForAll,
   onClose,
@@ -69,6 +73,7 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
   };
 
   const speakers = participants.filter((p) => p.isSpeaker);
+  const coModerators = participants.filter((p) => p.isCoModerator && !p.isHost);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 select-none animate-in fade-in">
@@ -81,11 +86,11 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
               <h2 className="text-base font-bold text-[#1C1917] leading-tight flex items-center gap-2">
                 <span>Moderator Control Center</span>
                 <span className="px-1.5 py-0.2 bg-[#E9A83A] text-[#1E140C] text-[9px] font-bold rounded-sm uppercase tracking-wider">
-                  Moderator
+                  {isPrimaryHost ? 'Primary Moderator' : 'Co-Moderator'}
                 </span>
               </h2>
               <p className="text-[11px] text-[#8E7E73] mt-0.5">
-                Manage speakers, permissions, and stage for {participants.length} attendee{participants.length === 1 ? '' : 's'}
+                Manage co-moderators, speakers, permissions, and stage for {participants.length} attendee{participants.length === 1 ? '' : 's'}
               </p>
             </div>
           </div>
@@ -99,6 +104,66 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5 text-xs">
+          {/* CO-MODERATOR MANAGEMENT (Primary moderator only) */}
+          {isPrimaryHost && onToggleCoModerator && (
+            <div className="bg-[#FAF8F5] p-3.5 rounded-sm border border-[#E6DFD5] space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-[#1C1917] uppercase tracking-wider flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-[#075E4A]" /> Appoint Co-Moderators ({coModerators.length})
+                </h3>
+                <span className="text-[10px] text-[#8E7E73] font-semibold bg-[#EFECE4] px-2 py-0.5 rounded-sm">
+                  Authorized by Primary Mod
+                </span>
+              </div>
+
+              <p className="text-[11px] text-[#68594E]">
+                Co-moderators receive full moderator capabilities to mute mics, lock the room, and manage speaker stages.
+              </p>
+
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pt-1">
+                {participants
+                  .filter((p) => !p.isHost)
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between p-2 rounded-sm bg-[#FFFCF5] border border-[#E6DFD5] text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[#1C1917]">{p.name}</span>
+                        {p.isCoModerator && (
+                          <span className="px-1.5 py-0.2 bg-[#E9A83A] text-[#1E140C] text-[9px] font-bold rounded-sm">
+                            Co-Mod
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleCoModerator(p.id)}
+                        className={`px-3 py-1 rounded-sm text-[11px] font-bold transition-colors flex items-center gap-1 ${
+                          p.isCoModerator
+                            ? 'bg-[#075E4A] text-[#FFFCF5] border border-[#19A6A0]/40'
+                            : 'bg-[#EFECE4] text-[#302116] hover:bg-[#E2DDD3] border border-[#D9D0C3]'
+                        }`}
+                      >
+                        {p.isCoModerator ? (
+                          <>
+                            <UserCheck className="w-3 h-3 text-[#E9A83A]" /> Co-Moderator
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3 h-3 text-[#075E4A]" /> Appoint Co-Mod
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                {participants.filter((p) => !p.isHost).length === 0 && (
+                  <p className="text-[11px] text-[#8E7E73] italic py-1">No other attendees currently in sanctuary.</p>
+                )}
+              </div>
+            </div>
+          )}
           {/* SPEAKER MANAGEMENT SECTION */}
           <div className="bg-[#FAF8F5] p-3.5 rounded-sm border border-[#E6DFD5] space-y-3">
             <div className="flex items-center justify-between">

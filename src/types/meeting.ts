@@ -2,6 +2,7 @@ export interface Participant {
   id: string;
   name: string;
   isHost: boolean;
+  isCoModerator?: boolean;
   isLocal: boolean;
   isMuted: boolean;
   isVideoOff: boolean;

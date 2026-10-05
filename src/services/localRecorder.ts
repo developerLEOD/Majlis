@@ -31,7 +31,7 @@ export class LocalMeetingRecorder {
   private canvas: HTMLCanvasElement | null = null;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private delayedFramesQueue: ImageBitmap[] = [];
-  private readonly VIDEO_SYNC_DELAY_FRAMES = 6; // 6 frames @ 30fps = ~200ms delay compensation to align canvas video with mic/Web Audio processing latency
+  private readonly VIDEO_SYNC_DELAY_FRAMES = 11; // 11 frames @ 30fps = ~366ms delay compensation to align canvas video with mic/Web Audio processing latency
   private currentSizeBytes = 0;
   private internalVideos: Map<string, HTMLVideoElement> = new Map();
 
@@ -310,8 +310,11 @@ export class LocalMeetingRecorder {
                   frameToDraw.close();
                 }
               } else {
-                // Initial fill frames so canvas stream has immediate video without black screen
-                ctx.drawImage(bitmap, 0, 0);
+                // Keep drawing the initial buffered frame until delay queue is full to preserve audio-video synchronization
+                const initialFrame = this.delayedFramesQueue[0];
+                if (initialFrame) {
+                  ctx.drawImage(initialFrame, 0, 0);
+                }
               }
             })
             .catch(() => {

@@ -16,6 +16,8 @@ import {
   ArrowRightLeft,
   Sliders,
   Sparkles,
+  Shield,
+  ShieldCheck,
 } from 'lucide-react';
 import { Participant } from '../types/meeting';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
@@ -24,6 +26,8 @@ interface ParticipantsDrawerProps {
   participants: Participant[];
   currentUserId: string;
   isHost: boolean;
+  canModerate?: boolean;
+  isPrimaryHost?: boolean;
   isLocked: boolean;
   spotlightUserId?: string | null;
   onMuteAll: () => void;
@@ -32,6 +36,7 @@ interface ParticipantsDrawerProps {
   onLowerHand?: (userId: string) => void;
   onSpotlightUser?: (userId: string | null) => void;
   onToggleSpeaker?: (userId: string) => void;
+  onToggleCoModerator?: (userId: string) => void;
   onTransferHost?: (userId: string) => void;
   onKickUser: (userId: string) => void;
   onOpenFacilitatorHub?: () => void;
@@ -43,6 +48,8 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   participants,
   currentUserId,
   isHost,
+  canModerate = isHost,
+  isPrimaryHost = isHost,
   isLocked,
   spotlightUserId,
   onMuteAll,
@@ -51,6 +58,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   onLowerHand,
   onSpotlightUser,
   onToggleSpeaker,
+  onToggleCoModerator,
   onTransferHost,
   onKickUser,
   onOpenFacilitatorHub,
@@ -78,7 +86,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {isHost && onOpenFacilitatorHub && (
+          {canModerate && onOpenFacilitatorHub && (
             <button
               onClick={onOpenFacilitatorHub}
               className="p-1 px-2 text-[#E9A83A] bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 rounded-sm transition-colors text-xs font-semibold flex items-center gap-1 shadow-xs"
@@ -98,7 +106,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
       </div>
 
       {/* Host / Moderator Quick Bar */}
-      {isHost && (
+      {canModerate && (
         <div className="p-3 bg-[#1F140D] border-b border-[#2E1E14] flex items-center justify-between gap-2 text-xs">
           <button
             onClick={onMuteAll}
@@ -178,6 +186,11 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                         <Crown className="w-2.5 h-2.5" /> Moderator
                       </span>
                     )}
+                    {p.isCoModerator && !p.isHost && (
+                      <span className="flex items-center gap-1 text-[9px] font-bold text-[#1E140C] bg-[#E9A83A]/90 px-1 py-0.2 rounded-sm border border-[#E9A83A]">
+                        <Shield className="w-2.5 h-2.5 text-[#075E4A]" /> Co-Moderator
+                      </span>
+                    )}
                     {p.isSpeaker && (
                       <span className="flex items-center gap-1 text-[9px] font-bold text-[#FFFCF5] bg-[#075E4A] px-1 py-0.2 rounded-sm border border-[#19A6A0]/50">
                         <Sparkles className="w-2.5 h-2.5 text-[#E9A83A]" /> Speaker
@@ -209,7 +222,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                   {p.isVideoOff ? <VideoOff className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
                 </div>
 
-                {isHost && (
+                {canModerate && (
                   <div className="relative">
                     <button
                       onClick={() =>
@@ -221,7 +234,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                     </button>
 
                     {activeMenuId === p.id && (
-                      <div className="absolute right-0 top-7 z-50 w-48 bg-[#1F140D] border border-[#3A2619] rounded-sm py-1 text-xs text-[#FFFCF5] shadow-2xl">
+                      <div className="absolute right-0 top-7 z-50 w-52 bg-[#1F140D] border border-[#3A2619] rounded-sm py-1 text-xs text-[#FFFCF5] shadow-2xl">
                         {onToggleSpeaker && (
                           <button
                             onClick={() => {
@@ -232,6 +245,20 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                           >
                             <Sparkles className="w-3.5 h-3.5 text-[#E9A83A]" />
                             {p.isSpeaker ? 'Remove Speaker Role' : 'Assign as Speaker'}
+                          </button>
+                        )}
+
+                        {/* Co-Moderator Assignment - Only primary host can toggle */}
+                        {isPrimaryHost && onToggleCoModerator && !isMe && !p.isHost && (
+                          <button
+                            onClick={() => {
+                              onToggleCoModerator(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#19A6A0]"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-[#19A6A0]" />
+                            {p.isCoModerator ? 'Remove Co-Moderator Role' : 'Assign as Co-Moderator'}
                           </button>
                         )}
 
@@ -272,7 +299,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                           </button>
                         )}
 
-                        {onTransferHost && !isMe && (
+                        {isPrimaryHost && onTransferHost && !isMe && (
                           <button
                             onClick={() => {
                               if (confirm(`Transfer Moderator role to ${p.name}?`)) {
@@ -286,7 +313,7 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                           </button>
                         )}
 
-                        {!isMe && (
+                        {!isMe && !p.isHost && (
                           <button
                             onClick={() => {
                               onKickUser(p.id);

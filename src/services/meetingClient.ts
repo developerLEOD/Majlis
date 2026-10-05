@@ -33,6 +33,7 @@ export interface MeetingClientEvents {
   onScreenSharePermissionChanged?: (enabled: boolean) => void;
   onHandsLowered?: () => void;
   onPromotedToHost?: (message: string) => void;
+  onCoModeratorStatusChanged?: (isCoModerator: boolean, assignedBy?: string) => void;
   onAnnouncement?: (text: string, senderName?: string) => void;
   onSpeakerStatusChanged?: (userId: string, isSpeaker: boolean) => void;
   onUserStatusChanged: (data: {
@@ -41,6 +42,8 @@ export interface MeetingClientEvents {
     isVideoOff?: boolean;
     isScreenSharing?: boolean;
     handRaised?: boolean;
+    isCoModerator?: boolean;
+    isSpeaker?: boolean;
   }) => void;
   onError: (message: string) => void;
 }
@@ -73,6 +76,7 @@ export class MeetingClient {
   public userId: string = '';
   public userName: string = '';
   public isHost: boolean = false;
+  public isCoModerator: boolean = false;
   public sessionTitle: string = '';
 
   constructor(events: MeetingClientEvents) {
@@ -596,6 +600,8 @@ export class MeetingClient {
           id: user.id,
           name: user.name,
           isHost: user.isHost,
+          isCoModerator: user.isCoModerator,
+          isSpeaker: user.isSpeaker,
           isLocal: false,
           isMuted: user.isMuted,
           isVideoOff: user.isVideoOff,
@@ -613,6 +619,12 @@ export class MeetingClient {
           const isInitiator = this.userId > user.id;
           this.createPeerConnection(user.id, isInitiator);
         }
+        break;
+      }
+
+      case 'comoderator-status-changed': {
+        this.isCoModerator = !!message.isCoModerator;
+        this.events.onCoModeratorStatusChanged?.(this.isCoModerator, message.assignedBy);
         break;
       }
 
@@ -703,6 +715,8 @@ export class MeetingClient {
           isVideoOff: message.isVideoOff,
           isScreenSharing: message.isScreenSharing,
           handRaised: message.handRaised,
+          isCoModerator: message.isCoModerator,
+          isSpeaker: message.isSpeaker,
         });
         break;
       }
@@ -1004,16 +1018,16 @@ export class MeetingClient {
     this.firebaseSync?.updateParticipantStatus(status).catch(() => {});
   }
 
-  // Facilitator Controls
+  // Facilitator & Moderator Controls
   public hostMuteAll() {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-mute-all',
     });
   }
 
   public hostMuteUser(targetId: string) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-mute-user',
       targetId,
@@ -1021,14 +1035,14 @@ export class MeetingClient {
   }
 
   public hostLowerAllHands() {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-lower-all-hands',
     });
   }
 
   public hostLowerHand(targetId: string) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-lower-hand',
       targetId,
@@ -1036,7 +1050,7 @@ export class MeetingClient {
   }
 
   public hostSpotlight(targetId: string | null) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-spotlight',
       targetId,
@@ -1044,7 +1058,7 @@ export class MeetingClient {
   }
 
   public hostSetChatPermission(enabled: boolean) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-toggle-chat',
       enabled,
@@ -1052,7 +1066,7 @@ export class MeetingClient {
   }
 
   public hostSetScreenSharePermission(enabled: boolean) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-toggle-screenshare',
       enabled,
@@ -1060,10 +1074,19 @@ export class MeetingClient {
   }
 
   public hostBroadcastAnnouncement(text: string) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-announcement',
       text,
+    });
+  }
+
+  public hostToggleCoModerator(targetId: string, isCoModerator: boolean) {
+    if (!this.isHost) return; // Only primary moderator can assign or remove co-moderators
+    this.sendWsMessage({
+      type: 'host-toggle-comoderator',
+      targetId,
+      isCoModerator,
     });
   }
 
@@ -1076,7 +1099,7 @@ export class MeetingClient {
   }
 
   public hostKickUser(targetId: string) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-kick',
       targetId,
@@ -1088,7 +1111,7 @@ export class MeetingClient {
   }
 
   public hostToggleSpeaker(targetId: string, isSpeaker: boolean) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     this.sendWsMessage({
       type: 'host-toggle-speaker',
       targetId,
@@ -1097,7 +1120,7 @@ export class MeetingClient {
   }
 
   public hostToggleLock(forcedState?: boolean) {
-    if (!this.isHost) return;
+    if (!this.isHost && !this.isCoModerator) return;
     const nextLocked = forcedState !== undefined ? forcedState : !this.isLocked;
     this.isLocked = nextLocked;
     this.sendWsMessage({

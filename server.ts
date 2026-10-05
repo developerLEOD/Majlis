@@ -15,11 +15,13 @@ interface Participant {
   id: string;
   name: string;
   isHost: boolean;
+  isCoModerator?: boolean;
   socket: WebSocket;
   isMuted: boolean;
   isVideoOff: boolean;
   isScreenSharing: boolean;
   handRaised: boolean;
+  isSpeaker?: boolean;
   joinedAt: number;
 }
 
@@ -118,8 +120,8 @@ wss.on('connection', (ws: WebSocket) => {
             room = {
               id: roomId,
               title: title || (isHost ? `${userName}'s Majlis` : 'Live Majlis'),
-              hostId: userId,
-              hostName: userName || 'Facilitator',
+              hostId: isHost ? userId : '',
+              hostName: isHost ? (userName || 'Moderator') : 'Facilitator',
               locked: false,
               isRecording: false,
               participants: new Map(),
@@ -134,8 +136,8 @@ wss.on('connection', (ws: WebSocket) => {
             return;
           }
 
-          // If user joins with host status or room has no host
-          const becomesHost = isHost || room.hostId === userId || room.participants.size === 0;
+          // A user ONLY becomes host if isHost is explicitly true (verified authorized moderator)
+          const becomesHost = isHost === true;
           if (becomesHost) {
             room.hostId = userId;
             if (userName) room.hostName = userName;
@@ -146,6 +148,7 @@ wss.on('connection', (ws: WebSocket) => {
             id: userId,
             name: userName || 'Guest',
             isHost: becomesHost,
+            isCoModerator: false,
             socket: ws,
             isMuted: !!message.isMuted,
             isVideoOff: !!message.isVideoOff,
@@ -163,6 +166,8 @@ wss.on('connection', (ws: WebSocket) => {
               id: p.id,
               name: p.name,
               isHost: p.isHost,
+              isCoModerator: !!p.isCoModerator,
+              isSpeaker: !!p.isSpeaker,
               isMuted: p.isMuted,
               isVideoOff: p.isVideoOff,
               isScreenSharing: p.isScreenSharing,
@@ -174,6 +179,7 @@ wss.on('connection', (ws: WebSocket) => {
             roomId,
             userId,
             isHost: participant.isHost,
+            isCoModerator: participant.isCoModerator,
             title: room.title,
             hostName: room.hostName,
             locked: room.locked,
@@ -188,6 +194,8 @@ wss.on('connection', (ws: WebSocket) => {
               id: participant.id,
               name: participant.name,
               isHost: participant.isHost,
+              isCoModerator: participant.isCoModerator,
+              isSpeaker: participant.isSpeaker,
               isMuted: participant.isMuted,
               isVideoOff: participant.isVideoOff,
               isScreenSharing: participant.isScreenSharing,
@@ -299,7 +307,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           for (const [pId, p] of room.participants.entries()) {
@@ -318,7 +326,7 @@ wss.on('connection', (ws: WebSocket) => {
 
           broadcastToRoom(currentRoomId, null, {
             type: 'system-announcement',
-            text: 'Facilitator has muted all participants',
+            text: `${host?.name || 'Moderator'} muted all participants`,
           });
           break;
         }
@@ -329,7 +337,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
@@ -352,7 +360,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           for (const [pId, p] of room.participants.entries()) {
@@ -366,7 +374,7 @@ wss.on('connection', (ws: WebSocket) => {
 
           broadcastToRoom(currentRoomId, null, {
             type: 'hands-lowered',
-            message: 'Facilitator lowered all hands',
+            message: 'Moderator lowered all hands',
           });
           break;
         }
@@ -377,7 +385,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
           if (target) {
@@ -397,7 +406,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
@@ -413,7 +422,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
@@ -429,7 +438,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
@@ -445,7 +454,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
@@ -453,6 +462,41 @@ wss.on('connection', (ws: WebSocket) => {
             text: text.trim(),
             senderName: host?.name || 'Moderator',
           });
+          break;
+        }
+
+        case 'host-toggle-comoderator': {
+          const { targetId, isCoModerator } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          // Only primary host/moderator can appoint or revoke co-moderators
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.isCoModerator = !!isCoModerator;
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({
+                type: 'comoderator-status-changed',
+                isCoModerator: target.isCoModerator,
+                assignedBy: host.name,
+              }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              isCoModerator: target.isCoModerator,
+            });
+            broadcastToRoom(currentRoomId, null, {
+              type: 'system-announcement',
+              text: target.isCoModerator
+                ? `${target.name} has been assigned as Co-Moderator`
+                : `${target.name} is no longer a Co-Moderator`,
+            });
+            broadcastActiveRooms();
+          }
           break;
         }
 
@@ -494,7 +538,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
           if (target) {
@@ -523,11 +568,12 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
           if (target) {
+            target.isSpeaker = !!isSpeaker;
             broadcastToRoom(currentRoomId, null, {
               type: 'speaker-status-changed',
               userId: targetId,
@@ -542,7 +588,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
           room.locked = message.locked !== undefined ? !!message.locked : !room.locked;

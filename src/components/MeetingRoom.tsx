@@ -75,11 +75,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   onEndOrLeaveMeeting,
 }) => {
   const { isModerator } = useAuth();
-  const effectiveIsHost = initialIsHost || isModerator;
+  const effectiveIsHost = Boolean(isModerator && initialIsHost);
 
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isHost, setIsHost] = useState(effectiveIsHost);
+  const [isCoModerator, setIsCoModerator] = useState(false);
+  const canModerate = isHost || isCoModerator;
   const [isMuted, setIsMuted] = useState(initialMuted);
   const [isVideoOff, setIsVideoOff] = useState(initialVideoOff);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -369,6 +371,15 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         showNotification(msg || 'You are now the facilitator of this Majlis.');
       },
 
+      onCoModeratorStatusChanged: (coMod, assignedBy) => {
+        setIsCoModerator(coMod);
+        showNotification(
+          coMod
+            ? `You have been appointed as Co-Moderator by ${assignedBy || 'Moderator'}`
+            : 'Your Co-Moderator role has ended.'
+        );
+      },
+
       onAnnouncement: (text, sender) => {
         setStageAnnouncement({ text, senderName: sender });
       },
@@ -390,6 +401,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               isVideoOff: data.isVideoOff !== undefined ? data.isVideoOff : p.isVideoOff,
               isScreenSharing: data.isScreenSharing !== undefined ? data.isScreenSharing : p.isScreenSharing,
               handRaised: data.handRaised !== undefined ? data.handRaised : p.handRaised,
+              isCoModerator: data.isCoModerator !== undefined ? data.isCoModerator : p.isCoModerator,
+              isSpeaker: data.isSpeaker !== undefined ? data.isSpeaker : p.isSpeaker,
             };
           })
         );
@@ -753,6 +766,21 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           : `${target.name} removed from Speaker Stage`
       );
     }
+  };
+
+  const handleToggleCoModerator = (targetUserId: string) => {
+    const target = participants.find((p) => p.id === targetUserId);
+    if (!target) return;
+    const nextCoMod = !target.isCoModerator;
+    setParticipants((prev) =>
+      prev.map((p) => (p.id === targetUserId ? { ...p, isCoModerator: nextCoMod } : p))
+    );
+    clientRef.current?.hostToggleCoModerator(targetUserId, nextCoMod);
+    showNotification(
+      nextCoMod
+        ? `${target.name} appointed as Co-Moderator`
+        : `${target.name} removed from Co-Moderator role`
+    );
   };
 
   const handleToggleLock = () => {
@@ -1150,6 +1178,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             participants={participants}
             currentUserId={userId}
             isHost={isHost}
+            canModerate={canModerate}
+            isPrimaryHost={isHost}
             isLocked={isLocked}
             spotlightUserId={pinnedUserId}
             onMuteAll={handleMuteAll}
@@ -1158,6 +1188,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             onLowerHand={handleLowerHand}
             onSpotlightUser={handleSpotlightUser}
             onToggleSpeaker={handleToggleSpeaker}
+            onToggleCoModerator={handleToggleCoModerator}
             onTransferHost={handleTransferHost}
             onKickUser={handleKickUser}
             onOpenFacilitatorHub={() => setShowModeratorHub(true)}
@@ -1258,7 +1289,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           </button>
 
           {/* Moderator Hub Toolbar Button */}
-          {isHost && (
+          {canModerate && (
             <button
               onClick={() => setShowModeratorHub(true)}
               className="p-2 sm:p-2.5 rounded-sm bg-[#075E4A] hover:bg-[#05493A] border border-[#19A6A0]/50 text-[#FFFCF5] text-xs font-medium transition-colors flex items-center justify-center gap-1 shadow-xs"
@@ -1369,6 +1400,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           screenShareEnabled={screenShareEnabled}
           participants={participants}
           spotlightUserId={pinnedUserId}
+          isPrimaryHost={isHost}
           onToggleLock={handleToggleLock}
           onMuteAll={handleMuteAll}
           onLowerAllHands={handleLowerAllHands}
@@ -1376,6 +1408,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           onToggleScreenSharePermission={handleToggleScreenSharePermission}
           onClearSpotlight={() => handleSpotlightUser(null)}
           onToggleSpeaker={handleToggleSpeaker}
+          onToggleCoModerator={handleToggleCoModerator}
           onBroadcastAnnouncement={handleBroadcastAnnouncement}
           onEndMeetingForAll={handleEndMeetingForAll}
           onClose={() => setShowModeratorHub(false)}

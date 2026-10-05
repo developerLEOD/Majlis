@@ -13,7 +13,6 @@ import { auth } from '../firebase';
 export const ALLOWED_MODERATORS = [
   'araizhasan00@gmail.com',
   'thewisdomlounge1@gmail.com',
-  'developertwl@gmail.com',
 ];
 
 export const ALLOWED_FACILITATORS = ALLOWED_MODERATORS;

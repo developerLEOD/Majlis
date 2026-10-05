@@ -131,8 +131,8 @@ function MainAppContent() {
     localStorage.setItem('infinitymeet_username', chosenName);
     setPreJoinTarget(null);
 
-    // Grant host/moderator privileges if entering as host/creator or authenticated as moderator
-    const effectiveIsHost = params.isHost || isModerator;
+    // Grant host/moderator privileges ONLY if authenticated as authorized moderator AND entering with host mode enabled
+    const effectiveIsHost = Boolean(isModerator && params.isHost);
 
     setActiveMeeting({
       roomId: params.roomId,
@@ -176,11 +176,11 @@ function MainAppContent() {
       }),
     }).catch(console.warn);
 
-    // Transition host directly into pre-join screen with host flag enabled
+    // Transition host directly into pre-join screen with host flag enabled only if verified moderator
     setPreJoinTarget({
       roomId: newSession.roomId,
       title: newSession.title,
-      isHost: true,
+      isHost: isModerator,
     });
   };
 

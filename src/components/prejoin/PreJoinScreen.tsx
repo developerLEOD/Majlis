@@ -40,10 +40,17 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   const [isMicOn, setIsMicOn] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [micVolume, setMicVolume] = useState(0);
-  const [isHost, setIsHost] = useState(isHostDefault && isModerator);
+  const [isHost, setIsHost] = useState(Boolean(isHostDefault && isModerator));
   const [showHostNotice, setShowHostNotice] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    // If auth state changes, update host state accordingly
+    if (!isModerator) {
+      setIsHost(false);
+    }
+  }, [isModerator]);
 
   useEffect(() => {
     let active = true;
@@ -107,7 +114,12 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   }, [stream, isMicOn]);
 
   const handleToggleHostMode = () => {
-    setIsHost(!isHost);
+    if (!isModerator) {
+      setShowHostNotice(true);
+      setIsHost(false);
+      return;
+    }
+    setIsHost((prev) => !prev);
     setShowHostNotice(false);
   };
 
@@ -116,14 +128,15 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
     if (isConnecting) return;
     setIsConnecting(true);
 
-    const finalName = userName.trim() || (isHost ? 'Moderator' : 'Seeker');
+    const willBeHost = Boolean(isModerator && isHost);
+    const finalName = userName.trim() || (willBeHost ? 'Moderator' : 'Seeker');
     localStorage.setItem('infinitymeet_username', finalName);
 
     setTimeout(() => {
       onEnterMeeting({
         roomId: roomId.trim().toLowerCase(),
         userName: finalName,
-        isHost: isHost || isModerator,
+        isHost: willBeHost,
         stream,
         isMuted: !isMicOn,
         isVideoOff: !isCameraOn,
@@ -277,7 +290,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
 
           {showHostNotice && !isModerator && (
             <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-sm text-[11px] text-[#302116] space-y-1.5">
-              <p>Moderator privileges require an authorized moderator account.</p>
+              <p>Only authorized moderators (<strong>araizhasan00@gmail.com</strong> &amp; <strong>thewisdomlounge1@gmail.com</strong>) can enter as moderators.</p>
               {onOpenAuthModal && (
                 <button
                   type="button"
