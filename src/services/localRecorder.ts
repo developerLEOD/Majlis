@@ -369,7 +369,7 @@ export class LocalMeetingRecorder {
     };
 
     // Use a higher timeSlice value of 5000ms to allow smooth chunk encoding and prevent frame skipping during long recordings
-    this.mediaRecorder.start(100);
+    this.mediaRecorder.start(10000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
