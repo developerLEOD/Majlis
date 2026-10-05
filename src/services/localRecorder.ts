@@ -365,8 +365,8 @@ export class LocalMeetingRecorder {
     }
 
     const mimeTypes = [
-      'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9,opus',
       'video/webm',
       'video/mp4',
     ];
@@ -379,10 +379,11 @@ export class LocalMeetingRecorder {
       }
     }
 
-    this.mediaRecorder = new MediaRecorder(
-      recordingStream,
-      selectedMimeType ? { mimeType: selectedMimeType } : undefined
-    );
+    this.mediaRecorder = new MediaRecorder(recordingStream, {
+      mimeType: selectedMimeType || undefined,
+      videoBitsPerSecond: 2500000, // Consistent 2.5 Mbps for high-fidelity 720p 30fps
+      audioBitsPerSecond: 128000,  // High-quality 128 kbps audio
+    });
 
     this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
       if (event.data && event.data.size > 0) {
@@ -398,7 +399,7 @@ export class LocalMeetingRecorder {
       }
     };
 
-    this.mediaRecorder.start(1000);
+    this.mediaRecorder.start(5000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
