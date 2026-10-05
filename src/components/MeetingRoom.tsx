@@ -902,13 +902,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             <span>{formatTime(meetingSeconds)}</span>
           </div>
 
-          {/* Recording Badge */}
-          {recordingStatus !== 'idle' && (
-            <div className="flex items-center gap-1 bg-[#A83245] border border-[#C44056] px-2 py-1 rounded-sm text-white font-mono text-[10px] sm:text-xs shadow-xs shrink-0">
-              <span className={`w-1.5 h-1.5 rounded-full bg-white ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`} />
-              <span>REC {formatTime(recordingDuration)}</span>
-            </div>
-          )}
+
         </div>
       </header>
 
