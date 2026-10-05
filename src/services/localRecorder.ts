@@ -322,25 +322,6 @@ export class LocalMeetingRecorder {
           }
         }
 
-        // Live Recording Overlay Watermark
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
-        ctx.beginPath();
-        ctx.roundRect(w - 280, 24, 256, 36, [8]);
-        ctx.fill();
-
-        ctx.fillStyle = Math.floor(Date.now() / 600) % 2 === 0 ? '#ef4444' : '#f87171';
-        ctx.beginPath();
-        ctx.arc(w - 262, 42, 6, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '600 13px system-ui, sans-serif';
-        ctx.textAlign = 'left';
-        const elapsedSec = Math.floor((Date.now() - this.startTime - this.pausedDuration) / 1000);
-        const mins = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
-        const secs = String(elapsedSec % 60).padStart(2, '0');
-        ctx.fillText(`REC ${mins}:${secs} • Majlis`, w - 246, 46);
-
         lastFrameTime = Date.now();
       };
 
