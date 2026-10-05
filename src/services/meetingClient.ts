@@ -34,6 +34,7 @@ export interface MeetingClientEvents {
   onHandsLowered?: () => void;
   onPromotedToHost?: (message: string) => void;
   onAnnouncement?: (text: string, senderName?: string) => void;
+  onSpeakerStatusChanged?: (userId: string, isSpeaker: boolean) => void;
   onUserStatusChanged: (data: {
     userId: string;
     isMuted?: boolean;
@@ -198,7 +199,9 @@ export class MeetingClient {
 
       // Listen to reactions via Firebase
       this.firebaseSync.subscribeToReactions((react) => {
-        this.events.onReaction(react);
+        if (react.senderId !== this.userId) {
+          this.events.onReaction(react);
+        }
       });
     } catch (e) {
       console.warn('Firebase sync initialization warning:', e);
@@ -614,12 +617,19 @@ export class MeetingClient {
       }
 
       case 'reaction': {
-        this.events.onReaction({
-          id: message.id,
-          senderId: message.senderId,
-          senderName: message.senderName,
-          emoji: message.emoji,
-        });
+        if (message.senderId !== this.userId) {
+          this.events.onReaction({
+            id: message.id,
+            senderId: message.senderId,
+            senderName: message.senderName,
+            emoji: message.emoji,
+          });
+        }
+        break;
+      }
+
+      case 'speaker-status-changed': {
+        this.events.onSpeakerStatusChanged?.(message.userId, !!message.isSpeaker);
         break;
       }
 
@@ -898,9 +908,13 @@ export class MeetingClient {
     this.firebaseSync?.sendChatMessage(message).catch(() => {});
   }
 
-  public sendReaction(emoji: string) {
+  public setHost(isHost: boolean) {
+    this.isHost = isHost;
+  }
+
+  public sendReaction(emoji: string, existingId?: string) {
     const reaction: ReactionItem = {
-      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: existingId || ('react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
       senderId: this.userId,
       senderName: this.userName,
       emoji,
@@ -1010,11 +1024,29 @@ export class MeetingClient {
     this.events.onUserLeft(targetId);
   }
 
-  public hostToggleLock() {
+  public hostToggleSpeaker(targetId: string, isSpeaker: boolean) {
     if (!this.isHost) return;
     this.sendWsMessage({
-      type: 'host-toggle-lock',
+      type: 'host-toggle-speaker',
+      targetId,
+      isSpeaker,
     });
+  }
+
+  public hostToggleLock(forcedState?: boolean) {
+    if (!this.isHost) return;
+    const nextLocked = forcedState !== undefined ? forcedState : !this.isLocked;
+    this.isLocked = nextLocked;
+    this.sendWsMessage({
+      type: 'host-toggle-lock',
+      locked: nextLocked,
+    });
+    this.firebaseSync?.setRoom({
+      title: this.sessionTitle,
+      hostName: this.userName,
+      hostId: this.userId,
+      locked: nextLocked,
+    }).catch(() => {});
   }
 
   public notifyRecording(isRecording: boolean) {

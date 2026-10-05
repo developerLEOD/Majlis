@@ -131,8 +131,8 @@ function MainAppContent() {
     localStorage.setItem('infinitymeet_username', chosenName);
     setPreJoinTarget(null);
 
-    // Strict check: only grant host status if the user's account is an authorized moderator!
-    const effectiveIsHost = params.isHost && isModerator;
+    // Grant host/moderator privileges if entering as host/creator or authenticated as moderator
+    const effectiveIsHost = params.isHost || isModerator;
 
     setActiveMeeting({
       roomId: params.roomId,

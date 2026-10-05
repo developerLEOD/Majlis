@@ -247,7 +247,7 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'reaction': {
-          const { emoji } = message;
+          const { emoji, id } = message;
           if (!currentRoomId || !currentUserId || !emoji) return;
           const room = rooms.get(currentRoomId);
           if (!room) return;
@@ -259,11 +259,12 @@ wss.on('connection', (ws: WebSocket) => {
             senderId: sender.id,
             senderName: sender.name,
             emoji,
-            id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+            id: id || ('react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6)),
           };
 
-          for (const participant of room.participants.values()) {
-            if (participant.socket.readyState === WebSocket.OPEN) {
+          // Send only to OTHER participants so the sender does not receive a duplicate reaction
+          for (const [pId, participant] of room.participants.entries()) {
+            if (pId !== currentUserId && participant.socket.readyState === WebSocket.OPEN) {
               participant.socket.send(JSON.stringify(reactionPayload));
             }
           }
@@ -499,6 +500,25 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'host-toggle-speaker': {
+          const { targetId, isSpeaker } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          if (!host?.isHost) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            broadcastToRoom(currentRoomId, null, {
+              type: 'speaker-status-changed',
+              userId: targetId,
+              isSpeaker: !!isSpeaker,
+            });
+          }
+          break;
+        }
+
         case 'host-toggle-lock': {
           if (!currentRoomId || !currentUserId) return;
           const room = rooms.get(currentRoomId);
@@ -506,7 +526,7 @@ wss.on('connection', (ws: WebSocket) => {
           const host = room.participants.get(currentUserId);
           if (!host?.isHost) return;
 
-          room.locked = !room.locked;
+          room.locked = message.locked !== undefined ? !!message.locked : !room.locked;
           broadcastToRoom(currentRoomId, null, {
             type: 'room-lock-changed',
             locked: room.locked,

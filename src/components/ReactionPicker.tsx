@@ -28,6 +28,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
   onClose,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastActionTimeRef = useRef<number>(0);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -39,6 +40,24 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [onClose]);
 
+  const handleEmojiClick = (emoji: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastActionTimeRef.current < 350) return;
+    lastActionTimeRef.current = now;
+    onSelectReaction(emoji);
+  };
+
+  const handleHandRaiseClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (now - lastActionTimeRef.current < 350) return;
+    lastActionTimeRef.current = now;
+    onToggleHandRaise();
+  };
+
   return (
     <div
       ref={containerRef}
@@ -47,7 +66,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
       {/* Hand Raise Button */}
       <div className="pb-2.5 mb-2.5 border-b border-[#2E1E14]">
         <button
-          onClick={onToggleHandRaise}
+          onClick={handleHandRaiseClick}
           className={`flex items-center gap-2 px-3 py-2 rounded-sm text-xs font-semibold transition-colors w-full justify-center shadow-xs ${
             handRaised
               ? 'bg-[#E5A93C] text-[#1F160F] border border-[#C48C28] font-bold'
@@ -64,7 +83,7 @@ export const ReactionPicker: React.FC<ReactionPickerProps> = ({
         {POPULAR_REACTIONS.map((item) => (
           <button
             key={item.emoji}
-            onClick={() => onSelectReaction(item.emoji)}
+            onClick={(e) => handleEmojiClick(item.emoji, e)}
             className="w-11 h-9 rounded-sm flex items-center justify-center text-xl hover:bg-[#24170F] transition-colors cursor-pointer"
             title={item.label}
           >

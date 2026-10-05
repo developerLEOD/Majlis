@@ -107,13 +107,8 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   }, [stream, isMicOn]);
 
   const handleToggleHostMode = () => {
-    if (!isModerator) {
-      setShowHostNotice(true);
-      setIsHost(false);
-    } else {
-      setIsHost(!isHost);
-      setShowHostNotice(false);
-    }
+    setIsHost(!isHost);
+    setShowHostNotice(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -128,7 +123,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
       onEnterMeeting({
         roomId: roomId.trim().toLowerCase(),
         userName: finalName,
-        isHost: isHost && isModerator,
+        isHost: isHost || isModerator,
         stream,
         isMuted: !isMicOn,
         isVideoOff: !isCameraOn,

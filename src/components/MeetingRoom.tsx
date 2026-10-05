@@ -281,6 +281,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onReaction: (reaction) => {
+        if (reaction.senderId === userId) return;
         setActiveReactions((prev) => {
           if (prev.some((r) => r.id === reaction.id)) return prev;
           return [...prev, reaction];
@@ -357,6 +358,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onAnnouncement: (text, sender) => {
         setStageAnnouncement({ text, senderName: sender });
+      },
+
+      onSpeakerStatusChanged: (targetId, isSpeaker) => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === targetId ? { ...p, isSpeaker } : p))
+        );
       },
 
       onUserStatusChanged: (data) => {
@@ -579,6 +586,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (clientRef.current) {
+      clientRef.current.setHost(isHost);
+    }
+  }, [isHost]);
+
   const toggleHandRaise = () => {
     const nextState = !handRaised;
     setHandRaised(nextState);
@@ -586,20 +599,23 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       prev.map((p) => (p.isLocal ? { ...p, handRaised: nextState } : p))
     );
     clientRef.current?.updateStatus({ handRaised: nextState });
-    clientRef.current?.sendReaction(nextState ? '✋' : '👋');
   };
 
   const handleSendReaction = (emoji: string) => {
-    clientRef.current?.sendReaction(emoji);
+    const reactionId = 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newReaction: ReactionItem = {
-      id: 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: reactionId,
       senderId: userId,
       senderName: userName,
       emoji,
     };
-    setActiveReactions((prev) => [...prev, newReaction]);
+    setActiveReactions((prev) => {
+      if (prev.some((r) => r.id === reactionId)) return prev;
+      return [...prev, newReaction];
+    });
+    clientRef.current?.sendReaction(emoji, reactionId);
     setTimeout(() => {
-      setActiveReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+      setActiveReactions((prev) => prev.filter((r) => r.id !== reactionId));
     }, 3200);
   };
 
@@ -678,16 +694,19 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   // Facilitator Moderation Handlers
   const handleMuteAll = () => {
     clientRef.current?.hostMuteAll();
+    setParticipants((prev) => prev.map((p) => (!p.isLocal ? { ...p, isMuted: true } : p)));
     showNotification('Muted all attendee microphones');
   };
 
   const handleMuteUser = (targetUserId: string) => {
     clientRef.current?.hostMuteUser(targetUserId);
+    setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isMuted: true } : p)));
     showNotification('Microphone muted for attendee');
   };
 
   const handleLowerHand = (targetUserId: string) => {
     clientRef.current?.hostLowerHand(targetUserId);
+    setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, handRaised: false } : p)));
   };
 
   const handleLowerAllHands = () => {
@@ -703,31 +722,38 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   };
 
   const handleToggleSpeaker = (targetUserId: string) => {
-    setParticipants((prev) =>
-      prev.map((p) => (p.id === targetUserId ? { ...p, isSpeaker: !p.isSpeaker } : p))
-    );
     const target = participants.find((p) => p.id === targetUserId);
+    const nextIsSpeaker = !target?.isSpeaker;
+    setParticipants((prev) =>
+      prev.map((p) => (p.id === targetUserId ? { ...p, isSpeaker: nextIsSpeaker } : p))
+    );
+    clientRef.current?.hostToggleSpeaker(targetUserId, nextIsSpeaker);
     if (target) {
       showNotification(
-        target.isSpeaker
-          ? `${target.name} removed from Speaker Stage`
-          : `${target.name} assigned as Speaker`
+        nextIsSpeaker
+          ? `${target.name} assigned as Speaker`
+          : `${target.name} removed from Speaker Stage`
       );
     }
   };
 
   const handleToggleLock = () => {
-    clientRef.current?.hostToggleLock();
+    const nextLocked = !isLocked;
+    setIsLocked(nextLocked);
+    clientRef.current?.hostToggleLock(nextLocked);
+    showNotification(nextLocked ? 'Sanctuary locked to new entries' : 'Sanctuary unlocked');
   };
 
   const handleToggleChatPermission = (enabled: boolean) => {
     setChatEnabled(enabled);
     clientRef.current?.hostSetChatPermission(enabled);
+    showNotification(enabled ? 'Discussion chat enabled' : 'Discussion chat paused by moderator');
   };
 
   const handleToggleScreenSharePermission = (enabled: boolean) => {
     setScreenShareEnabled(enabled);
     clientRef.current?.hostSetScreenSharePermission(enabled);
+    showNotification(enabled ? 'Attendee screen sharing enabled' : 'Screen sharing restricted to moderator');
   };
 
   const handleBroadcastAnnouncement = (text: string) => {
@@ -744,6 +770,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
   const handleKickUser = (targetUserId: string) => {
     clientRef.current?.hostKickUser(targetUserId);
+    setParticipants((prev) => prev.filter((p) => p.id !== targetUserId));
     showNotification('Attendee removed from Majlis');
   };
 
