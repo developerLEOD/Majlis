@@ -29,6 +29,9 @@ export class LocalMeetingRecorder {
   private audioCleanup: (() => void) | null = null;
   private options: RecorderOptions;
   private canvas: HTMLCanvasElement | null = null;
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private delayedFramesQueue: ImageBitmap[] = [];
+  private readonly VIDEO_SYNC_DELAY_FRAMES = 6; // 6 frames @ 30fps = ~200ms delay compensation to align canvas video with mic/Web Audio processing latency
   private currentSizeBytes = 0;
   private internalVideos: Map<string, HTMLVideoElement> = new Map();
 
@@ -178,8 +181,7 @@ export class LocalMeetingRecorder {
       syncTracks();
       this.audioSyncInterval = window.setInterval(syncTracks, 1000);
 
-      // 720p HD (1280x720) canvas: optimal resolution providing crisp text and graphics while consuming 55% less bandwidth
-      // than 1080p, allowing both hardware and software encoders to maintain steady 30 FPS without dropping frames.
+      // 720p HD (1280x720) recording canvas passed to captureStream(30)
       this.canvas = document.createElement('canvas');
       this.canvas.width = 1280;
       this.canvas.height = 720;
@@ -187,14 +189,24 @@ export class LocalMeetingRecorder {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'medium';
 
+      // Offscreen composition canvas where frames are drawn in real-time
+      this.offscreenCanvas = document.createElement('canvas');
+      this.offscreenCanvas.width = 1280;
+      this.offscreenCanvas.height = 720;
+      const offCtx = this.offscreenCanvas.getContext('2d', { alpha: false, desynchronized: true })!;
+      offCtx.imageSmoothingEnabled = true;
+      offCtx.imageSmoothingQuality = 'medium';
+
+      this.delayedFramesQueue = [];
+
       const drawMeetingComposite = () => {
-        if (this.status === 'stopped' || this.status === 'paused') return;
+        if (this.status === 'stopped' || this.status === 'paused' || !this.offscreenCanvas) return;
 
-        const w = this.canvas!.width;
-        const h = this.canvas!.height;
+        const w = this.offscreenCanvas.width;
+        const h = this.offscreenCanvas.height;
 
-        ctx.fillStyle = '#06080d';
-        ctx.fillRect(0, 0, w, h);
+        offCtx.fillStyle = '#06080d';
+        offCtx.fillRect(0, 0, w, h);
 
         const participantsList = this.options.getParticipants();
         const domElements = this.options.getVideoElements();
@@ -211,28 +223,28 @@ export class LocalMeetingRecorder {
 
         if (screenSharer) {
           const screenVideo = getVideoForParticipant(screenSharer.id, screenSharer.isVideoOff);
-          this.drawSharedScreen(ctx, screenVideo, screenSharer.name, w, h);
+          this.drawSharedScreen(offCtx, screenVideo, screenSharer.name, w, h);
         } else {
           const count = participantsList.length;
 
           if (count === 0) {
-            ctx.fillStyle = '#101625';
-            ctx.fillRect(40, 40, w - 80, h - 80);
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '24px system-ui, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('Majlis Session in Progress', w / 2, h / 2);
+            offCtx.fillStyle = '#101625';
+            offCtx.fillRect(40, 40, w - 80, h - 80);
+            offCtx.fillStyle = '#94a3b8';
+            offCtx.font = '24px system-ui, sans-serif';
+            offCtx.textAlign = 'center';
+            offCtx.fillText('Majlis Session in Progress', w / 2, h / 2);
           } else if (count === 1) {
             const p = participantsList[0];
             const video = getVideoForParticipant(p.id, p.isVideoOff);
-            this.drawVideoTile(ctx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
+            this.drawVideoTile(offCtx, video, p.name, p.isMuted, 20, 20, w - 40, h - 40);
           } else if (count === 2) {
             const tileW = (w - 60) / 2;
             const tileH = h - 60;
             const p0 = participantsList[0];
             const p1 = participantsList[1];
             this.drawVideoTile(
-              ctx,
+              offCtx,
               getVideoForParticipant(p0.id, p0.isVideoOff),
               p0.name,
               p0.isMuted,
@@ -242,7 +254,7 @@ export class LocalMeetingRecorder {
               tileH
             );
             this.drawVideoTile(
-              ctx,
+              offCtx,
               getVideoForParticipant(p1.id, p1.isVideoOff),
               p1.name,
               p1.isMuted,
@@ -260,7 +272,7 @@ export class LocalMeetingRecorder {
               const x = 20 + col * (tileW + 20);
               const y = 20 + row * (tileH + 20);
               const video = getVideoForParticipant(p.id, p.isVideoOff);
-              this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
+              this.drawVideoTile(offCtx, video, p.name, p.isMuted, x, y, tileW, tileH);
             });
           } else {
             const cols = 3;
@@ -273,9 +285,42 @@ export class LocalMeetingRecorder {
               const x = 20 + col * (tileW + 20);
               const y = 20 + row * (tileH + 20);
               const video = getVideoForParticipant(p.id, p.isVideoOff);
-              this.drawVideoTile(ctx, video, p.name, p.isMuted, x, y, tileW, tileH);
+              this.drawVideoTile(offCtx, video, p.name, p.isMuted, x, y, tileW, tileH);
             });
           }
+        }
+      };
+
+      // Push composite frame with latency compensation queue to eliminate the ~200ms audio-lag / video-ahead discrepancy
+      const pushCompositeFrame = () => {
+        drawMeetingComposite();
+
+        if (typeof window !== 'undefined' && 'createImageBitmap' in window && this.offscreenCanvas) {
+          createImageBitmap(this.offscreenCanvas)
+            .then((bitmap) => {
+              if (this.status === 'stopped' || !this.canvas) {
+                bitmap.close();
+                return;
+              }
+              this.delayedFramesQueue.push(bitmap);
+              if (this.delayedFramesQueue.length > this.VIDEO_SYNC_DELAY_FRAMES) {
+                const frameToDraw = this.delayedFramesQueue.shift();
+                if (frameToDraw) {
+                  ctx.drawImage(frameToDraw, 0, 0);
+                  frameToDraw.close();
+                }
+              } else {
+                // Initial fill frames so canvas stream has immediate video without black screen
+                ctx.drawImage(bitmap, 0, 0);
+              }
+            })
+            .catch(() => {
+              if (this.offscreenCanvas && this.canvas) {
+                ctx.drawImage(this.offscreenCanvas, 0, 0);
+              }
+            });
+        } else if (this.offscreenCanvas && this.canvas) {
+          ctx.drawImage(this.offscreenCanvas, 0, 0);
         }
       };
 
@@ -290,7 +335,7 @@ export class LocalMeetingRecorder {
             if (timer) clearInterval(timer);
             timer = setInterval(function() {
               self.postMessage('tick');
-            }, 33.33);
+            }, 33.333);
           } else if (e.data === 'stop') {
             if (timer) clearInterval(timer);
             timer = null;
@@ -303,16 +348,16 @@ export class LocalMeetingRecorder {
         const workerUrl = URL.createObjectURL(blob);
         this.timerWorker = new Worker(workerUrl);
         this.timerWorker.onmessage = () => {
-          drawMeetingComposite();
+          pushCompositeFrame();
         };
         this.timerWorker.postMessage('start');
       } catch (e) {
         console.warn('Web Worker timer unavailable, falling back to interval:', e);
-        this.canvasRenderInterval = window.setInterval(drawMeetingComposite, 33);
+        this.canvasRenderInterval = window.setInterval(pushCompositeFrame, 33);
       }
 
       // Draw initial frame synchronously so canvas stream has a valid video frame ready immediately
-      drawMeetingComposite();
+      pushCompositeFrame();
 
       const canvasStream = this.canvas.captureStream(30);
 
@@ -621,6 +666,13 @@ export class LocalMeetingRecorder {
         this.audioCtx = null;
       }
       this.audioDestination = null;
+
+      // Dispose delayed frame bitmaps and offscreen canvas
+      this.delayedFramesQueue.forEach((bmp) => {
+        try { bmp.close(); } catch {}
+      });
+      this.delayedFramesQueue = [];
+      this.offscreenCanvas = null;
 
       if (!this.mediaRecorder) {
         resolve({
