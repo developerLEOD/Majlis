@@ -128,9 +128,26 @@ export class LocalMeetingRecorder {
       const ctx = this.canvas.getContext('2d')!;
 
       let frameCount = 0;
+      const fps = 30;
+      const frameDelay = 1000 / fps; // 33.33ms
+      let lastDrawTime = Date.now();
 
       const drawMeetingComposite = () => {
         if (this.status === 'stopped' || this.status === 'paused') return;
+
+        // Request next frame immediately to maintain smooth GPU updates
+        this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
+
+        const now = Date.now();
+        const elapsed = now - lastDrawTime;
+
+        // Only render the composite frame if the target interval (30 FPS) has been reached
+        if (elapsed < frameDelay - 2) {
+          return;
+        }
+
+        // Align lastDrawTime with frame boundaries, incorporating any timer drift
+        lastDrawTime = now - (elapsed % frameDelay);
 
         const w = this.canvas!.width;
         const h = this.canvas!.height;
@@ -325,7 +342,6 @@ export class LocalMeetingRecorder {
         ctx.fillText(`REC ${mins}:${secs} • Majlis`, w - 246, 46);
 
         lastFrameTime = Date.now();
-        this.canvasAnimFrame = requestAnimationFrame(drawMeetingComposite);
       };
 
       let lastFrameTime = Date.now();
@@ -382,7 +398,7 @@ export class LocalMeetingRecorder {
       }
     };
 
-    this.mediaRecorder.start();
+    this.mediaRecorder.start(1000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
 
