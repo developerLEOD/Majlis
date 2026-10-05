@@ -123,8 +123,8 @@ export class LocalMeetingRecorder {
       });
 
       this.canvas = document.createElement('canvas');
-      this.canvas.width = 1280;
-      this.canvas.height = 720;
+      this.canvas.width = 1920;
+      this.canvas.height = 1080;
       const ctx = this.canvas.getContext('2d')!;
 
       let frameCount = 0;
@@ -223,38 +223,16 @@ export class LocalMeetingRecorder {
           return this.internalVideos.get(pId) || null;
         };
 
-        // Determine if anyone is sharing a screen to use our premium presentation layout
+        // Determine if anyone is sharing a screen
         const screenSharer = participantsList.find((p) => p.isScreenSharing);
 
         if (screenSharer) {
-          // CINEMATIC SPLIT PRESENTATION LAYOUT
-          const leftW = Math.floor(w * 0.75) - 30;
-          const leftH = h - 40;
-          const leftX = 20;
-          const leftY = 20;
-
+          // Dedicated full-frame shared screen recording:
+          // 1. Completely remove side panel so the shared screen utilizes the full canvas
+          // 2. Strict aspect ratio preservation (contain letterbox/pillarbox) without cropping or distortion
+          // 3. No obscuring labels or badges that degrade resolution or block screen content
           const screenVideo = getVideoForParticipant(screenSharer.id, screenSharer.isVideoOff);
-          this.drawVideoTile(ctx, screenVideo, `${screenSharer.name} (Shared Screen)`, screenSharer.isMuted, leftX, leftY, leftW, leftH);
-
-          // Right sidebar with participant cameras stacked vertically
-          const otherParticipants = participantsList.filter((p) => p.id !== screenSharer.id);
-          const rightX = leftX + leftW + 20;
-          const rightW = w - rightX - 20;
-          const sidebarCount = otherParticipants.length;
-
-          if (sidebarCount > 0) {
-            const gap = 15;
-            const availableHeight = h - 40 - (gap * (sidebarCount - 1));
-            const tileH = Math.max(80, Math.min(180, Math.floor(availableHeight / sidebarCount)));
-
-            otherParticipants.forEach((p, idx) => {
-              const tileY = 20 + idx * (tileH + gap);
-              if (tileY + tileH <= h - 20) {
-                const pVideo = getVideoForParticipant(p.id, p.isVideoOff);
-                this.drawVideoTile(ctx, pVideo, p.name, p.isMuted, rightX, tileY, rightW, tileH);
-              }
-            });
-          }
+          this.drawSharedScreen(ctx, screenVideo, screenSharer.name, w, h);
         } else {
           // TRADITIONAL GRID LAYOUT based on participant count
           const count = participantsList.length;
@@ -362,7 +340,7 @@ export class LocalMeetingRecorder {
 
     this.mediaRecorder = new MediaRecorder(recordingStream, {
       mimeType: selectedMimeType || undefined,
-      videoBitsPerSecond: 2500000, // Consistent 2.5 Mbps for high-fidelity 720p 30fps
+      videoBitsPerSecond: 3500000, // 3.5 Mbps for crystal-clear 1080p 30fps screen share & composite
       audioBitsPerSecond: 128000,  // High-quality 128 kbps audio
     });
 
@@ -393,6 +371,75 @@ export class LocalMeetingRecorder {
         this.options.onTick(currentDuration, this.currentSizeBytes);
       }
     }, 1000);
+  }
+
+  private drawSharedScreen(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement | null,
+    name: string,
+    w: number,
+    h: number
+  ) {
+    // Fill canvas background with clean solid black for letterbox/pillarbox margins
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
+
+    let drewVideo = false;
+
+    if (video && (video.readyState >= 2 || video.videoWidth > 0)) {
+      try {
+        const vW = video.videoWidth;
+        const vH = video.videoHeight;
+
+        if (vW > 0 && vH > 0) {
+          const videoRatio = vW / vH;
+          const canvasRatio = w / h;
+
+          let drawW = w;
+          let drawH = h;
+          let drawX = 0;
+          let drawY = 0;
+
+          // Standard contain math: strictly preserve 100% exact original aspect ratio without distortion or cropping
+          if (videoRatio > canvasRatio) {
+            // Shared screen is wider than canvas ratio -> fit width, letterbox top/bottom
+            drawW = w;
+            drawH = w / videoRatio;
+            drawX = 0;
+            drawY = (h - drawH) / 2;
+          } else {
+            // Shared screen is taller than canvas ratio -> fit height, pillarbox left/right
+            drawH = h;
+            drawW = h * videoRatio;
+            drawX = (w - drawW) / 2;
+            drawY = 0;
+          }
+
+          // Render clean edge-to-edge shared screen: no borders, no clipping, no side panel, and no obscuring badge labels
+          ctx.drawImage(
+            video,
+            Math.round(drawX),
+            Math.round(drawY),
+            Math.round(drawW),
+            Math.round(drawH)
+          );
+          drewVideo = true;
+        }
+      } catch (err) {
+        // Fallback below if frame cannot be decoded yet
+      }
+    }
+
+    if (!drewVideo) {
+      // Clean fallback if screen video stream is loading
+      ctx.fillStyle = '#080d1a';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 24px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${name}'s Screen Share`, w / 2, h / 2);
+    }
   }
 
   private drawAvatarPlaceholder(
