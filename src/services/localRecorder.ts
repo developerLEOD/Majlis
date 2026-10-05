@@ -323,7 +323,9 @@ export class LocalMeetingRecorder {
       this.audioDestination.stream.getAudioTracks().forEach((t) => recordingStream.addTrack(t));
     }
 
-    const mimeTypes = [
+    // Preferred container and codecs for smooth encoding and universal playback
+    const preferredMimeType = 'video/webm;codecs=vp8,opus';
+    const fallbackMimeTypes = [
       'video/webm;codecs=vp8,opus',
       'video/webm;codecs=vp9,opus',
       'video/webm',
@@ -331,18 +333,26 @@ export class LocalMeetingRecorder {
     ];
 
     let selectedMimeType = '';
-    for (const type of mimeTypes) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        selectedMimeType = type;
-        break;
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(preferredMimeType)) {
+      selectedMimeType = preferredMimeType;
+    } else {
+      for (const type of fallbackMimeTypes) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+          selectedMimeType = type;
+          break;
+        }
       }
     }
 
-    this.mediaRecorder = new MediaRecorder(recordingStream, {
-      mimeType: selectedMimeType || undefined,
-      videoBitsPerSecond: 3500000, // 3.5 Mbps for crystal-clear 1080p 30fps screen share & composite
-      audioBitsPerSecond: 128000,  // High-quality 128 kbps audio
-    });
+    const recorderOptions: MediaRecorderOptions = {
+      videoBitsPerSecond: 2500000, // Consistent 2.5 Mbps constant bitrate for smooth chunk encoding without frame skipping
+      audioBitsPerSecond: 128000,  // Consistent 128 kbps audio
+    };
+    if (selectedMimeType) {
+      recorderOptions.mimeType = selectedMimeType;
+    }
+
+    this.mediaRecorder = new MediaRecorder(recordingStream, recorderOptions);
 
     this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
       if (event.data && event.data.size > 0) {
@@ -358,6 +368,7 @@ export class LocalMeetingRecorder {
       }
     };
 
+    // Use a higher timeSlice value of 5000ms to allow smooth chunk encoding and prevent frame skipping during long recordings
     this.mediaRecorder.start(5000);
     this.status = 'recording';
     this.options.onStatusChange?.('recording');
