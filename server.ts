@@ -299,7 +299,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           for (const [pId, p] of room.participants.entries()) {
             if (pId !== currentUserId) {
@@ -307,6 +308,11 @@ wss.on('connection', (ws: WebSocket) => {
               if (p.socket.readyState === WebSocket.OPEN) {
                 p.socket.send(JSON.stringify({ type: 'force-mute' }));
               }
+              broadcastToRoom(currentRoomId, null, {
+                type: 'user-status-changed',
+                userId: pId,
+                isMuted: true,
+              });
             }
           }
 
@@ -323,7 +329,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
           if (target) {
@@ -345,10 +352,16 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
-          for (const p of room.participants.values()) {
+          for (const [pId, p] of room.participants.entries()) {
             p.handRaised = false;
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: pId,
+              handRaised: false,
+            });
           }
 
           broadcastToRoom(currentRoomId, null, {
@@ -384,7 +397,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
             type: 'spotlight-changed',
@@ -399,7 +413,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
             type: 'chat-permission-changed',
@@ -414,7 +429,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
             type: 'screenshare-permission-changed',
@@ -429,12 +445,13 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
             type: 'system-announcement',
             text: text.trim(),
-            senderName: host.name,
+            senderName: host?.name || 'Moderator',
           });
           break;
         }
@@ -506,7 +523,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
           if (target) {
@@ -524,7 +542,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isHostAuth = host?.isHost || room.hostId === currentUserId || room.participants.size === 1;
+          if (!isHostAuth) return;
 
           room.locked = message.locked !== undefined ? !!message.locked : !room.locked;
           broadcastToRoom(currentRoomId, null, {

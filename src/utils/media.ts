@@ -223,8 +223,7 @@ export function createMixedAudioStream(streams: MediaStream[]): {
 } {
   const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
   const audioCtx = new AudioContextClass({
-    latencyHint: 'playback',
-    sampleRate: 48000, // force 48kHz studio sample rate to avoid clock drift
+    latencyHint: 'interactive',
   });
 
   if (audioCtx.state === 'suspended') {

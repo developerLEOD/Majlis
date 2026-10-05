@@ -288,27 +288,90 @@ export class MeetingClient {
               break;
             }
 
-            case 'spotlight-changed': {
+            case 'spotlight-changed':
+            case 'host-spotlight': {
               this.events.onSpotlightChanged?.(msg.targetId || null);
               break;
             }
 
-            case 'chat-permission-changed': {
+            case 'chat-permission-changed':
+            case 'host-toggle-chat': {
               this.events.onChatPermissionChanged?.(!!msg.enabled);
               break;
             }
 
-            case 'screenshare-permission-changed': {
+            case 'screenshare-permission-changed':
+            case 'host-toggle-screenshare': {
               this.events.onScreenSharePermissionChanged?.(!!msg.enabled);
               break;
             }
 
-            case 'hands-lowered': {
+            case 'hands-lowered':
+            case 'host-lower-all-hands': {
               this.events.onHandsLowered?.();
               break;
             }
 
-            case 'system-announcement': {
+            case 'host-lower-hand': {
+              this.events.onUserStatusChanged({
+                userId: msg.targetId,
+                handRaised: false,
+              });
+              break;
+            }
+
+            case 'host-mute-all': {
+              if (!this.isHost) {
+                this.events.onForceMute();
+              }
+              break;
+            }
+
+            case 'host-mute-user':
+            case 'force-mute': {
+              if (msg.targetId === this.userId || !msg.targetId) {
+                this.events.onForceMute();
+              }
+              break;
+            }
+
+            case 'speaker-status-changed':
+            case 'host-toggle-speaker': {
+              this.events.onSpeakerStatusChanged?.(msg.targetId, !!msg.isSpeaker);
+              break;
+            }
+
+            case 'room-lock-changed':
+            case 'host-toggle-lock': {
+              this.isLocked = !!msg.locked;
+              this.events.onLockChanged(this.isLocked);
+              break;
+            }
+
+            case 'recording-notice': {
+              this.events.onRecordingNotice(!!msg.isRecording, msg.recordedBy || 'Facilitator');
+              break;
+            }
+
+            case 'host-end-session': {
+              if (this.events.onSessionEnded) {
+                this.events.onSessionEnded(msg.message || 'The facilitator has concluded this Majlis session.');
+              }
+              this.leave();
+              break;
+            }
+
+            case 'host-kick':
+            case 'kicked': {
+              if (msg.targetId === this.userId) {
+                this.events.onKicked(msg.message || 'You were removed from the room.');
+                this.leave();
+              }
+              break;
+            }
+
+            case 'system-announcement':
+            case 'host-announcement': {
               this.events.onAnnouncement?.(msg.text, msg.senderName);
               break;
             }
@@ -463,7 +526,7 @@ export class MeetingClient {
 
     switch (message.type) {
       case 'room-joined': {
-        this.isHost = message.isHost;
+        this.isHost = message.isHost || this.isHost;
         this.isLocked = message.locked;
 
         if (message.title && !message.title.startsWith('Majlis (')) {

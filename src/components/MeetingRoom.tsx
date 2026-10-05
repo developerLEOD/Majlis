@@ -42,6 +42,7 @@ import { RecordingModal } from './RecordingModal';
 import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
 import { HoneycombGrid } from './common/HoneycombGrid';
+import { useAuth } from '../context/AuthContext';
 import heroStainedGlassImg from '../assets/images/hero_stained_glass_1791132771042.jpg';
 import {
   buildMeetingInviteUrl,
@@ -73,9 +74,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   initialVideoOff,
   onEndOrLeaveMeeting,
 }) => {
+  const { isModerator } = useAuth();
+  const effectiveIsHost = initialIsHost || isModerator;
+
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [isHost, setIsHost] = useState(initialIsHost);
+  const [isHost, setIsHost] = useState(effectiveIsHost);
   const [isMuted, setIsMuted] = useState(initialMuted);
   const [isVideoOff, setIsVideoOff] = useState(initialVideoOff);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -165,7 +169,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     const localParticipant: Participant = {
       id: userId,
       name: userName,
-      isHost: initialIsHost,
+      isHost: effectiveIsHost,
       isLocal: true,
       isMuted: initialMuted,
       isVideoOff: initialVideoOff,
@@ -178,7 +182,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
     const client = new MeetingClient({
       onRoomJoined: (data) => {
-        setIsHost(data.isHost);
+        setIsHost(data.isHost || effectiveIsHost);
         setIsLocked(data.locked);
         if (data.title) {
           setCurrentTitle(data.title);
@@ -299,6 +303,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         setParticipants((prev) =>
           prev.map((p) => (p.isLocal ? { ...p, isMuted: true } : p))
         );
+        clientRef.current?.updateStatus({ isMuted: true });
         showNotification('Microphone muted by facilitator');
       },
 
@@ -311,7 +316,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onLockChanged: (locked) => {
         setIsLocked(locked);
-        showNotification(locked ? 'Majlis locked by facilitator' : 'Majlis unlocked');
+        if (!isHost) {
+          showNotification(locked ? 'Majlis locked by facilitator' : 'Majlis unlocked');
+        }
       },
 
       onRecordingNotice: (recording, by) => {
@@ -337,18 +344,24 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onChatPermissionChanged: (enabled) => {
         setChatEnabled(enabled);
-        showNotification(enabled ? 'Discussion chat enabled' : 'Discussion chat paused by facilitator');
+        if (!isHost) {
+          showNotification(enabled ? 'Discussion chat enabled' : 'Discussion chat paused by facilitator');
+        }
       },
 
       onScreenSharePermissionChanged: (enabled) => {
         setScreenShareEnabled(enabled);
-        showNotification(enabled ? 'Attendee screen sharing enabled' : 'Screen sharing restricted to facilitator');
+        if (!isHost) {
+          showNotification(enabled ? 'Attendee screen sharing enabled' : 'Screen sharing restricted to facilitator');
+        }
       },
 
       onHandsLowered: () => {
         setHandRaised(false);
         setParticipants((prev) => prev.map((p) => ({ ...p, handRaised: false })));
-        showNotification('Facilitator lowered all hands');
+        if (!isHost) {
+          showNotification('Facilitator lowered all hands');
+        }
       },
 
       onPromotedToHost: (msg) => {
@@ -388,7 +401,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     });
 
     clientRef.current = client;
-    client.connect(roomId, userId, userName, initialIsHost, initialStream, sessionTitle);
+    client.connect(roomId, userId, userName, effectiveIsHost, initialStream, sessionTitle);
 
     return () => {
       client.leave();
@@ -601,7 +614,12 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.updateStatus({ handRaised: nextState });
   };
 
+  const lastReactionTimeRef = useRef<number>(0);
   const handleSendReaction = (emoji: string) => {
+    const now = Date.now();
+    if (now - lastReactionTimeRef.current < 400) return;
+    lastReactionTimeRef.current = now;
+
     const reactionId = 'react_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
     const newReaction: ReactionItem = {
       id: reactionId,
@@ -833,36 +851,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           <span>{systemBanner}</span>
         </div>
       )}
-
-      {/* Floating Animated Reactions */}
-      <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden">
-        {activeReactions.map((reaction) => (
-          <div
-            key={reaction.id}
-            className="absolute bottom-24 right-1/4 text-3xl"
-            style={{
-              animation: 'floatUp 3s ease-out forwards',
-              right: `${20 + Math.random() * 40}%`,
-            }}
-          >
-            <div className="flex flex-col items-center">
-              <span>{reaction.emoji}</span>
-              <span className="text-[10px] bg-[#1A1410] text-[#E0C2A6] px-2 py-0.5 rounded-sm mt-0.5 border border-[#302116]">
-                {reaction.senderName}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <style>{`
-        @keyframes floatUp {
-          0% { transform: translateY(0) scale(0.6); opacity: 0; }
-          15% { opacity: 1; transform: translateY(-30px) scale(1); }
-          80% { opacity: 0.9; }
-          100% { transform: translateY(-200px) scale(1.2); opacity: 0; }
-        }
-      `}</style>
 
       {/* TOP COMPACT HEADER */}
       <header className="h-12 sm:h-13 px-2.5 sm:px-4 md:px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md gap-1.5 sm:gap-3">
@@ -1244,9 +1232,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               <ReactionPicker
                 onSelectReaction={(emoji) => {
                   handleSendReaction(emoji);
+                  setShowReactionPicker(false);
                 }}
                 onToggleHandRaise={() => {
                   toggleHandRaise();
+                  setShowReactionPicker(false);
                 }}
                 handRaised={handRaised}
                 onClose={() => setShowReactionPicker(false)}

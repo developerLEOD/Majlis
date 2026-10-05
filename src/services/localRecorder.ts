@@ -82,11 +82,10 @@ export class LocalMeetingRecorder {
         }
       });
     } else {
-      // Initialize dynamic AudioContext with forced 48kHz sample rate to prevent clock drift and audio quality deterioration over time
+      // Initialize dynamic AudioContext with interactive latency so audio and canvas video timestamps are tightly synchronized without buffering lag
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       this.audioCtx = new AudioContextClass({
-        latencyHint: 'playback',
-        sampleRate: 48000,
+        latencyHint: 'interactive',
       });
 
       if (this.audioCtx.state === 'suspended') {
@@ -311,6 +310,9 @@ export class LocalMeetingRecorder {
         console.warn('Web Worker timer unavailable, falling back to interval:', e);
         this.canvasRenderInterval = window.setInterval(drawMeetingComposite, 33);
       }
+
+      // Draw initial frame synchronously so canvas stream has a valid video frame ready immediately
+      drawMeetingComposite();
 
       const canvasStream = this.canvas.captureStream(30);
 
