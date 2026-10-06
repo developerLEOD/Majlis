@@ -416,6 +416,22 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onUserStatusChanged: (data) => {
         const targetId = String(data.userId);
+        if (targetId === userId) {
+          if (data.isVideoOff === true && !isVideoOff) {
+            setIsVideoOff(true);
+            if (localStreamRef.current) {
+              localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
+            }
+            showNotification('Camera turned off by facilitator');
+          }
+          if (data.isMuted === true && !isMuted) {
+            setIsMuted(true);
+            if (localStreamRef.current) {
+              localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = false));
+            }
+            showNotification('Microphone muted by facilitator');
+          }
+        }
         setParticipants((prev) =>
           prev.map((p) => {
             if (String(p.id) !== targetId) return p;
