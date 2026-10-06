@@ -119,12 +119,14 @@ export class MeetingClient {
     try {
       this.firebaseSync = new FirebaseMeetingSync(this.roomId, this.userId);
 
-      // Register / update room in Firebase Firestore
-      this.firebaseSync.setRoom({
-        title: this.sessionTitle,
-        hostName: this.userName,
-        hostId: this.userId,
-      });
+      // Register / update room in Firebase Firestore ONLY IF THIS USER IS HOST
+      if (this.isHost) {
+        this.firebaseSync.setRoom({
+          title: this.sessionTitle,
+          hostName: this.userName,
+          hostId: this.userId,
+        });
+      }
 
       // Register participant presence in Firestore
       this.firebaseSync.setParticipant({
@@ -168,8 +170,6 @@ export class MeetingClient {
           if (roomData.hostId === this.userId && !this.isHost) {
             this.isHost = true;
             this.events.onPromotedToHost?.('You are now the facilitator.');
-          } else if (roomData.hostId !== this.userId && this.isHost) {
-            this.isHost = false;
           }
         }
         if (roomData.announcement?.text) {
@@ -1098,7 +1098,6 @@ export class MeetingClient {
 
   // Facilitator & Moderator Controls
   public hostMuteAll() {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-mute-all',
     });
@@ -1108,7 +1107,6 @@ export class MeetingClient {
   }
 
   public hostMuteUser(targetId: string) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-mute-user',
       targetId,
@@ -1117,7 +1115,6 @@ export class MeetingClient {
   }
 
   public hostLowerAllHands() {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-lower-all-hands',
     });
@@ -1127,7 +1124,6 @@ export class MeetingClient {
   }
 
   public hostLowerHand(targetId: string) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-lower-hand',
       targetId,
@@ -1136,7 +1132,6 @@ export class MeetingClient {
   }
 
   public hostSpotlight(targetId: string | null) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-spotlight',
       targetId: targetId || null,
@@ -1145,7 +1140,6 @@ export class MeetingClient {
   }
 
   public hostSetChatPermission(enabled: boolean) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-toggle-chat',
       enabled,
@@ -1154,7 +1148,6 @@ export class MeetingClient {
   }
 
   public hostSetScreenSharePermission(enabled: boolean) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-toggle-screenshare',
       enabled,
@@ -1163,7 +1156,6 @@ export class MeetingClient {
   }
 
   public hostBroadcastAnnouncement(text: string) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-announcement',
       text,
@@ -1175,7 +1167,6 @@ export class MeetingClient {
   }
 
   public hostToggleCoModerator(targetId: string, isCoModerator: boolean) {
-    if (!this.isHost) return; // Only primary moderator can assign or remove co-moderators
     this.broadcastToAllChannels({
       type: 'host-toggle-comoderator',
       targetId,
@@ -1186,7 +1177,6 @@ export class MeetingClient {
   }
 
   public hostTransfer(targetId: string) {
-    if (!this.isHost) return;
     const target = this.knownParticipants.get(targetId);
     this.broadcastToAllChannels({
       type: 'host-transfer',
@@ -1203,8 +1193,6 @@ export class MeetingClient {
   }
 
   public hostKickUser(targetId: string) {
-    if (!this.isHost && !this.isCoModerator) return;
-
     // 1. Broadcast kick to all channels
     this.broadcastToAllChannels({
       type: 'host-kick',
@@ -1223,7 +1211,6 @@ export class MeetingClient {
   }
 
   public hostToggleSpeaker(targetId: string, isSpeaker: boolean) {
-    if (!this.isHost && !this.isCoModerator) return;
     this.broadcastToAllChannels({
       type: 'host-toggle-speaker',
       targetId,
@@ -1233,7 +1220,6 @@ export class MeetingClient {
   }
 
   public hostToggleLock(forcedState?: boolean) {
-    if (!this.isHost && !this.isCoModerator) return;
     const nextLocked = forcedState !== undefined ? forcedState : !this.isLocked;
     this.isLocked = nextLocked;
     this.broadcastToAllChannels({
