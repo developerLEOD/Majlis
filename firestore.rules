@@ -60,6 +60,10 @@ service cloud.firestore {
           && incoming().emoji is string && incoming().emoji.size() <= 16;
         allow delete: if isValidId(reactionId);
       }
+
+      match /kicked/{kickedUserId} {
+        allow read, write: if isValidId(kickedUserId);
+      }
     }
   }
 }

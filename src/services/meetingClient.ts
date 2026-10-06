@@ -207,6 +207,12 @@ export class MeetingClient {
           this.events.onReaction(react);
         }
       });
+
+      // Listen to kick notices via Firebase
+      this.firebaseSync.subscribeToKicked(() => {
+        this.events.onKicked('You have been removed from the meeting by the moderator.');
+        this.leave();
+      });
     } catch (e) {
       console.warn('Firebase sync initialization warning:', e);
     }
@@ -367,9 +373,24 @@ export class MeetingClient {
 
             case 'host-kick':
             case 'kicked': {
-              if (msg.targetId === this.userId) {
+              const kickedId = msg.targetId || msg.userId;
+              if (kickedId === this.userId) {
                 this.events.onKicked(msg.message || 'You were removed from the room.');
                 this.leave();
+              } else if (kickedId) {
+                this.knownParticipants.delete(kickedId);
+                this.closePeerConnection(kickedId);
+                this.events.onUserLeft(kickedId, msg.name);
+              }
+              break;
+            }
+
+            case 'user-left': {
+              const leftId = msg.userId || msg.targetId;
+              if (leftId && leftId !== this.userId) {
+                this.knownParticipants.delete(leftId);
+                this.closePeerConnection(leftId);
+                this.events.onUserLeft(leftId, msg.name);
               }
               break;
             }
@@ -1100,11 +1121,36 @@ export class MeetingClient {
 
   public hostKickUser(targetId: string) {
     if (!this.isHost && !this.isCoModerator) return;
+
+    // 1. Send via WebSocket to server
     this.sendWsMessage({
       type: 'host-kick',
       targetId,
     });
 
+    // 2. Remove & mark kicked in Firebase Firestore so all attendees sync
+    this.firebaseSync?.deleteParticipant(targetId).catch(() => {});
+    this.firebaseSync?.markKicked(targetId).catch(() => {});
+
+    // 3. Broadcast to all open tabs / windows
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          type: 'host-kick',
+          _senderId: this.userId,
+          targetId,
+          message: 'You have been removed from the meeting by the moderator.',
+        });
+        this.broadcastChannel.postMessage({
+          type: 'user-left',
+          _senderId: this.userId,
+          userId: targetId,
+          name: 'Participant',
+        });
+      } catch (e) {}
+    }
+
+    // 4. Clean up locally
     this.knownParticipants.delete(targetId);
     this.closePeerConnection(targetId);
     this.events.onUserLeft(targetId);

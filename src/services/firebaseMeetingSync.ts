@@ -170,6 +170,48 @@ export class FirebaseMeetingSync {
     }
   }
 
+  // Moderator removes / dismisses a participant from Firestore
+  public async deleteParticipant(targetId: string) {
+    const path = `rooms/${this.roomId}/participants/${targetId}`;
+    try {
+      await deleteDoc(doc(db, 'rooms', this.roomId, 'participants', targetId));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, path);
+    }
+  }
+
+  // Mark participant as kicked in cloud so all clients & reconnect attempts know
+  public async markKicked(targetId: string) {
+    const path = `rooms/${this.roomId}/kicked/${targetId}`;
+    try {
+      await setDoc(doc(db, 'rooms', this.roomId, 'kicked', targetId), {
+        userId: targetId,
+        kickedAt: Date.now(),
+        kickedBy: this.userId,
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  }
+
+  // Subscribe to kick notices for this user
+  public subscribeToKicked(onKicked: () => void): () => void {
+    const path = `rooms/${this.roomId}/kicked/${this.userId}`;
+    const unsub = onSnapshot(
+      doc(db, 'rooms', this.roomId, 'kicked', this.userId),
+      (snap) => {
+        if (snap.exists()) {
+          onKicked();
+        }
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, path);
+      }
+    );
+    this.unsubscribers.push(unsub);
+    return unsub;
+  }
+
   // Listen to participants real-time
   public subscribeToParticipants(onUpdate: (participants: Participant[]) => void): () => void {
     const path = `rooms/${this.roomId}/participants`;

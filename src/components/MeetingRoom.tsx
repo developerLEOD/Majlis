@@ -310,10 +310,16 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       },
 
       onKicked: (reason) => {
-        showNotification(reason || 'Removed from Majlis');
+        if (localStreamRef.current) {
+          localStreamRef.current.getTracks().forEach((t) => t.stop());
+        }
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach((t) => t.stop());
+        }
+        showNotification(reason || 'You were removed from this Majlis by the moderator.');
         setTimeout(() => {
           handleFinalExit();
-        }, 400);
+        }, 300);
       },
 
       onLockChanged: (locked) => {

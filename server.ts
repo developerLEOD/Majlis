@@ -33,6 +33,7 @@ interface Room {
   locked: boolean;
   isRecording: boolean;
   participants: Map<string, Participant>;
+  kickedUsers?: Set<string>;
   createdAt: number;
 }
 
@@ -128,6 +129,12 @@ wss.on('connection', (ws: WebSocket) => {
               createdAt: Date.now(),
             };
             rooms.set(roomId, room);
+          } else if (room.kickedUsers?.has(userId)) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'You have been removed from this meeting by the moderator.',
+            }));
+            return;
           } else if (room.locked && room.hostId !== userId) {
             ws.send(JSON.stringify({
               type: 'error',
@@ -541,24 +548,49 @@ wss.on('connection', (ws: WebSocket) => {
           const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
+          if (!room.kickedUsers) {
+            room.kickedUsers = new Set();
+          }
+          room.kickedUsers.add(targetId);
+
+          if (pendingDisconnects.has(targetId)) {
+            clearTimeout(pendingDisconnects.get(targetId)!);
+            pendingDisconnects.delete(targetId);
+          }
+
           const target = room.participants.get(targetId);
+          const targetName = target?.name || 'Participant';
+
           if (target) {
             if (target.socket.readyState === WebSocket.OPEN) {
               target.socket.send(JSON.stringify({
                 type: 'kicked',
+                targetId,
                 message: 'You have been removed from the meeting by the moderator.',
               }));
-              target.socket.close();
+              setTimeout(() => {
+                try {
+                  target.socket.close();
+                } catch (e) {}
+              }, 250);
             }
             room.participants.delete(targetId);
-            broadcastToRoom(currentRoomId, null, {
-              type: 'user-left',
-              userId: targetId,
-              name: target.name,
-              reason: 'removed by moderator',
-            });
-            broadcastActiveRooms();
           }
+
+          // Broadcast user-left to ALL participants in the room
+          broadcastToRoom(currentRoomId, null, {
+            type: 'user-left',
+            userId: targetId,
+            name: targetName,
+            reason: 'removed by moderator',
+          });
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'system-announcement',
+            text: `${targetName} was dismissed from the Majlis.`,
+          });
+
+          broadcastActiveRooms();
           break;
         }
 
