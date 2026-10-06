@@ -75,7 +75,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   onEndOrLeaveMeeting,
 }) => {
   const { isModerator } = useAuth();
-  const effectiveIsHost = Boolean(isModerator && initialIsHost);
+  const effectiveIsHost = Boolean(initialIsHost || isModerator);
 
   // State
   const [participants, setParticipants] = useState<Participant[]>([]);

@@ -323,7 +323,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           for (const [pId, p] of room.participants.entries()) {
@@ -353,7 +353,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
@@ -376,7 +376,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           for (const [pId, p] of room.participants.entries()) {
@@ -401,7 +401,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           const target = room.participants.get(targetId);
@@ -422,7 +422,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           room.spotlightUserId = targetId || null;
@@ -439,7 +439,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           room.chatEnabled = !!enabled;
@@ -456,7 +456,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           room.screenShareEnabled = !!enabled;
@@ -473,7 +473,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           broadcastToRoom(currentRoomId, null, {
@@ -490,8 +490,8 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          // Only primary host/moderator can appoint or revoke co-moderators
-          if (!host?.isHost) return;
+          const isPrimaryHost = Boolean(host?.isHost || room.hostId === currentUserId);
+          if (!isPrimaryHost) return;
 
           const target = room.participants.get(targetId);
           if (target) {
@@ -500,7 +500,7 @@ wss.on('connection', (ws: WebSocket) => {
               target.socket.send(JSON.stringify({
                 type: 'comoderator-status-changed',
                 isCoModerator: target.isCoModerator,
-                assignedBy: host.name,
+                assignedBy: host?.name || 'Facilitator',
               }));
             }
             broadcastToRoom(currentRoomId, null, {
@@ -525,11 +525,12 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          if (!host?.isHost) return;
+          const isPrimaryHost = Boolean(host?.isHost || room.hostId === currentUserId);
+          if (!isPrimaryHost) return;
 
           const target = room.participants.get(targetId);
           if (target) {
-            host.isHost = false;
+            if (host) host.isHost = false;
             target.isHost = true;
             room.hostId = target.id;
             room.hostName = target.name;
@@ -541,11 +542,13 @@ wss.on('connection', (ws: WebSocket) => {
               }));
             }
 
-            broadcastToRoom(currentRoomId, null, {
-              type: 'user-status-changed',
-              userId: host.id,
-              isHost: false,
-            });
+            if (host) {
+              broadcastToRoom(currentRoomId, null, {
+                type: 'user-status-changed',
+                userId: host.id,
+                isHost: false,
+              });
+            }
 
             broadcastToRoom(currentRoomId, null, {
               type: 'user-status-changed',
@@ -569,7 +572,7 @@ wss.on('connection', (ws: WebSocket) => {
           const room = rooms.get(currentRoomId);
           if (!room) return;
           const host = room.participants.get(currentUserId);
-          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
           if (!isHostAuth) return;
 
           if (!room.kickedUsers) {

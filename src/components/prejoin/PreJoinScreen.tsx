@@ -290,7 +290,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
 
           {showHostNotice && !isModerator && (
             <div className="p-2.5 bg-[#EFECE4] border border-[#D9D0C3] rounded-sm text-[11px] text-[#302116] space-y-1.5">
-              <p>Only authorized moderators (<strong>araizhasan00@gmail.com</strong> &amp; <strong>thewisdomlounge1@gmail.com</strong>) can enter as moderators.</p>
+              <p>Only authorized moderators (<strong>araizhasan00@gmail.com</strong>, <strong>thewisdomlounge1@gmail.com</strong> &amp; <strong>developertwl@gmail.com</strong>) can enter as moderators.</p>
               {onOpenAuthModal && (
                 <button
                   type="button"
