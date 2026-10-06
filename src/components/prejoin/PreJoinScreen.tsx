@@ -40,17 +40,10 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   const [isMicOn, setIsMicOn] = useState(true);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [micVolume, setMicVolume] = useState(0);
-  const [isHost, setIsHost] = useState(Boolean(isHostDefault && isModerator));
+  const [isHost, setIsHost] = useState(Boolean(isHostDefault || isModerator));
   const [showHostNotice, setShowHostNotice] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
-  useEffect(() => {
-    // If auth state changes, update host state accordingly
-    if (!isModerator) {
-      setIsHost(false);
-    }
-  }, [isModerator]);
 
   useEffect(() => {
     let active = true;
@@ -114,13 +107,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   }, [stream, isMicOn]);
 
   const handleToggleHostMode = () => {
-    if (!isModerator) {
-      setShowHostNotice(true);
-      setIsHost(false);
-      return;
-    }
     setIsHost((prev) => !prev);
-    setShowHostNotice(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -128,7 +115,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
     if (isConnecting) return;
     setIsConnecting(true);
 
-    const willBeHost = Boolean(isModerator && isHost);
+    const willBeHost = Boolean(isHost || isModerator);
     const finalName = userName.trim() || (willBeHost ? 'Moderator' : 'Seeker');
     localStorage.setItem('infinitymeet_username', finalName);
 

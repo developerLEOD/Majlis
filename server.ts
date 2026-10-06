@@ -149,8 +149,8 @@ wss.on('connection', (ws: WebSocket) => {
             return;
           }
 
-          // A user ONLY becomes host if isHost is explicitly true (verified authorized moderator)
-          const becomesHost = isHost === true;
+          // A user becomes host if isHost is explicitly true OR if the room has no host yet
+          const becomesHost = isHost === true || !room.hostId;
           if (becomesHost) {
             room.hostId = userId;
             if (userName) room.hostName = userName;
