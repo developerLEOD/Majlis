@@ -309,6 +309,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         showNotification('Microphone muted by facilitator');
       },
 
+      onForceStopVideo: () => {
+        setIsVideoOff(true);
+        if (localStreamRef.current) {
+          localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = false));
+        }
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isVideoOff: true } : p))
+        );
+        clientRef.current?.updateStatus({ isVideoOff: true });
+        showNotification('Camera turned off by facilitator');
+      },
+
       onKicked: (reason) => {
         if (localStreamRef.current) {
           localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -746,6 +758,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     clientRef.current?.hostMuteUser(targetUserId);
     setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isMuted: true } : p)));
     showNotification('Microphone muted for attendee');
+  };
+
+  const handleStopVideoUser = (targetUserId: string) => {
+    clientRef.current?.hostStopVideo(targetUserId);
+    setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isVideoOff: true } : p)));
+    showNotification('Camera turned off for attendee');
+  };
+
+  const handleStopAllVideo = () => {
+    clientRef.current?.hostStopAllVideo();
+    setParticipants((prev) => prev.map((p) => (!p.isLocal ? { ...p, isVideoOff: true } : p)));
+    showNotification('Turned off all attendee cameras');
   };
 
   const handleLowerHand = (targetUserId: string) => {
@@ -1196,8 +1220,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             isLocked={isLocked}
             spotlightUserId={pinnedUserId}
             onMuteAll={handleMuteAll}
+            onStopAllVideo={handleStopAllVideo}
             onToggleLock={handleToggleLock}
             onMuteUser={handleMuteUser}
+            onStopVideoUser={handleStopVideoUser}
             onLowerHand={handleLowerHand}
             onSpotlightUser={handleSpotlightUser}
             onToggleSpeaker={handleToggleSpeaker}
@@ -1416,6 +1442,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           isPrimaryHost={isHost}
           onToggleLock={handleToggleLock}
           onMuteAll={handleMuteAll}
+          onStopAllVideo={handleStopAllVideo}
           onLowerAllHands={handleLowerAllHands}
           onToggleChatPermission={handleToggleChatPermission}
           onToggleScreenSharePermission={handleToggleScreenSharePermission}

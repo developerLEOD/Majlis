@@ -4,6 +4,7 @@ import {
   Lock,
   Unlock,
   MicOff,
+  VideoOff,
   Hand,
   MessageSquare,
   Share2,
@@ -29,6 +30,7 @@ interface ModeratorHubModalProps {
   isPrimaryHost?: boolean;
   onToggleLock: () => void;
   onMuteAll: () => void;
+  onStopAllVideo?: () => void;
   onLowerAllHands: () => void;
   onToggleChatPermission: (enabled: boolean) => void;
   onToggleScreenSharePermission: (enabled: boolean) => void;
@@ -49,6 +51,7 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
   isPrimaryHost = true,
   onToggleLock,
   onMuteAll,
+  onStopAllVideo,
   onLowerAllHands,
   onToggleChatPermission,
   onToggleScreenSharePermission,
@@ -237,6 +240,22 @@ export const ModeratorHubModal: React.FC<ModeratorHubModalProps> = ({
                   <div className="text-[10px] text-[#7A6C62]">Silence attendee audio</div>
                 </div>
               </button>
+
+              {/* Stop All Video */}
+              {onStopAllVideo && (
+                <button
+                  onClick={onStopAllVideo}
+                  className="flex items-center gap-2.5 p-3 rounded-sm bg-[#F5F2EB] hover:bg-[#EAE4DC] border border-[#E0D7CB] transition-colors text-left shadow-xs"
+                >
+                  <div className="p-1.5 rounded-sm bg-red-100 text-[#A83245]">
+                    <VideoOff className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-[#1C1917]">Stop All Video</div>
+                    <div className="text-[10px] text-[#7A6C62]">Turn off attendee cameras</div>
+                  </div>
+                </button>
+              )}
 
               {/* Lower All Hands */}
               <button

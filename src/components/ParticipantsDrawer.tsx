@@ -31,8 +31,10 @@ interface ParticipantsDrawerProps {
   isLocked: boolean;
   spotlightUserId?: string | null;
   onMuteAll: () => void;
+  onStopAllVideo?: () => void;
   onToggleLock: () => void;
   onMuteUser?: (userId: string) => void;
+  onStopVideoUser?: (userId: string) => void;
   onLowerHand?: (userId: string) => void;
   onSpotlightUser?: (userId: string | null) => void;
   onToggleSpeaker?: (userId: string) => void;
@@ -53,8 +55,10 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   isLocked,
   spotlightUserId,
   onMuteAll,
+  onStopAllVideo,
   onToggleLock,
   onMuteUser,
+  onStopVideoUser,
   onLowerHand,
   onSpotlightUser,
   onToggleSpeaker,
@@ -110,11 +114,22 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
         <div className="p-3 bg-[#1F140D] border-b border-[#2E1E14] flex items-center justify-between gap-2 text-xs">
           <button
             onClick={onMuteAll}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 font-semibold text-white bg-[#A83245] hover:bg-[#8B2334] rounded-sm transition-colors border border-[#C44056] shadow-xs"
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 font-semibold text-white bg-[#A83245] hover:bg-[#8B2334] rounded-sm transition-colors border border-[#C44056] shadow-xs"
+            title="Mute all attendee microphones"
           >
             <MicOff className="w-3.5 h-3.5" />
-            Mute All
+            <span>Mute All</span>
           </button>
+          {onStopAllVideo && (
+            <button
+              onClick={onStopAllVideo}
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 font-semibold text-white bg-[#A83245]/85 hover:bg-[#8B2334] rounded-sm transition-colors border border-[#C44056]/80 shadow-xs"
+              title="Turn off all attendee cameras"
+            >
+              <VideoOff className="w-3.5 h-3.5" />
+              <span>Cameras Off</span>
+            </button>
+          )}
           <button
             onClick={onToggleLock}
             className={`flex items-center justify-center gap-1.5 py-1.5 px-2.5 font-semibold rounded-sm border transition-colors ${
@@ -271,6 +286,18 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#FFFCF5]"
                           >
                             <MicOff className="w-3.5 h-3.5 text-[#A83245]" /> Mute Microphone
+                          </button>
+                        )}
+
+                        {!p.isVideoOff && onStopVideoUser && !isMe && (
+                          <button
+                            onClick={() => {
+                              onStopVideoUser(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#FFFCF5]"
+                          >
+                            <VideoOff className="w-3.5 h-3.5 text-[#A83245]" /> Turn Off Video
                           </button>
                         )}
 

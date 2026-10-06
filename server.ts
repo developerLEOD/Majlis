@@ -371,6 +371,59 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'host-stop-video': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
+          if (!isHostAuth) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.isVideoOff = true;
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({ type: 'force-stop-video' }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              isVideoOff: true,
+            });
+          }
+          break;
+        }
+
+        case 'host-stop-all-video': {
+          if (!currentRoomId || !currentUserId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const host = room.participants.get(currentUserId);
+          const isHostAuth = Boolean(host?.isHost || host?.isCoModerator || room.hostId === currentUserId);
+          if (!isHostAuth) return;
+
+          for (const [pId, p] of room.participants.entries()) {
+            if (pId !== currentUserId) {
+              p.isVideoOff = true;
+              if (p.socket.readyState === WebSocket.OPEN) {
+                p.socket.send(JSON.stringify({ type: 'force-stop-video' }));
+              }
+              broadcastToRoom(currentRoomId, null, {
+                type: 'user-status-changed',
+                userId: pId,
+                isVideoOff: true,
+              });
+            }
+          }
+
+          broadcastToRoom(currentRoomId, null, {
+            type: 'system-announcement',
+            text: `${host?.name || 'Moderator'} stopped all attendee cameras`,
+          });
+          break;
+        }
+
         case 'host-lower-all-hands': {
           if (!currentRoomId || !currentUserId) return;
           const room = rooms.get(currentRoomId);

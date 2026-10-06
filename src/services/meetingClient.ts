@@ -30,6 +30,7 @@ export interface MeetingClientEvents {
   onChatMessage: (message: ChatMessage) => void;
   onReaction: (reaction: ReactionItem) => void;
   onForceMute: () => void;
+  onForceStopVideo?: () => void;
   onKicked: (reason: string) => void;
   onLockChanged: (locked: boolean) => void;
   onRecordingNotice: (isRecording: boolean, recordedBy: string) => void;
@@ -233,6 +234,9 @@ export class MeetingClient {
         if (localDoc) {
           if (localDoc.isMuted && this.localStream?.getAudioTracks().some((t) => t.enabled)) {
             this.events.onForceMute();
+          }
+          if (localDoc.isVideoOff && this.localStream?.getVideoTracks().some((t) => t.enabled)) {
+            this.events.onForceStopVideo?.();
           }
           if (localDoc.isCoModerator !== undefined && localDoc.isCoModerator !== this.isCoModerator) {
             this.isCoModerator = !!localDoc.isCoModerator;
@@ -691,6 +695,32 @@ export class MeetingClient {
         break;
       }
 
+      case 'host-stop-all-video': {
+        if (!this.isHost) {
+          this.events.onForceStopVideo?.();
+        }
+        for (const p of this.knownParticipants.values()) {
+          p.isVideoOff = true;
+        }
+        break;
+      }
+
+      case 'host-stop-video':
+      case 'force-stop-video': {
+        if (msg.targetId === this.userId || !msg.targetId) {
+          this.events.onForceStopVideo?.();
+        }
+        if (msg.targetId) {
+          const p = this.knownParticipants.get(msg.targetId);
+          if (p) p.isVideoOff = true;
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            isVideoOff: true,
+          });
+        }
+        break;
+      }
+
       case 'host-mute-user':
       case 'force-mute': {
         if (msg.targetId === this.userId || !msg.targetId) {
@@ -1112,6 +1142,23 @@ export class MeetingClient {
       targetId,
     });
     this.firebaseSync?.updateParticipantStatusForUser(targetId, { isMuted: true }).catch(() => {});
+  }
+
+  public hostStopVideo(targetId: string) {
+    this.broadcastToAllChannels({
+      type: 'host-stop-video',
+      targetId,
+    });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isVideoOff: true }).catch(() => {});
+  }
+
+  public hostStopAllVideo() {
+    this.broadcastToAllChannels({
+      type: 'host-stop-all-video',
+    });
+    for (const pId of this.knownParticipants.keys()) {
+      this.firebaseSync?.updateParticipantStatusForUser(pId, { isVideoOff: true }).catch(() => {});
+    }
   }
 
   public hostLowerAllHands() {
