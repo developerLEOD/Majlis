@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Crown, Hand, Mic, MicOff } from 'lucide-react';
+import { Crown, Hand, Mic, MicOff, VideoOff } from 'lucide-react';
 import { Participant } from '../types/meeting';
 import { createAudioMeter } from '../utils/media';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
@@ -10,6 +10,9 @@ interface VideoTileProps {
   isLocal: boolean;
   mirror?: boolean;
   isPinned?: boolean;
+  canModerate?: boolean;
+  onMuteUser?: (userId: string) => void;
+  onStopVideoUser?: (userId: string) => void;
   forceShape?: 'star-medallion' | 'arc-door' | 'honeycomb' | 'standard';
   themeIndex?: number;
   onTogglePin?: () => void;
@@ -22,6 +25,9 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   isLocal,
   mirror = false,
   isPinned = false,
+  canModerate,
+  onMuteUser,
+  onStopVideoUser,
   forceShape,
   themeIndex,
   onTogglePin,
@@ -340,6 +346,38 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         {participant.isMuted && (
           <div className="absolute bottom-2.5 right-3 z-20 p-1 rounded-xs bg-[#A83245] text-white border border-[#C44056]/70 shadow-md">
             <MicOff className="w-2.5 h-2.5" />
+          </div>
+        )}
+
+        {/* Moderator Hover Controls Overlay */}
+        {canModerate && !isLocal && (
+          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30">
+            {!participant.isMuted && onMuteUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMuteUser(participant.id);
+                }}
+                className="p-1.5 rounded-sm bg-[#A83245] text-white hover:bg-[#8B2334] shadow-md transition-transform hover:scale-110"
+                title="Mute Microphone"
+              >
+                <MicOff className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {!participant.isVideoOff && onStopVideoUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStopVideoUser(participant.id);
+                }}
+                className="p-1.5 rounded-sm bg-[#A83245] text-white hover:bg-[#8B2334] shadow-md transition-transform hover:scale-110"
+                title="Turn Off Video"
+              >
+                <VideoOff className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         )}
       </div>

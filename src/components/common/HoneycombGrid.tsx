@@ -5,6 +5,9 @@ import { VideoTile } from '../VideoTile';
 interface HoneycombGridProps {
   participants: Participant[];
   mirrorVideo: boolean;
+  canModerate?: boolean;
+  onMuteUser?: (userId: string) => void;
+  onStopVideoUser?: (userId: string) => void;
   onPinUser: (userId: string) => void;
   videoElementsRef: React.MutableRefObject<Map<string, HTMLVideoElement>>;
 }
@@ -12,6 +15,9 @@ interface HoneycombGridProps {
 export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
   participants,
   mirrorVideo,
+  canModerate,
+  onMuteUser,
+  onStopVideoUser,
   onPinUser,
   videoElementsRef,
 }) => {
@@ -84,6 +90,9 @@ export const HoneycombGrid: React.FC<HoneycombGridProps> = ({
                   participant={p}
                   isLocal={p.isLocal}
                   mirror={mirrorVideo}
+                  canModerate={canModerate}
+                  onMuteUser={onMuteUser}
+                  onStopVideoUser={onStopVideoUser}
                   forceShape="honeycomb"
                   themeIndex={themeIndex}
                   onTogglePin={() => onPinUser(p.id)}

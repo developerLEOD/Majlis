@@ -1091,6 +1091,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                             participant={p}
                             isLocal={p.isLocal}
                             mirror={mirrorVideo}
+                            canModerate={canModerate}
+                            onMuteUser={handleMuteUser}
+                            onStopVideoUser={handleStopVideoUser}
                             videoRefCallback={(el) => {
                               if (el) videoElementsRef.current.set(p.id, el);
                               else videoElementsRef.current.delete(p.id);
@@ -1149,6 +1152,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                           participant={speaker}
                           isLocal={speaker.isLocal}
                           mirror={mirrorVideo}
+                          canModerate={canModerate}
+                          onMuteUser={handleMuteUser}
+                          onStopVideoUser={handleStopVideoUser}
                           forceShape="star-medallion"
                           onTogglePin={() => {}}
                           videoRefCallback={(el) => {
@@ -1181,6 +1187,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                       <HoneycombGrid
                         participants={regularHoneycombParticipants}
                         mirrorVideo={mirrorVideo}
+                        canModerate={canModerate}
+                        onMuteUser={handleMuteUser}
+                        onStopVideoUser={handleStopVideoUser}
                         onPinUser={() => {}}
                         videoElementsRef={videoElementsRef}
                       />
