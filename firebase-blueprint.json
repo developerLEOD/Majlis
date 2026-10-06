@@ -11,6 +11,9 @@
         "hostName": { "type": "string", "maxLength": 128 },
         "locked": { "type": "boolean" },
         "isRecording": { "type": "boolean" },
+        "spotlightUserId": { "type": "string", "maxLength": 128 },
+        "chatEnabled": { "type": "boolean" },
+        "screenShareEnabled": { "type": "boolean" },
         "participantCount": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -25,6 +28,8 @@
         "id": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "maxLength": 128 },
         "isHost": { "type": "boolean" },
+        "isCoModerator": { "type": "boolean" },
+        "isSpeaker": { "type": "boolean" },
         "isMuted": { "type": "boolean" },
         "isVideoOff": { "type": "boolean" },
         "isScreenSharing": { "type": "boolean" },

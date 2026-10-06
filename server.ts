@@ -32,6 +32,9 @@ interface Room {
   hostName: string;
   locked: boolean;
   isRecording: boolean;
+  spotlightUserId?: string | null;
+  chatEnabled?: boolean;
+  screenShareEnabled?: boolean;
   participants: Map<string, Participant>;
   kickedUsers?: Set<string>;
   createdAt: number;
@@ -125,6 +128,9 @@ wss.on('connection', (ws: WebSocket) => {
               hostName: isHost ? (userName || 'Moderator') : 'Facilitator',
               locked: false,
               isRecording: false,
+              spotlightUserId: null,
+              chatEnabled: true,
+              screenShareEnabled: true,
               participants: new Map(),
               createdAt: Date.now(),
             };
@@ -191,6 +197,9 @@ wss.on('connection', (ws: WebSocket) => {
             hostName: room.hostName,
             locked: room.locked,
             isRecording: room.isRecording,
+            spotlightUserId: room.spotlightUserId || null,
+            chatEnabled: room.chatEnabled !== false,
+            screenShareEnabled: room.screenShareEnabled !== false,
             participants: existingParticipants,
           }));
 
@@ -416,9 +425,10 @@ wss.on('connection', (ws: WebSocket) => {
           const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
+          room.spotlightUserId = targetId || null;
           broadcastToRoom(currentRoomId, null, {
             type: 'spotlight-changed',
-            targetId: targetId || null,
+            targetId: room.spotlightUserId,
           });
           break;
         }
@@ -432,9 +442,10 @@ wss.on('connection', (ws: WebSocket) => {
           const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
+          room.chatEnabled = !!enabled;
           broadcastToRoom(currentRoomId, null, {
             type: 'chat-permission-changed',
-            enabled: !!enabled,
+            enabled: room.chatEnabled,
           });
           break;
         }
@@ -448,9 +459,10 @@ wss.on('connection', (ws: WebSocket) => {
           const isHostAuth = Boolean(host?.isHost || host?.isCoModerator);
           if (!isHostAuth) return;
 
+          room.screenShareEnabled = !!enabled;
           broadcastToRoom(currentRoomId, null, {
             type: 'screenshare-permission-changed',
-            enabled: !!enabled,
+            enabled: room.screenShareEnabled,
           });
           break;
         }
@@ -528,6 +540,18 @@ wss.on('connection', (ws: WebSocket) => {
                 message: 'You have been appointed as the facilitator.',
               }));
             }
+
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: host.id,
+              isHost: false,
+            });
+
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: target.id,
+              isHost: true,
+            });
 
             broadcastToRoom(currentRoomId, null, {
               type: 'new-host',

@@ -63,7 +63,7 @@ function MainAppContent() {
   const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
 
   // Live ongoing majalis fetched and synced via WebSocket & REST
-  const { activeMajalis, addOptimisticMajlis, clearAllActive } = useActiveMajalis(!!activeMeeting);
+  const { activeMajalis, addOptimisticMajlis, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
     fetchAppConfig();
@@ -239,6 +239,7 @@ function MainAppContent() {
         {currentTab === 'home' && (
           <HomeScreen
             activeMajalis={activeMajalis}
+            loadingActiveMajalis={loading}
             upcomingSessions={upcomingSessions}
             onStartMajlis={() => setIsStartModalOpen(true)}
             onJoinMajlis={handleInitiateJoin}
@@ -251,6 +252,7 @@ function MainAppContent() {
         {currentTab === 'majalis' && (
           <MajalisScreen
             activeMajalis={activeMajalis}
+            loadingActiveMajalis={loading}
             upcomingSessions={upcomingSessions}
             onJoinMajlis={handleInitiateJoin}
             onStartMajlis={() => setIsStartModalOpen(true)}

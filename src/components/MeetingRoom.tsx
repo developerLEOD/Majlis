@@ -374,11 +374,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
       onPromotedToHost: (msg) => {
         setIsHost(true);
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isHost: true } : p))
+        );
         showNotification(msg || 'You are now the facilitator of this Majlis.');
       },
 
       onCoModeratorStatusChanged: (coMod, assignedBy) => {
         setIsCoModerator(coMod);
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isCoModerator: coMod } : p))
+        );
         showNotification(
           coMod
             ? `You have been appointed as Co-Moderator by ${assignedBy || 'Moderator'}`
@@ -403,6 +409,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             if (String(p.id) !== targetId) return p;
             return {
               ...p,
+              isHost: data.isHost !== undefined ? data.isHost : p.isHost,
               isMuted: data.isMuted !== undefined ? data.isMuted : p.isMuted,
               isVideoOff: data.isVideoOff !== undefined ? data.isVideoOff : p.isVideoOff,
               isScreenSharing: data.isScreenSharing !== undefined ? data.isScreenSharing : p.isScreenSharing,

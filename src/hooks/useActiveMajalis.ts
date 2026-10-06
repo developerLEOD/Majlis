@@ -189,7 +189,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     return [];
   });
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
 
@@ -204,11 +204,14 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       await clearAllCloudActiveRooms().catch(() => {});
     } catch (e) {
       console.warn('Error clearing active majalis:', e);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   const persistAndBroadcast = useCallback((rooms: MajlisSession[]) => {
     setActiveMajalis(rooms);
+    setLoading(false);
     try {
       localStorage.setItem(STORAGE_ACTIVE_ROOMS_KEY, JSON.stringify(rooms));
       if (broadcastRef.current) {
@@ -247,6 +250,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       } catch (e) {}
       return updated;
     });
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -257,6 +261,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
         if (Array.isArray(cloudRooms)) {
           persistAndBroadcast(cloudRooms);
         }
+        setLoading(false);
       });
     } catch (e) {
       console.warn('Cloud rooms subscription notice:', e);

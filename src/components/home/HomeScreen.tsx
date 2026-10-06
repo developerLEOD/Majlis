@@ -17,6 +17,7 @@ import wisdomPortraitImg from '../../assets/images/wisdom_portrait_1791132806800
 
 interface HomeScreenProps {
   activeMajalis: MajlisSession[];
+  loadingActiveMajalis?: boolean;
   upcomingSessions: MajlisSession[];
   onStartMajlis: () => void;
   onJoinMajlis: (roomId: string, title?: string) => void;
@@ -27,6 +28,7 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   activeMajalis,
+  loadingActiveMajalis,
   upcomingSessions: propUpcoming,
   onStartMajlis,
   onJoinMajlis,
@@ -297,8 +299,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </button>
               </div>
 
-              {/* Active Sessions List or Compact Empty State */}
-              {activeMajalis.length === 0 ? (
+              {/* Active Sessions List or Loading State or Compact Empty State */}
+              {loadingActiveMajalis ? (
+                <div className="bg-[#1A110A] border border-[#302116] rounded-sm p-4 text-xs flex items-center justify-between gap-4 shadow-md">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-sm bg-[#24170E] border border-[#3A2619] flex items-center justify-center shrink-0">
+                      <Loader2 className="w-4 h-4 text-[#E9A83A] animate-spin" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="font-bold text-[#FFFCF5] block truncate">
+                        Syncing active circles...
+                      </span>
+                      <span className="text-[11px] text-[#8A7A6D] block truncate">
+                        Confirming ongoing Majlis sessions across the sanctuary.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#E9A83A] font-semibold shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#19A6A0] animate-ping" />
+                    <span>Syncing</span>
+                  </div>
+                </div>
+              ) : activeMajalis.length === 0 ? (
                 <div className="bg-[#1A110A] border border-[#302116] rounded-sm p-4 text-xs flex items-center justify-between gap-4 shadow-md">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-sm bg-[#24170E] border border-[#3A2619] flex items-center justify-center shrink-0">

@@ -11,12 +11,18 @@ export interface MeetingClientEvents {
     participants: Participant[];
     title?: string;
     hostName?: string;
+    spotlightUserId?: string | null;
+    chatEnabled?: boolean;
+    screenShareEnabled?: boolean;
   }) => void;
   onRoomInfo?: (info: {
     title?: string;
     hostName?: string;
     locked?: boolean;
     isRecording?: boolean;
+    spotlightUserId?: string | null;
+    chatEnabled?: boolean;
+    screenShareEnabled?: boolean;
   }) => void;
   onUserJoined: (user: Participant) => void;
   onUserLeft: (userId: string, name?: string) => void;
@@ -38,6 +44,7 @@ export interface MeetingClientEvents {
   onSpeakerStatusChanged?: (userId: string, isSpeaker: boolean) => void;
   onUserStatusChanged: (data: {
     userId: string;
+    isHost?: boolean;
     isMuted?: boolean;
     isVideoOff?: boolean;
     isScreenSharing?: boolean;
@@ -124,6 +131,7 @@ export class MeetingClient {
         id: this.userId,
         name: this.userName,
         isHost: this.isHost,
+        isCoModerator: this.isCoModerator,
         isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
         isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
       });
@@ -143,11 +151,38 @@ export class MeetingClient {
           this.sessionTitle = roomData.title;
           saveRoomTitleLocally(this.roomId, roomData.title);
         }
+        if (roomData.spotlightUserId !== undefined) {
+          this.events.onSpotlightChanged?.(roomData.spotlightUserId || null);
+        }
+        if (roomData.chatEnabled !== undefined) {
+          this.events.onChatPermissionChanged?.(roomData.chatEnabled);
+        }
+        if (roomData.screenShareEnabled !== undefined) {
+          this.events.onScreenSharePermissionChanged?.(roomData.screenShareEnabled);
+        }
+        if (roomData.locked !== undefined) {
+          this.isLocked = !!roomData.locked;
+          this.events.onLockChanged(this.isLocked);
+        }
+        if (roomData.hostId) {
+          if (roomData.hostId === this.userId && !this.isHost) {
+            this.isHost = true;
+            this.events.onPromotedToHost?.('You are now the facilitator.');
+          } else if (roomData.hostId !== this.userId && this.isHost) {
+            this.isHost = false;
+          }
+        }
+        if (roomData.announcement?.text) {
+          this.events.onAnnouncement?.(roomData.announcement.text, roomData.announcement.senderName);
+        }
         this.events.onRoomInfo?.({
           title: roomData.title,
           hostName: roomData.hostName,
           locked: roomData.locked,
           isRecording: roomData.isRecording,
+          spotlightUserId: roomData.spotlightUserId || null,
+          chatEnabled: roomData.chatEnabled,
+          screenShareEnabled: roomData.screenShareEnabled,
         });
       });
 
@@ -176,6 +211,9 @@ export class MeetingClient {
           } else {
             this.events.onUserStatusChanged({
               userId: p.id,
+              isHost: p.isHost,
+              isCoModerator: p.isCoModerator,
+              isSpeaker: p.isSpeaker,
               isMuted: p.isMuted,
               isVideoOff: p.isVideoOff,
               isScreenSharing: p.isScreenSharing,
@@ -187,6 +225,25 @@ export class MeetingClient {
           if (!this.peerConnections.has(p.id)) {
             const isInitiator = this.userId > p.id;
             this.createPeerConnection(p.id, isInitiator);
+          }
+        }
+
+        // Check if our own participant record in Firestore changed (e.g. muted by mod, assigned co-mod)
+        const localDoc = participants.find((p) => p.id === this.userId);
+        if (localDoc) {
+          if (localDoc.isMuted && this.localStream?.getAudioTracks().some((t) => t.enabled)) {
+            this.events.onForceMute();
+          }
+          if (localDoc.isCoModerator !== undefined && localDoc.isCoModerator !== this.isCoModerator) {
+            this.isCoModerator = !!localDoc.isCoModerator;
+            this.events.onCoModeratorStatusChanged?.(this.isCoModerator);
+          }
+          if (localDoc.isHost && !this.isHost) {
+            this.isHost = true;
+            this.events.onPromotedToHost?.('You are now the facilitator.');
+          }
+          if (localDoc.isSpeaker !== undefined) {
+            this.events.onSpeakerStatusChanged?.(this.userId, !!localDoc.isSpeaker);
           }
         }
       });
@@ -225,224 +282,60 @@ export class MeetingClient {
           if (!e.data || e.data._senderId === this.userId) return;
 
           const msg = e.data;
-          switch (msg.type) {
-            case 'join': {
-              const participant: Participant = {
-                id: msg.userId,
-                name: msg.userName,
-                isHost: msg.isHost,
-                isLocal: false,
-                isMuted: !!msg.isMuted,
-                isVideoOff: !!msg.isVideoOff,
-                isScreenSharing: false,
-                handRaised: false,
-              };
+          if (msg.type === 'join' || msg.type === 'announce-presence') {
+            const participant: Participant = {
+              id: msg.userId,
+              name: msg.userName,
+              isHost: !!msg.isHost,
+              isCoModerator: !!msg.isCoModerator,
+              isSpeaker: !!msg.isSpeaker,
+              isLocal: false,
+              isMuted: !!msg.isMuted,
+              isVideoOff: !!msg.isVideoOff,
+              isScreenSharing: false,
+              handRaised: false,
+            };
 
-              const isNew = !this.knownParticipants.has(msg.userId);
-              this.knownParticipants.set(msg.userId, participant);
-              if (isNew) {
-                this.events.onUserJoined(participant);
-              }
+            const isNew = !this.knownParticipants.has(msg.userId);
+            this.knownParticipants.set(msg.userId, participant);
+            if (isNew) {
+              this.events.onUserJoined(participant);
+            }
 
+            if (msg.type === 'join') {
               this.broadcastChannel?.postMessage({
                 type: 'announce-presence',
                 _senderId: this.userId,
                 userId: this.userId,
                 userName: this.userName,
                 isHost: this.isHost,
+                isCoModerator: this.isCoModerator,
                 title: this.sessionTitle,
                 isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
                 isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
               });
-
-              if (!this.peerConnections.has(msg.userId)) {
-                const isInitiator = this.userId > msg.userId;
-                await this.createPeerConnection(msg.userId, isInitiator);
-              }
-              break;
             }
 
-            case 'announce-presence': {
-              const participant: Participant = {
-                id: msg.userId,
-                name: msg.userName,
-                isHost: msg.isHost,
-                isLocal: false,
-                isMuted: !!msg.isMuted,
-                isVideoOff: !!msg.isVideoOff,
-                isScreenSharing: false,
-                handRaised: false,
-              };
-
-              const isNew = !this.knownParticipants.has(msg.userId);
-              this.knownParticipants.set(msg.userId, participant);
-              if (isNew) {
-                this.events.onUserJoined(participant);
-              }
-              if (msg.title) {
-                this.sessionTitle = msg.title;
-                this.events.onRoomInfo?.({ title: msg.title });
-              }
-              if (!this.peerConnections.has(msg.userId)) {
-                const isInitiator = this.userId > msg.userId;
-                await this.createPeerConnection(msg.userId, isInitiator);
-              }
-              break;
+            if (msg.title) {
+              this.sessionTitle = msg.title;
+              this.events.onRoomInfo?.({ title: msg.title });
             }
 
-            case 'session-ended': {
-              if (this.events.onSessionEnded) {
-                this.events.onSessionEnded(msg.message || 'The facilitator has concluded this Majlis session.');
-              }
-              this.leave();
-              break;
+            if (!this.peerConnections.has(msg.userId)) {
+              const isInitiator = this.userId > msg.userId;
+              await this.createPeerConnection(msg.userId, isInitiator);
             }
-
-            case 'spotlight-changed':
-            case 'host-spotlight': {
-              this.events.onSpotlightChanged?.(msg.targetId || null);
-              break;
-            }
-
-            case 'chat-permission-changed':
-            case 'host-toggle-chat': {
-              this.events.onChatPermissionChanged?.(!!msg.enabled);
-              break;
-            }
-
-            case 'screenshare-permission-changed':
-            case 'host-toggle-screenshare': {
-              this.events.onScreenSharePermissionChanged?.(!!msg.enabled);
-              break;
-            }
-
-            case 'hands-lowered':
-            case 'host-lower-all-hands': {
-              this.events.onHandsLowered?.();
-              break;
-            }
-
-            case 'host-lower-hand': {
-              this.events.onUserStatusChanged({
-                userId: msg.targetId,
-                handRaised: false,
-              });
-              break;
-            }
-
-            case 'host-mute-all': {
-              if (!this.isHost) {
-                this.events.onForceMute();
-              }
-              break;
-            }
-
-            case 'host-mute-user':
-            case 'force-mute': {
-              if (msg.targetId === this.userId || !msg.targetId) {
-                this.events.onForceMute();
-              }
-              break;
-            }
-
-            case 'speaker-status-changed':
-            case 'host-toggle-speaker': {
-              this.events.onSpeakerStatusChanged?.(msg.targetId, !!msg.isSpeaker);
-              break;
-            }
-
-            case 'room-lock-changed':
-            case 'host-toggle-lock': {
-              this.isLocked = !!msg.locked;
-              this.events.onLockChanged(this.isLocked);
-              break;
-            }
-
-            case 'recording-notice': {
-              this.events.onRecordingNotice(!!msg.isRecording, msg.recordedBy || 'Facilitator');
-              break;
-            }
-
-            case 'host-end-session': {
-              if (this.events.onSessionEnded) {
-                this.events.onSessionEnded(msg.message || 'The facilitator has concluded this Majlis session.');
-              }
-              this.leave();
-              break;
-            }
-
-            case 'host-kick':
-            case 'kicked': {
-              const kickedId = msg.targetId || msg.userId;
-              if (kickedId === this.userId) {
-                this.events.onKicked(msg.message || 'You were removed from the room.');
-                this.leave();
-              } else if (kickedId) {
-                this.knownParticipants.delete(kickedId);
-                this.closePeerConnection(kickedId);
-                this.events.onUserLeft(kickedId, msg.name);
-              }
-              break;
-            }
-
-            case 'user-left': {
-              const leftId = msg.userId || msg.targetId;
-              if (leftId && leftId !== this.userId) {
-                this.knownParticipants.delete(leftId);
-                this.closePeerConnection(leftId);
-                this.events.onUserLeft(leftId, msg.name);
-              }
-              break;
-            }
-
-            case 'system-announcement':
-            case 'host-announcement': {
-              this.events.onAnnouncement?.(msg.text, msg.senderName);
-              break;
-            }
-
-            case 'signal': {
-              if (msg.targetId === this.userId && msg.signalData) {
-                await this.handleSignalingData(msg.senderId, msg.signalData);
-              }
-              break;
-            }
-
-            case 'chat': {
-              if (msg.message) {
-                this.events.onChatMessage(msg.message);
-              }
-              break;
-            }
-
-            case 'reaction': {
-              this.events.onReaction({
-                id: msg.id,
-                senderId: msg.senderId,
-                senderName: msg.senderName,
-                emoji: msg.emoji,
-              });
-              break;
-            }
-
-            case 'status-update': {
-              this.events.onUserStatusChanged({
-                userId: msg.userId,
-                isMuted: msg.isMuted,
-                isVideoOff: msg.isVideoOff,
-                isScreenSharing: msg.isScreenSharing,
-                handRaised: msg.handRaised,
-              });
-              break;
-            }
-
-            case 'user-left': {
-              this.knownParticipants.delete(msg.userId);
-              this.closePeerConnection(msg.userId);
-              this.events.onUserLeft(msg.userId, msg.name);
-              break;
-            }
+            return;
           }
+
+          if (msg.type === 'signal') {
+            if (msg.targetId === this.userId && msg.signalData) {
+              await this.handleSignalingData(msg.senderId, msg.signalData);
+            }
+            return;
+          }
+
+          await this.handleIncomingControlMessage(msg);
         };
 
         this.broadcastChannel.postMessage({
@@ -452,6 +345,7 @@ export class MeetingClient {
           userId: this.userId,
           userName: this.userName,
           isHost: this.isHost,
+          isCoModerator: this.isCoModerator,
           title: this.sessionTitle,
           isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
           isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
@@ -551,8 +445,11 @@ export class MeetingClient {
 
     switch (message.type) {
       case 'room-joined': {
-        this.isHost = message.isHost || this.isHost;
-        this.isLocked = message.locked;
+        this.roomId = message.roomId;
+        this.userId = message.userId;
+        this.isHost = !!message.isHost;
+        this.isCoModerator = !!message.isCoModerator;
+        this.isLocked = !!message.locked;
 
         if (message.title && !message.title.startsWith('Majlis (')) {
           this.sessionTitle = message.title;
@@ -562,7 +459,9 @@ export class MeetingClient {
         const remoteParticipants: Participant[] = (message.participants || []).map((p: any) => ({
           id: p.id,
           name: p.name,
-          isHost: p.isHost,
+          isHost: !!p.isHost,
+          isCoModerator: !!p.isCoModerator,
+          isSpeaker: !!p.isSpeaker,
           isLocal: false,
           isMuted: p.isMuted,
           isVideoOff: p.isVideoOff,
@@ -578,6 +477,9 @@ export class MeetingClient {
           participants: remoteParticipants,
           title: this.sessionTitle || message.title,
           hostName: message.hostName,
+          spotlightUserId: message.spotlightUserId,
+          chatEnabled: message.chatEnabled,
+          screenShareEnabled: message.screenShareEnabled,
         });
 
         if (message.title) {
@@ -586,6 +488,9 @@ export class MeetingClient {
             hostName: message.hostName,
             locked: this.isLocked,
             isRecording: message.isRecording,
+            spotlightUserId: message.spotlightUserId,
+            chatEnabled: message.chatEnabled,
+            screenShareEnabled: message.screenShareEnabled,
           });
         }
 
@@ -597,37 +502,57 @@ export class MeetingClient {
         break;
       }
 
+      case 'signal': {
+        const { senderId, signalData } = message;
+        if (!senderId || senderId === this.userId || !signalData) return;
+        await this.handleSignalingData(senderId, signalData);
+        break;
+      }
+
+      default: {
+        await this.handleIncomingControlMessage(message);
+        break;
+      }
+    }
+  }
+
+  private async handleIncomingControlMessage(msg: any) {
+    if (!msg || !msg.type) return;
+
+    switch (msg.type) {
+      case 'sync-room-title':
       case 'room-info-update': {
-        if (message.title && !message.title.startsWith('Majlis (')) {
-          this.sessionTitle = message.title;
-          saveRoomTitleLocally(this.roomId, message.title);
+        if (msg.title && !msg.title.startsWith('Majlis (')) {
+          this.sessionTitle = msg.title;
+          saveRoomTitleLocally(this.roomId, msg.title);
         }
-        if (this.events.onRoomInfo) {
-          this.events.onRoomInfo({
-            title: message.title,
-            hostName: message.hostName,
-            locked: message.locked,
-            isRecording: message.isRecording,
-          });
-        }
+        this.events.onRoomInfo?.({
+          title: msg.title,
+          hostName: msg.hostName,
+          locked: msg.locked,
+          isRecording: msg.isRecording,
+          spotlightUserId: msg.spotlightUserId,
+          chatEnabled: msg.chatEnabled,
+          screenShareEnabled: msg.screenShareEnabled,
+        });
         break;
       }
 
       case 'user-joined': {
-        const user = message.user;
-        if (!user || user.id === this.userId) return;
+        const user = msg.user || msg;
+        if (!user || !user.id || user.id === this.userId) return;
 
         const participant: Participant = {
           id: user.id,
-          name: user.name,
-          isHost: user.isHost,
-          isCoModerator: user.isCoModerator,
-          isSpeaker: user.isSpeaker,
+          name: user.name || user.userName || 'Attendee',
+          isHost: !!user.isHost,
+          isCoModerator: !!user.isCoModerator,
+          isSpeaker: !!user.isSpeaker,
           isLocal: false,
-          isMuted: user.isMuted,
-          isVideoOff: user.isVideoOff,
-          isScreenSharing: user.isScreenSharing,
-          handRaised: user.handRaised,
+          isMuted: !!user.isMuted,
+          isVideoOff: !!user.isVideoOff,
+          isScreenSharing: !!user.isScreenSharing,
+          handRaised: !!user.handRaised,
         };
 
         const isNew = !this.knownParticipants.has(user.id);
@@ -638,142 +563,256 @@ export class MeetingClient {
 
         if (!this.peerConnections.has(user.id)) {
           const isInitiator = this.userId > user.id;
-          this.createPeerConnection(user.id, isInitiator);
+          await this.createPeerConnection(user.id, isInitiator);
         }
         break;
       }
 
-      case 'comoderator-status-changed': {
-        this.isCoModerator = !!message.isCoModerator;
-        this.events.onCoModeratorStatusChanged?.(this.isCoModerator, message.assignedBy);
-        break;
-      }
-
-      case 'user-left': {
-        const leftId = message.userId;
-        if (!leftId || leftId === this.userId) return;
-
-        this.knownParticipants.delete(leftId);
-        this.closePeerConnection(leftId);
-        this.events.onUserLeft(leftId, message.name);
-        break;
-      }
-
-      case 'spotlight-changed': {
-        this.events.onSpotlightChanged?.(message.targetId || null);
-        break;
-      }
-
-      case 'chat-permission-changed': {
-        this.events.onChatPermissionChanged?.(!!message.enabled);
-        break;
-      }
-
-      case 'screenshare-permission-changed': {
-        this.events.onScreenSharePermissionChanged?.(!!message.enabled);
-        break;
-      }
-
-      case 'hands-lowered': {
-        this.events.onHandsLowered?.();
-        break;
-      }
-
-      case 'promoted-to-host': {
-        this.isHost = true;
-        this.events.onPromotedToHost?.(message.message || 'You are now the facilitator.');
-        break;
-      }
-
-      case 'new-host': {
-        if (message.hostId === this.userId) {
-          this.isHost = true;
+      case 'comoderator-status-changed':
+      case 'host-toggle-comoderator': {
+        const targetId = msg.targetId || msg.userId;
+        const isCoMod = !!msg.isCoModerator;
+        if (targetId === this.userId) {
+          this.isCoModerator = isCoMod;
+          this.events.onCoModeratorStatusChanged?.(isCoMod, msg.assignedBy);
         }
-        break;
-      }
-
-      case 'system-announcement': {
-        this.events.onAnnouncement?.(message.text, message.senderName);
-        break;
-      }
-
-      case 'signal': {
-        const { senderId, signalData } = message;
-        if (!senderId || senderId === this.userId || !signalData) return;
-
-        await this.handleSignalingData(senderId, signalData);
-        break;
-      }
-
-      case 'chat': {
-        if (message.message) {
-          this.events.onChatMessage(message.message);
-        }
-        break;
-      }
-
-      case 'reaction': {
-        if (message.senderId !== this.userId) {
-          this.events.onReaction({
-            id: message.id,
-            senderId: message.senderId,
-            senderName: message.senderName,
-            emoji: message.emoji,
+        if (targetId) {
+          const p = this.knownParticipants.get(targetId);
+          if (p) p.isCoModerator = isCoMod;
+          this.events.onUserStatusChanged({
+            userId: targetId,
+            isCoModerator: isCoMod,
           });
         }
         break;
       }
 
-      case 'speaker-status-changed': {
-        this.events.onSpeakerStatusChanged?.(message.userId, !!message.isSpeaker);
+      case 'user-left': {
+        const leftId = msg.userId || msg.targetId;
+        if (!leftId || leftId === this.userId) return;
+
+        this.knownParticipants.delete(leftId);
+        this.closePeerConnection(leftId);
+        this.events.onUserLeft(leftId, msg.name);
         break;
       }
 
-      case 'user-status-changed': {
+      case 'spotlight-changed':
+      case 'host-spotlight': {
+        const targetId = msg.targetId || null;
+        this.events.onSpotlightChanged?.(targetId);
+        break;
+      }
+
+      case 'chat-permission-changed':
+      case 'host-toggle-chat': {
+        this.events.onChatPermissionChanged?.(!!msg.enabled);
+        break;
+      }
+
+      case 'screenshare-permission-changed':
+      case 'host-toggle-screenshare': {
+        this.events.onScreenSharePermissionChanged?.(!!msg.enabled);
+        break;
+      }
+
+      case 'hands-lowered':
+      case 'host-lower-all-hands': {
+        for (const p of this.knownParticipants.values()) {
+          p.handRaised = false;
+        }
+        this.events.onHandsLowered?.();
+        break;
+      }
+
+      case 'host-lower-hand': {
+        if (msg.targetId) {
+          const p = this.knownParticipants.get(msg.targetId);
+          if (p) p.handRaised = false;
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            handRaised: false,
+          });
+        }
+        break;
+      }
+
+      case 'promoted-to-host': {
+        this.isHost = true;
+        this.events.onPromotedToHost?.(msg.message || 'You are now the facilitator.');
         this.events.onUserStatusChanged({
-          userId: message.userId,
-          isMuted: message.isMuted,
-          isVideoOff: message.isVideoOff,
-          isScreenSharing: message.isScreenSharing,
-          handRaised: message.handRaised,
-          isCoModerator: message.isCoModerator,
-          isSpeaker: message.isSpeaker,
+          userId: this.userId,
+          isHost: true,
         });
         break;
       }
 
+      case 'new-host': {
+        if (msg.hostId === this.userId) {
+          this.isHost = true;
+        } else if (this.isHost) {
+          this.isHost = false;
+        }
+        if (msg.hostId) {
+          for (const [pId, p] of this.knownParticipants.entries()) {
+            p.isHost = (pId === msg.hostId);
+          }
+          this.events.onUserStatusChanged({
+            userId: msg.hostId,
+            isHost: true,
+          });
+        }
+        break;
+      }
+
+      case 'host-transfer': {
+        if (msg.targetId === this.userId) {
+          this.isHost = true;
+          this.events.onPromotedToHost?.(msg.message || 'You have been appointed as the facilitator.');
+        } else if (this.isHost) {
+          this.isHost = false;
+        }
+        if (msg.targetId) {
+          for (const [pId, p] of this.knownParticipants.entries()) {
+            p.isHost = (pId === msg.targetId);
+          }
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            isHost: true,
+          });
+        }
+        break;
+      }
+
+      case 'host-mute-all': {
+        if (!this.isHost) {
+          this.events.onForceMute();
+        }
+        break;
+      }
+
+      case 'host-mute-user':
       case 'force-mute': {
-        this.events.onForceMute();
+        if (msg.targetId === this.userId || !msg.targetId) {
+          this.events.onForceMute();
+        }
+        if (msg.targetId) {
+          const p = this.knownParticipants.get(msg.targetId);
+          if (p) p.isMuted = true;
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            isMuted: true,
+          });
+        }
         break;
       }
 
+      case 'system-announcement':
+      case 'host-announcement': {
+        this.events.onAnnouncement?.(msg.text, msg.senderName);
+        break;
+      }
+
+      case 'chat': {
+        if (msg.message) {
+          this.events.onChatMessage(msg.message);
+        }
+        break;
+      }
+
+      case 'reaction': {
+        if (msg.senderId !== this.userId) {
+          this.events.onReaction({
+            id: msg.id,
+            senderId: msg.senderId,
+            senderName: msg.senderName,
+            emoji: msg.emoji,
+          });
+        }
+        break;
+      }
+
+      case 'speaker-status-changed':
+      case 'host-toggle-speaker': {
+        const targetId = msg.targetId || msg.userId;
+        const isSpeaker = !!msg.isSpeaker;
+        if (targetId) {
+          const p = this.knownParticipants.get(targetId);
+          if (p) p.isSpeaker = isSpeaker;
+          this.events.onSpeakerStatusChanged?.(targetId, isSpeaker);
+          this.events.onUserStatusChanged({
+            userId: targetId,
+            isSpeaker,
+          });
+        }
+        break;
+      }
+
+      case 'user-status-changed':
+      case 'status-update': {
+        const uId = msg.userId || msg.targetId;
+        if (uId) {
+          const p = this.knownParticipants.get(uId);
+          if (p) {
+            if (msg.isMuted !== undefined) p.isMuted = msg.isMuted;
+            if (msg.isVideoOff !== undefined) p.isVideoOff = msg.isVideoOff;
+            if (msg.isScreenSharing !== undefined) p.isScreenSharing = msg.isScreenSharing;
+            if (msg.handRaised !== undefined) p.handRaised = msg.handRaised;
+            if (msg.isHost !== undefined) p.isHost = msg.isHost;
+            if (msg.isCoModerator !== undefined) p.isCoModerator = msg.isCoModerator;
+            if (msg.isSpeaker !== undefined) p.isSpeaker = msg.isSpeaker;
+          }
+          this.events.onUserStatusChanged({
+            userId: uId,
+            isHost: msg.isHost,
+            isMuted: msg.isMuted,
+            isVideoOff: msg.isVideoOff,
+            isScreenSharing: msg.isScreenSharing,
+            handRaised: msg.handRaised,
+            isCoModerator: msg.isCoModerator,
+            isSpeaker: msg.isSpeaker,
+          });
+        }
+        break;
+      }
+
+      case 'host-kick':
       case 'kicked': {
-        this.events.onKicked(message.message || 'You were removed from the room.');
-        this.leave();
+        const kickedId = msg.targetId || msg.userId;
+        if (kickedId === this.userId) {
+          this.events.onKicked(msg.message || 'You were removed from the room.');
+          this.leave();
+        } else if (kickedId) {
+          this.knownParticipants.delete(kickedId);
+          this.closePeerConnection(kickedId);
+          this.events.onUserLeft(kickedId, msg.name);
+        }
         break;
       }
 
-      case 'room-lock-changed': {
-        this.isLocked = message.locked;
+      case 'room-lock-changed':
+      case 'host-toggle-lock': {
+        this.isLocked = !!msg.locked;
         this.events.onLockChanged(this.isLocked);
         break;
       }
 
       case 'recording-notice': {
-        this.events.onRecordingNotice(message.isRecording, message.recordedBy || 'Facilitator');
+        this.events.onRecordingNotice(!!msg.isRecording, msg.recordedBy || 'Facilitator');
         break;
       }
 
-      case 'session-ended': {
+      case 'session-ended':
+      case 'host-end-session': {
         if (this.events.onSessionEnded) {
-          this.events.onSessionEnded(message.message || 'The facilitator has concluded this Majlis session.');
+          this.events.onSessionEnded(msg.message || 'The facilitator has concluded this Majlis session.');
         }
         this.leave();
         break;
       }
 
       case 'error': {
-        this.events.onError(message.message || 'An error occurred.');
+        this.events.onError(msg.message || 'An error occurred.');
         break;
       }
     }
@@ -794,14 +833,10 @@ export class MeetingClient {
       }
     };
 
-    dc.onmessage = (event) => {
+    dc.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'sync-room-title' && data.title) {
-          this.sessionTitle = data.title;
-          saveRoomTitleLocally(this.roomId, data.title);
-          this.events.onRoomInfo?.({ title: data.title, hostName: data.hostName });
-        }
+        await this.handleIncomingControlMessage(data);
       } catch (err) {}
     };
 
@@ -1039,118 +1074,149 @@ export class MeetingClient {
     this.firebaseSync?.updateParticipantStatus(status).catch(() => {});
   }
 
+  // Broadcast control message across WebSocket, direct DataChannels, and local BroadcastChannel
+  private broadcastToAllChannels(payload: any) {
+    this.sendWsMessage(payload);
+
+    for (const dc of this.dataChannels.values()) {
+      if (dc.readyState === 'open') {
+        try {
+          dc.send(JSON.stringify(payload));
+        } catch (e) {}
+      }
+    }
+
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({
+          ...payload,
+          _senderId: this.userId,
+        });
+      } catch (e) {}
+    }
+  }
+
   // Facilitator & Moderator Controls
   public hostMuteAll() {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-mute-all',
     });
+    for (const pId of this.knownParticipants.keys()) {
+      this.firebaseSync?.updateParticipantStatusForUser(pId, { isMuted: true }).catch(() => {});
+    }
   }
 
   public hostMuteUser(targetId: string) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-mute-user',
       targetId,
     });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isMuted: true }).catch(() => {});
   }
 
   public hostLowerAllHands() {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-lower-all-hands',
     });
+    for (const pId of this.knownParticipants.keys()) {
+      this.firebaseSync?.updateParticipantStatusForUser(pId, { handRaised: false }).catch(() => {});
+    }
   }
 
   public hostLowerHand(targetId: string) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-lower-hand',
       targetId,
     });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { handRaised: false }).catch(() => {});
   }
 
   public hostSpotlight(targetId: string | null) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-spotlight',
-      targetId,
+      targetId: targetId || null,
     });
+    this.firebaseSync?.setRoom({ spotlightUserId: targetId || null }).catch(() => {});
   }
 
   public hostSetChatPermission(enabled: boolean) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-toggle-chat',
       enabled,
     });
+    this.firebaseSync?.setRoom({ chatEnabled: enabled }).catch(() => {});
   }
 
   public hostSetScreenSharePermission(enabled: boolean) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-toggle-screenshare',
       enabled,
     });
+    this.firebaseSync?.setRoom({ screenShareEnabled: enabled }).catch(() => {});
   }
 
   public hostBroadcastAnnouncement(text: string) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-announcement',
       text,
+      senderName: this.userName,
     });
+    this.firebaseSync?.setRoom({
+      announcement: { text, senderName: this.userName },
+    }).catch(() => {});
   }
 
   public hostToggleCoModerator(targetId: string, isCoModerator: boolean) {
     if (!this.isHost) return; // Only primary moderator can assign or remove co-moderators
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-toggle-comoderator',
       targetId,
       isCoModerator,
+      assignedBy: this.userName,
     });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isCoModerator }).catch(() => {});
   }
 
   public hostTransfer(targetId: string) {
     if (!this.isHost) return;
-    this.sendWsMessage({
+    const target = this.knownParticipants.get(targetId);
+    this.broadcastToAllChannels({
       type: 'host-transfer',
       targetId,
+      hostName: target?.name || 'Facilitator',
     });
+    this.isHost = false;
+    this.firebaseSync?.setRoom({
+      hostId: targetId,
+      hostName: target?.name || 'Facilitator',
+    }).catch(() => {});
+    this.firebaseSync?.updateParticipantStatusForUser(this.userId, { isHost: false }).catch(() => {});
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isHost: true }).catch(() => {});
   }
 
   public hostKickUser(targetId: string) {
     if (!this.isHost && !this.isCoModerator) return;
 
-    // 1. Send via WebSocket to server
-    this.sendWsMessage({
+    // 1. Broadcast kick to all channels
+    this.broadcastToAllChannels({
       type: 'host-kick',
       targetId,
+      message: 'You have been removed from the meeting by the moderator.',
     });
 
     // 2. Remove & mark kicked in Firebase Firestore so all attendees sync
     this.firebaseSync?.deleteParticipant(targetId).catch(() => {});
     this.firebaseSync?.markKicked(targetId).catch(() => {});
 
-    // 3. Broadcast to all open tabs / windows
-    if (this.broadcastChannel) {
-      try {
-        this.broadcastChannel.postMessage({
-          type: 'host-kick',
-          _senderId: this.userId,
-          targetId,
-          message: 'You have been removed from the meeting by the moderator.',
-        });
-        this.broadcastChannel.postMessage({
-          type: 'user-left',
-          _senderId: this.userId,
-          userId: targetId,
-          name: 'Participant',
-        });
-      } catch (e) {}
-    }
-
-    // 4. Clean up locally
+    // 3. Clean up locally
     this.knownParticipants.delete(targetId);
     this.closePeerConnection(targetId);
     this.events.onUserLeft(targetId);
@@ -1158,18 +1224,19 @@ export class MeetingClient {
 
   public hostToggleSpeaker(targetId: string, isSpeaker: boolean) {
     if (!this.isHost && !this.isCoModerator) return;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-toggle-speaker',
       targetId,
       isSpeaker,
     });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isSpeaker }).catch(() => {});
   }
 
   public hostToggleLock(forcedState?: boolean) {
     if (!this.isHost && !this.isCoModerator) return;
     const nextLocked = forcedState !== undefined ? forcedState : !this.isLocked;
     this.isLocked = nextLocked;
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-toggle-lock',
       locked: nextLocked,
     });
@@ -1182,32 +1249,21 @@ export class MeetingClient {
   }
 
   public notifyRecording(isRecording: boolean) {
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'recording-notice',
       isRecording,
+      recordedBy: this.userName || 'Facilitator',
     });
+    this.firebaseSync?.setRoom({ isRecording }).catch(() => {});
   }
 
   public hostEndSession() {
     if (!this.isHost) return;
-
-    // 1. Notify via WebSocket
-    this.sendWsMessage({
+    this.broadcastToAllChannels({
       type: 'host-end-session',
+      message: 'The facilitator has concluded this Majlis session.',
     });
-
-    // 2. Notify via BroadcastChannel
-    if (this.broadcastChannel) {
-      try {
-        this.broadcastChannel.postMessage({
-          type: 'session-ended',
-          _senderId: this.userId,
-          message: 'The facilitator has concluded this Majlis session.',
-        });
-      } catch (e) {}
-    }
-
-    // 3. Delete room and participants from Firestore so it disappears from Ongoing list immediately
+    // Delete room and participants from Firestore so it disappears from Ongoing list immediately
     this.firebaseSync?.endRoomSession().catch(() => {});
   }
 

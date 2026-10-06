@@ -1,10 +1,11 @@
 import React from 'react';
 import { MajlisSession } from '../../types/meeting';
-import { Plus, ArrowRight, Calendar, Users } from 'lucide-react';
+import { Plus, ArrowRight, Calendar, Users, Loader2 } from 'lucide-react';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 
 interface MajalisScreenProps {
   activeMajalis: MajlisSession[];
+  loadingActiveMajalis?: boolean;
   upcomingSessions: MajlisSession[];
   onJoinMajlis: (roomId: string, title?: string) => void;
   onStartMajlis: () => void;
@@ -13,6 +14,7 @@ interface MajalisScreenProps {
 
 export const MajalisScreen: React.FC<MajalisScreenProps> = ({
   activeMajalis,
+  loadingActiveMajalis,
   upcomingSessions,
   onJoinMajlis,
   onStartMajlis,
@@ -64,7 +66,19 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
           )}
         </div>
 
-        {activeMajalis.length === 0 ? (
+        {loadingActiveMajalis ? (
+          <div className="p-4 bg-[#1A110A] border border-[#302116] rounded-sm flex items-center justify-between gap-3 text-xs shadow-md">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-[#E9A83A] animate-spin shrink-0" />
+              <span className="text-[#C2B2A3] font-medium">
+                Syncing sanctuary circles in real-time...
+              </span>
+            </div>
+            <span className="text-[11px] text-[#E9A83A] font-semibold">
+              Connecting
+            </span>
+          </div>
+        ) : activeMajalis.length === 0 ? (
           <div className="p-4 bg-[#1A110A] border border-[#302116] rounded-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-md">
             <span className="text-[#C2B2A3] font-medium">
               It's quiet in the sanctuary right now. Start a Majlis and bring everyone in.

@@ -26,29 +26,34 @@ export class FirebaseMeetingSync {
 
   // Register or update the room in cloud
   public async setRoom(data: {
-    title: string;
-    hostName: string;
-    hostId: string;
+    title?: string;
+    hostName?: string;
+    hostId?: string;
     locked?: boolean;
     isRecording?: boolean;
+    spotlightUserId?: string | null;
+    chatEnabled?: boolean;
+    screenShareEnabled?: boolean;
+    announcement?: { text: string; senderName?: string } | null;
   }) {
     const path = `rooms/${this.roomId}`;
     try {
-      await setDoc(
-        doc(db, 'rooms', this.roomId),
-        {
-          roomId: this.roomId,
-          title: data.title || 'Live Majlis',
-          hostName: data.hostName || 'Facilitator',
-          hostId: data.hostId || this.userId,
-          locked: !!data.locked,
-          isRecording: !!data.isRecording,
-          ended: false,
-          updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+      const updatePayload: any = {
+        roomId: this.roomId,
+        ended: false,
+        updatedAt: serverTimestamp(),
+      };
+      if (data.title !== undefined) updatePayload.title = data.title;
+      if (data.hostName !== undefined) updatePayload.hostName = data.hostName;
+      if (data.hostId !== undefined) updatePayload.hostId = data.hostId;
+      if (data.locked !== undefined) updatePayload.locked = data.locked;
+      if (data.isRecording !== undefined) updatePayload.isRecording = data.isRecording;
+      if (data.spotlightUserId !== undefined) updatePayload.spotlightUserId = data.spotlightUserId;
+      if (data.chatEnabled !== undefined) updatePayload.chatEnabled = data.chatEnabled;
+      if (data.screenShareEnabled !== undefined) updatePayload.screenShareEnabled = data.screenShareEnabled;
+      if (data.announcement !== undefined) updatePayload.announcement = data.announcement;
+
+      await setDoc(doc(db, 'rooms', this.roomId), updatePayload, { merge: true });
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, path);
     }
@@ -115,6 +120,8 @@ export class FirebaseMeetingSync {
     id: string;
     name: string;
     isHost: boolean;
+    isCoModerator?: boolean;
+    isSpeaker?: boolean;
     isMuted: boolean;
     isVideoOff: boolean;
     isScreenSharing?: boolean;
@@ -125,14 +132,16 @@ export class FirebaseMeetingSync {
       await setDoc(doc(db, 'rooms', this.roomId, 'participants', participant.id), {
         id: participant.id,
         name: participant.name,
-        isHost: participant.isHost,
-        isMuted: participant.isMuted,
-        isVideoOff: participant.isVideoOff,
+        isHost: !!participant.isHost,
+        isCoModerator: !!participant.isCoModerator,
+        isSpeaker: !!participant.isSpeaker,
+        isMuted: !!participant.isMuted,
+        isVideoOff: !!participant.isVideoOff,
         isScreenSharing: !!participant.isScreenSharing,
         handRaised: !!participant.handRaised,
         joinedAt: Date.now(),
         lastSeen: Date.now(),
-      });
+      }, { merge: true });
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, path);
     }
@@ -144,11 +153,39 @@ export class FirebaseMeetingSync {
     isVideoOff?: boolean;
     isScreenSharing?: boolean;
     handRaised?: boolean;
+    isHost?: boolean;
+    isCoModerator?: boolean;
+    isSpeaker?: boolean;
   }) {
     const path = `rooms/${this.roomId}/participants/${this.userId}`;
     try {
       await setDoc(
         doc(db, 'rooms', this.roomId, 'participants', this.userId),
+        {
+          ...status,
+          lastSeen: Date.now(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, path);
+    }
+  }
+
+  // Update specific participant status (e.g. moderator actions)
+  public async updateParticipantStatusForUser(userId: string, status: {
+    isMuted?: boolean;
+    isVideoOff?: boolean;
+    isScreenSharing?: boolean;
+    handRaised?: boolean;
+    isHost?: boolean;
+    isCoModerator?: boolean;
+    isSpeaker?: boolean;
+  }) {
+    const path = `rooms/${this.roomId}/participants/${userId}`;
+    try {
+      await setDoc(
+        doc(db, 'rooms', this.roomId, 'participants', userId),
         {
           ...status,
           lastSeen: Date.now(),
@@ -226,6 +263,8 @@ export class FirebaseMeetingSync {
             id: d.id,
             name: d.name,
             isHost: !!d.isHost,
+            isCoModerator: !!d.isCoModerator,
+            isSpeaker: !!d.isSpeaker,
             isLocal: d.id === this.userId,
             isMuted: !!d.isMuted,
             isVideoOff: !!d.isVideoOff,
