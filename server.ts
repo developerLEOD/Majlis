@@ -46,8 +46,9 @@ const rooms = new Map<string, Room>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function getActiveRoomsList() {
+  const now = Date.now();
   return Array.from(rooms.values())
-    .filter((r) => r.participants.size > 0)
+    .filter((r) => r.participants.size > 0 || (now - r.createdAt < 1000 * 60 * 15))
     .map((r) => ({
       id: `live_${r.id}`,
       roomId: r.id,
@@ -55,7 +56,7 @@ function getActiveRoomsList() {
       hostName: r.hostName || 'Facilitator',
       scheduledAt: 'Happening Now',
       status: 'live' as const,
-      participantCount: r.participants.size,
+      participantCount: Math.max(r.participants.size, 1),
       startedAt: r.createdAt,
       locked: r.locked,
     }));

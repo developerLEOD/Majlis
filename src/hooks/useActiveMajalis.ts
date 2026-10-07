@@ -265,16 +265,16 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       }
     }
 
-    // 3. Add fresh locally created rooms (only for 15 seconds while entering room)
+    // 3. Add fresh locally created rooms (for 5 minutes while room is live)
     const now = Date.now();
     optimisticRoomsRef.current = optimisticRoomsRef.current.filter(
-      (r) => r && typeof r.startedAt === 'number' && now - r.startedAt < 1000 * 15
+      (r) => r && typeof r.startedAt === 'number' && now - r.startedAt < 1000 * 60 * 5
     );
     for (const r of optimisticRoomsRef.current) {
-      if (r && r.roomId && (r.participantCount ?? 0) > 0) {
+      if (r && r.roomId) {
         const key = r.roomId.toLowerCase();
         if (!mergedMap.has(key)) {
-          mergedMap.set(key, r);
+          mergedMap.set(key, { ...r, participantCount: Math.max(r.participantCount ?? 1, 1) });
         }
       }
     }
@@ -353,8 +353,14 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
 
   const addOptimisticMajlis = useCallback(
     (session: MajlisSession) => {
+      const formatted: MajlisSession = {
+        ...session,
+        status: 'live',
+        participantCount: Math.max(session.participantCount ?? 1, 1),
+        startedAt: Date.now(),
+      };
       optimisticRoomsRef.current = [
-        { ...session, startedAt: Date.now() },
+        formatted,
         ...optimisticRoomsRef.current.filter((p) => p.roomId.toLowerCase() !== session.roomId.toLowerCase()),
       ];
       mergeAndSync();
