@@ -72,6 +72,7 @@ export class MeetingClient {
   private ws: WebSocket | null = null;
   private peerConnections = new Map<string, RTCPeerConnection>();
   private dataChannels = new Map<string, RTCDataChannel>();
+  private remoteStreams = new Map<string, MediaStream>();
   private queuedCandidates = new Map<string, RTCIceCandidateInit[]>();
   private localStream: MediaStream | null = null;
   private events: MeetingClientEvents;
@@ -954,10 +955,20 @@ export class MeetingClient {
     };
 
     pc.ontrack = (event) => {
+      let stream = this.remoteStreams.get(peerId);
       if (event.streams && event.streams[0]) {
-        this.events.onRemoteStream(peerId, event.streams[0]);
+        stream = event.streams[0];
+        this.remoteStreams.set(peerId, stream);
       } else if (event.track) {
-        const stream = new MediaStream([event.track]);
+        if (!stream) {
+          stream = new MediaStream();
+          this.remoteStreams.set(peerId, stream);
+        }
+        if (!stream.getTracks().some((t) => t.id === event.track.id)) {
+          stream.addTrack(event.track);
+        }
+      }
+      if (stream) {
         this.events.onRemoteStream(peerId, stream);
       }
     };
@@ -1366,13 +1377,19 @@ export class MeetingClient {
   }
 
   public hostEndSession() {
-    if (!this.isHost) return;
     this.broadcastToAllChannels({
       type: 'host-end-session',
+      roomId: this.roomId,
       message: 'The facilitator has concluded this Majlis session.',
     });
     // Delete room and participants from Firestore so it disappears from Ongoing list immediately
     this.firebaseSync?.endRoomSession().catch(() => {});
+    // Notify server to purge from active rooms
+    fetch('/api/end-majlis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roomId: this.roomId }),
+    }).catch(() => {});
   }
 
   private closePeerConnection(peerId: string) {
@@ -1391,6 +1408,8 @@ export class MeetingClient {
       } catch (e) {}
       this.dataChannels.delete(peerId);
     }
+
+    this.remoteStreams.delete(peerId);
   }
 
   public leave() {

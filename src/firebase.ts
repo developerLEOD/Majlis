@@ -30,9 +30,34 @@ export interface FirestoreErrorInfo {
   };
 }
 
+let hasReportedQuotaExhausted = false;
+export let isFirestoreQuotaExhausted = false;
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errStr = error instanceof Error ? error.message : String(error);
+  const isQuota =
+    errStr.includes('resource-exhausted') ||
+    errStr.includes('Quota limit exceeded') ||
+    (error as any)?.code === 'resource-exhausted';
+
+  if (isQuota) {
+    isFirestoreQuotaExhausted = true;
+    if (!hasReportedQuotaExhausted) {
+      hasReportedQuotaExhausted = true;
+      console.warn(
+        'Firestore free daily write quota reached. Seamlessly switching to local WebSocket and BroadcastChannel synchronization.'
+      );
+    }
+    return {
+      error: 'Firestore quota limit reached. Using WebSocket / REST fallback.',
+      operationType,
+      path,
+      authInfo: { userId: auth.currentUser?.uid },
+    };
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errStr,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -48,7 +73,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.warn('Firestore notice: ', JSON.stringify(errInfo));
   return errInfo;
 }
 

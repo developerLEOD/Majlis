@@ -265,13 +265,13 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       }
     }
 
-    // 3. Add fresh locally created rooms (only for 20 seconds while entering room)
+    // 3. Add fresh locally created rooms (only for 15 seconds while entering room)
     const now = Date.now();
     optimisticRoomsRef.current = optimisticRoomsRef.current.filter(
-      (r) => r && typeof r.startedAt === 'number' && now - r.startedAt < 1000 * 20
+      (r) => r && typeof r.startedAt === 'number' && now - r.startedAt < 1000 * 15
     );
     for (const r of optimisticRoomsRef.current) {
-      if (r && r.roomId) {
+      if (r && r.roomId && (r.participantCount ?? 0) > 0) {
         const key = r.roomId.toLowerCase();
         if (!mergedMap.has(key)) {
           mergedMap.set(key, r);

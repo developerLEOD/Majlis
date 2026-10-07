@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   getDocs,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, isFirestoreQuotaExhausted, OperationType } from '../firebase';
 import { ChatMessage, MajlisSession, Participant, ReactionItem } from '../types/meeting';
 
 export class FirebaseMeetingSync {
@@ -36,6 +36,7 @@ export class FirebaseMeetingSync {
     screenShareEnabled?: boolean;
     announcement?: { text: string; senderName?: string } | null;
   }) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}`;
     try {
       const updatePayload: any = {
@@ -61,6 +62,7 @@ export class FirebaseMeetingSync {
 
   // When facilitator ends session for all, delete/mark ended
   public async endRoomSession() {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}`;
     try {
       // 1. Mark ended first so any listeners fire sessionEnded immediately
@@ -72,12 +74,14 @@ export class FirebaseMeetingSync {
           participantCount: 0,
         },
         { merge: true }
-      );
+      ).catch(() => {});
 
       // 2. Delete participants
-      const participantsSnap = await getDocs(collection(db, 'rooms', this.roomId, 'participants'));
-      for (const d of participantsSnap.docs) {
-        deleteDoc(d.ref).catch(() => {});
+      const participantsSnap = await getDocs(collection(db, 'rooms', this.roomId, 'participants')).catch(() => null);
+      if (participantsSnap) {
+        for (const d of participantsSnap.docs) {
+          deleteDoc(d.ref).catch(() => {});
+        }
       }
 
       // 3. Immediately delete room document
@@ -124,6 +128,7 @@ export class FirebaseMeetingSync {
     isScreenSharing?: boolean;
     handRaised?: boolean;
   }) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/participants/${participant.id}`;
     try {
       await setDoc(doc(db, 'rooms', this.roomId, 'participants', participant.id), {
@@ -139,6 +144,16 @@ export class FirebaseMeetingSync {
         joinedAt: Date.now(),
         lastSeen: Date.now(),
       }, { merge: true });
+
+      // Update room document with active state
+      await setDoc(
+        doc(db, 'rooms', this.roomId),
+        {
+          ended: false,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch(() => {});
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, path);
     }
@@ -154,6 +169,7 @@ export class FirebaseMeetingSync {
     isCoModerator?: boolean;
     isSpeaker?: boolean;
   }) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/participants/${this.userId}`;
     try {
       await setDoc(
@@ -179,6 +195,7 @@ export class FirebaseMeetingSync {
     isCoModerator?: boolean;
     isSpeaker?: boolean;
   }) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/participants/${userId}`;
     try {
       await setDoc(
@@ -196,9 +213,20 @@ export class FirebaseMeetingSync {
 
   // Remove participant upon leaving
   public async removeParticipant() {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/participants/${this.userId}`;
     try {
-      await deleteDoc(doc(db, 'rooms', this.roomId, 'participants', this.userId));
+      await deleteDoc(doc(db, 'rooms', this.roomId, 'participants', this.userId)).catch(() => {});
+      const remainingSnap = await getDocs(collection(db, 'rooms', this.roomId, 'participants')).catch(() => null);
+      if (remainingSnap && remainingSnap.empty) {
+        await deleteDoc(doc(db, 'rooms', this.roomId)).catch(() => {});
+      } else if (remainingSnap) {
+        await setDoc(
+          doc(db, 'rooms', this.roomId),
+          { participantCount: remainingSnap.size, updatedAt: serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, path);
     }
@@ -206,9 +234,14 @@ export class FirebaseMeetingSync {
 
   // Moderator removes / dismisses a participant from Firestore
   public async deleteParticipant(targetId: string) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/participants/${targetId}`;
     try {
-      await deleteDoc(doc(db, 'rooms', this.roomId, 'participants', targetId));
+      await deleteDoc(doc(db, 'rooms', this.roomId, 'participants', targetId)).catch(() => {});
+      const remainingSnap = await getDocs(collection(db, 'rooms', this.roomId, 'participants')).catch(() => null);
+      if (remainingSnap && remainingSnap.empty) {
+        await deleteDoc(doc(db, 'rooms', this.roomId)).catch(() => {});
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, path);
     }
@@ -216,6 +249,7 @@ export class FirebaseMeetingSync {
 
   // Mark participant as kicked in cloud so all clients & reconnect attempts know
   public async markKicked(targetId: string) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/kicked/${targetId}`;
     try {
       await setDoc(doc(db, 'rooms', this.roomId, 'kicked', targetId), {
@@ -281,6 +315,7 @@ export class FirebaseMeetingSync {
 
   // WebRTC Signaling via Firestore
   public async sendSignal(targetId: string, signalData: any) {
+    if (isFirestoreQuotaExhausted) return;
     const signalId = `sig_${this.userId}_to_${targetId}_${Date.now()}`;
     const path = `rooms/${this.roomId}/signals/${signalId}`;
     try {
@@ -327,6 +362,7 @@ export class FirebaseMeetingSync {
 
   // Chat via Firestore
   public async sendChatMessage(message: ChatMessage) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/messages/${message.id}`;
     try {
       await setDoc(doc(db, 'rooms', this.roomId, 'messages', message.id), {
@@ -373,6 +409,7 @@ export class FirebaseMeetingSync {
 
   // Live emoji reactions via Firestore
   public async sendReaction(reaction: ReactionItem) {
+    if (isFirestoreQuotaExhausted) return;
     const path = `rooms/${this.roomId}/reactions/${reaction.id}`;
     try {
       await setDoc(doc(db, 'rooms', this.roomId, 'reactions', reaction.id), {
@@ -431,6 +468,7 @@ export async function createCloudRoom(session: {
   hostName: string;
   hostId?: string;
 }): Promise<void> {
+  if (isFirestoreQuotaExhausted) return;
   const cleanRoomId = session.roomId.trim().toLowerCase();
   const path = `rooms/${cleanRoomId}`;
   try {
@@ -462,21 +500,36 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
     q,
     (snapshot) => {
       const list: MajlisSession[] = [];
+      const now = Date.now();
       snapshot.forEach((docSnap) => {
         const d = docSnap.data();
-        if (d && d.roomId && !d.ended) {
-          list.push({
-            id: `live_${d.roomId}`,
-            roomId: d.roomId,
-            title: d.title || 'Live Majlis',
-            hostName: d.hostName || 'Facilitator',
-            scheduledAt: 'Happening Now',
-            status: 'live',
-            participantCount: typeof d.participantCount === 'number' && d.participantCount > 0 ? d.participantCount : 1,
-            startedAt: d.createdAt ? (d.createdAt.toMillis?.() || Date.now()) : Date.now(),
-            locked: !!d.locked,
-          });
+        if (!d || !d.roomId) return;
+
+        const isEnded = Boolean(d.ended);
+        const count = typeof d.participantCount === 'number' ? d.participantCount : 0;
+        const createdTime = d.createdAt ? (d.createdAt.toMillis?.() || Date.now()) : Date.now();
+        const updatedTime = d.updatedAt ? (d.updatedAt.toMillis?.() || createdTime) : createdTime;
+        const isStale = (now - updatedTime > 1000 * 60 * 60) && count <= 0;
+
+        if (isEnded || isStale || count <= 0) {
+          // If explicitly ended or stale and empty, asynchronously purge the lingering doc
+          if (isEnded || isStale) {
+            deleteDoc(docSnap.ref).catch(() => {});
+          }
+          return;
         }
+
+        list.push({
+          id: `live_${d.roomId}`,
+          roomId: d.roomId,
+          title: d.title || 'Live Majlis',
+          hostName: d.hostName || 'Facilitator',
+          scheduledAt: 'Happening Now',
+          status: 'live',
+          participantCount: Math.max(count, 1),
+          startedAt: createdTime,
+          locked: !!d.locked,
+        });
       });
       onUpdate(list);
     },
@@ -490,7 +543,13 @@ export async function clearAllCloudActiveRooms(): Promise<void> {
   const path = 'rooms';
   try {
     const snapshot = await getDocs(collection(db, 'rooms'));
-    const promises = snapshot.docs.map((docSnap) => deleteDoc(docSnap.ref));
+    const promises = snapshot.docs.map(async (docSnap) => {
+      const participantsSnap = await getDocs(collection(db, 'rooms', docSnap.id, 'participants')).catch(() => null);
+      if (participantsSnap) {
+        participantsSnap.docs.forEach((pDoc) => deleteDoc(pDoc.ref).catch(() => {}));
+      }
+      return deleteDoc(docSnap.ref);
+    });
     await Promise.all(promises);
   } catch (e) {
     handleFirestoreError(e, OperationType.DELETE, path);
@@ -501,18 +560,11 @@ export async function endCloudRoomSession(roomId: string): Promise<void> {
   const cleanRoomId = roomId.trim().toLowerCase();
   const path = `rooms/${cleanRoomId}`;
   try {
-    await setDoc(
-      doc(db, 'rooms', cleanRoomId),
-      {
-        ended: true,
-        endedAt: serverTimestamp(),
-        participantCount: 0,
-      },
-      { merge: true }
-    );
-    const participantsSnap = await getDocs(collection(db, 'rooms', cleanRoomId, 'participants'));
-    for (const d of participantsSnap.docs) {
-      deleteDoc(d.ref).catch(() => {});
+    const participantsSnap = await getDocs(collection(db, 'rooms', cleanRoomId, 'participants')).catch(() => null);
+    if (participantsSnap) {
+      for (const d of participantsSnap.docs) {
+        deleteDoc(d.ref).catch(() => {});
+      }
     }
     await deleteDoc(doc(db, 'rooms', cleanRoomId)).catch(() => {});
   } catch (e) {
@@ -593,6 +645,7 @@ export async function createScheduledSession(session: {
   scheduledAt: string;
   series?: string;
 }): Promise<void> {
+  if (isFirestoreQuotaExhausted) return;
   const cleanId = `sched_${session.roomId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')}`;
   const path = `scheduled_sessions/${cleanId}`;
   try {
@@ -616,6 +669,7 @@ export async function createScheduledSession(session: {
 }
 
 export async function deleteScheduledSession(sessionId: string): Promise<void> {
+  if (isFirestoreQuotaExhausted) return;
   const cleanId = sessionId.trim();
   const path = `scheduled_sessions/${cleanId}`;
   try {
