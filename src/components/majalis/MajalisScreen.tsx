@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MajlisSession } from '../../types/meeting';
-import { Plus, ArrowRight, Calendar, Users, Loader2, Sparkles, Clock } from 'lucide-react';
+import { Plus, ArrowRight, Calendar, Users, Loader2, Sparkles, Clock, RefreshCw } from 'lucide-react';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 
 interface MajalisScreenProps {
@@ -11,6 +11,7 @@ interface MajalisScreenProps {
   onStartMajlis: () => void;
   onScheduleMajlis?: () => void;
   onClearActive?: () => void;
+  onRefreshActive?: () => void;
 }
 
 export const MajalisScreen: React.FC<MajalisScreenProps> = ({
@@ -21,7 +22,9 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
   onStartMajlis,
   onScheduleMajlis,
   onClearActive,
+  onRefreshActive,
 }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
   return (
     <div className="flex-1 overflow-y-auto bg-[#120B07] text-[#FFFCF5] p-6 lg:p-10 select-none space-y-8 max-w-6xl w-full mx-auto">
       {/* Directory Header */}
@@ -68,14 +71,32 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
             </h2>
           </div>
 
-          {onClearActive && activeMajalis.length > 0 && (
-            <button
-              onClick={onClearActive}
-              className="text-xs font-medium text-[#8A7A6D] hover:text-[#FFFCF5] underline transition-colors"
-            >
-              Clear Directory
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {onRefreshActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRefreshing(true);
+                  onRefreshActive();
+                  setTimeout(() => setIsRefreshing(false), 800);
+                }}
+                className="text-xs font-semibold text-[#A8988B] hover:text-[#FFFCF5] flex items-center gap-1.5 transition-colors px-2.5 py-1 rounded-sm bg-[#24170E] border border-[#3A2619] hover:border-[#E9A83A]/40 shadow-xs"
+                title="Refresh live ongoing sessions list"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-[#E9A83A] ${isRefreshing || loadingActiveMajalis ? 'animate-spin' : ''}`} />
+                <span>Refresh List</span>
+              </button>
+            )}
+
+            {onClearActive && activeMajalis.length > 0 && (
+              <button
+                onClick={onClearActive}
+                className="text-xs font-medium text-[#8A7A6D] hover:text-[#FFFCF5] underline transition-colors"
+              >
+                Clear Directory
+              </button>
+            )}
+          </div>
         </div>
 
         {loadingActiveMajalis ? (

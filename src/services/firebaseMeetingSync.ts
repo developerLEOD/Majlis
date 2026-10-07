@@ -506,13 +506,13 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
         if (!d || !d.roomId) return;
 
         const isEnded = Boolean(d.ended);
-        const count = typeof d.participantCount === 'number' ? d.participantCount : 1;
+        const count = typeof d.participantCount === 'number' ? d.participantCount : 0;
         const createdTime = d.createdAt ? (d.createdAt.toMillis?.() || Date.now()) : Date.now();
         const updatedTime = d.updatedAt ? (d.updatedAt.toMillis?.() || createdTime) : createdTime;
-        // Consider stale if inactive for over 20 minutes
-        const isStale = (now - updatedTime > 1000 * 60 * 20);
+        // Consider stale if inactive for over 15 minutes or count is 0 or marked ended
+        const isStale = (now - updatedTime > 1000 * 60 * 15);
 
-        if (isEnded || isStale) {
+        if (isEnded || isStale || count <= 0) {
           if (!isFirestoreQuotaExhausted) {
             deleteDoc(docSnap.ref).catch(() => {});
           }

@@ -5,6 +5,7 @@ import {
   Calendar,
   Link as LinkIcon,
   Loader2,
+  RefreshCw,
   Video,
   X,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ interface HomeScreenProps {
   onStartMajlis: () => void;
   onJoinMajlis: (roomId: string, title?: string) => void;
   onClearActive?: () => void;
+  onRefreshActive?: () => void;
   externalErrorMessage?: string | null;
   onClearExternalError?: () => void;
 }
@@ -32,12 +34,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   upcomingSessions: propUpcoming,
   onStartMajlis,
   onJoinMajlis,
+  onRefreshActive,
   externalErrorMessage,
   onClearExternalError,
 }) => {
   const [inputCode, setInputCode] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const displayError = externalErrorMessage || errorMessage;
 
@@ -284,13 +288,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   </h3>
                 </div>
 
-                <button
-                  onClick={onStartMajlis}
-                  className="text-xs font-semibold text-[#A8988B] hover:text-[#E9A83A] flex items-center gap-1 transition-colors"
-                >
-                  <span>Start Majlis</span>
-                  <span>→</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  {onRefreshActive && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRefreshing(true);
+                        onRefreshActive();
+                        setTimeout(() => setIsRefreshing(false), 800);
+                      }}
+                      className="text-xs font-semibold text-[#A8988B] hover:text-[#FFFCF5] flex items-center gap-1.5 transition-colors px-2 py-1 rounded-sm bg-[#24170E] border border-[#3A2619] hover:border-[#E9A83A]/40"
+                      title="Refresh live ongoing sessions list"
+                    >
+                      <RefreshCw className={`w-3 h-3 text-[#E9A83A] ${isRefreshing || loadingActiveMajalis ? 'animate-spin' : ''}`} />
+                      <span>Refresh</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={onStartMajlis}
+                    className="text-xs font-semibold text-[#A8988B] hover:text-[#E9A83A] flex items-center gap-1 transition-colors"
+                  >
+                    <span>Start Majlis</span>
+                    <span>→</span>
+                  </button>
+                </div>
               </div>
 
               {/* Active Sessions List or Loading State or Compact Empty State */}

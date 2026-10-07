@@ -70,7 +70,7 @@ function MainAppContent() {
   const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
 
   // Live ongoing majalis fetched and synced via WebSocket & REST
-  const { activeMajalis, addOptimisticMajlis, removeRoom, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
+  const { activeMajalis, refreshActiveMajalis, addOptimisticMajlis, removeRoom, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
     // Subscribe to Firestore scheduled sessions for real-time schedule sync
@@ -286,6 +286,7 @@ function MainAppContent() {
             onStartMajlis={() => setIsStartModalOpen(true)}
             onJoinMajlis={handleInitiateJoin}
             onClearActive={clearAllActive}
+            onRefreshActive={refreshActiveMajalis}
             externalErrorMessage={joinErrorMessage}
             onClearExternalError={() => setJoinErrorMessage(null)}
           />
@@ -306,6 +307,7 @@ function MainAppContent() {
               setIsStartModalOpen(true);
             }}
             onClearActive={clearAllActive}
+            onRefreshActive={refreshActiveMajalis}
           />
         )}
 

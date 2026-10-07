@@ -82,14 +82,13 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
-// Validate connection
+// Validate connection safely without throwing quota errors
 async function testConnection() {
+  if (isFirestoreQuotaExhausted) return;
   try {
     await getDocFromServer(doc(db, 'rooms', 'test-connection'));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore offline status:', error);
-    }
+    handleFirestoreError(error, OperationType.GET, 'rooms/test-connection');
   }
 }
 

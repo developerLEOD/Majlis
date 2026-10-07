@@ -5,6 +5,28 @@ import { MajlisSession } from '../types/meeting';
 import { subscribeToCloudActiveRooms, clearAllCloudActiveRooms } from '../services/firebaseMeetingSync';
 
 const STORAGE_ACTIVE_ROOMS_KEY = 'infinitymeet_active_rooms_cache';
+const STORAGE_ENDED_ROOMS_KEY = 'infinitymeet_ended_rooms';
+
+function getStoredEndedRooms(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_ENDED_ROOMS_KEY) || localStorage.getItem(STORAGE_ENDED_ROOMS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr.map((s) => String(s).toLowerCase()));
+      }
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+function saveStoredEndedRooms(set: Set<string>) {
+  try {
+    const arr = Array.from(set);
+    sessionStorage.setItem(STORAGE_ENDED_ROOMS_KEY, JSON.stringify(arr));
+    localStorage.setItem(STORAGE_ENDED_ROOMS_KEY, JSON.stringify(arr));
+  } catch (e) {}
+}
 
 export interface RoomVerificationResult {
   isOngoing: boolean;
@@ -229,6 +251,7 @@ export async function verifyMajlisOngoing(
 export function useActiveMajalis(isInsideMeeting: boolean) {
   const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const endedRoomsSetRef = useRef<Set<string>>(getStoredEndedRooms());
   const cloudRoomsRef = useRef<MajlisSession[]>([]);
   const serverRoomsRef = useRef<MajlisSession[]>([]);
   const optimisticRoomsRef = useRef<MajlisSession[]>([]);
@@ -238,29 +261,35 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   // Helper to merge all active sources without stale ghosts
   const mergeAndSync = useCallback(() => {
     const mergedMap = new Map<string, MajlisSession>();
+    const endedSet = endedRoomsSetRef.current;
 
-    // 1. Add cloud rooms from Firestore (authoritative)
+    // 1. Add cloud rooms from Firestore
     for (const r of cloudRoomsRef.current) {
       if (r && r.roomId && (r.participantCount ?? 0) > 0) {
-        mergedMap.set(r.roomId.toLowerCase(), r);
+        const key = r.roomId.toLowerCase();
+        if (!endedSet.has(key)) {
+          mergedMap.set(key, r);
+        }
       }
     }
 
-    // 2. Add server rooms from WebSocket / REST (authoritative)
+    // 2. Add server rooms from WebSocket / REST
     for (const r of serverRoomsRef.current) {
       if (r && r.roomId && (r.participantCount ?? 0) > 0) {
         const key = r.roomId.toLowerCase();
-        const existing = mergedMap.get(key);
-        if (existing) {
-          mergedMap.set(key, {
-            ...existing,
-            ...r,
-            title: r.title || existing.title,
-            hostName: r.hostName || existing.hostName,
-            participantCount: Math.max(existing.participantCount || 1, r.participantCount || 1),
-          });
-        } else {
-          mergedMap.set(key, r);
+        if (!endedSet.has(key)) {
+          const existing = mergedMap.get(key);
+          if (existing) {
+            mergedMap.set(key, {
+              ...existing,
+              ...r,
+              title: r.title || existing.title,
+              hostName: r.hostName || existing.hostName,
+              participantCount: Math.max(existing.participantCount || 1, r.participantCount || 1),
+            });
+          } else {
+            mergedMap.set(key, r);
+          }
         }
       }
     }
@@ -273,7 +302,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     for (const r of optimisticRoomsRef.current) {
       if (r && r.roomId) {
         const key = r.roomId.toLowerCase();
-        if (!mergedMap.has(key)) {
+        if (!endedSet.has(key) && !mergedMap.has(key)) {
           mergedMap.set(key, { ...r, participantCount: Math.max(r.participantCount ?? 1, 1) });
         }
       }
@@ -301,10 +330,21 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     (roomId: string) => {
       if (!roomId) return;
       const cleanId = roomId.trim().toLowerCase();
+
+      // Record in ended set so background snapshots never revive it
+      endedRoomsSetRef.current.add(cleanId);
+      saveStoredEndedRooms(endedRoomsSetRef.current);
+
       cloudRoomsRef.current = cloudRoomsRef.current.filter((r) => r.roomId.toLowerCase() !== cleanId);
       serverRoomsRef.current = serverRoomsRef.current.filter((r) => r.roomId.toLowerCase() !== cleanId);
       optimisticRoomsRef.current = optimisticRoomsRef.current.filter((r) => r.roomId.toLowerCase() !== cleanId);
       mergeAndSync();
+
+      fetch('/api/end-majlis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: cleanId }),
+      }).catch(() => {});
 
       try {
         if (broadcastRef.current) {
@@ -317,6 +357,15 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
 
   const clearAllActive = useCallback(async () => {
     try {
+      // Mark all current active room IDs as ended
+      activeMajalis.forEach((r) => {
+        if (r.roomId) endedRoomsSetRef.current.add(r.roomId.toLowerCase());
+      });
+      cloudRoomsRef.current.forEach((r) => {
+        if (r.roomId) endedRoomsSetRef.current.add(r.roomId.toLowerCase());
+      });
+      saveStoredEndedRooms(endedRoomsSetRef.current);
+
       cloudRoomsRef.current = [];
       serverRoomsRef.current = [];
       optimisticRoomsRef.current = [];
@@ -332,15 +381,18 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeMajalis]);
 
   const fetchActive = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.activeMajalis)) {
-          serverRoomsRef.current = data.activeMajalis;
+          serverRoomsRef.current = data.activeMajalis.filter(
+            (r: MajlisSession) => r && r.roomId && !endedRoomsSetRef.current.has(r.roomId.toLowerCase())
+          );
           mergeAndSync();
         }
       }
@@ -353,6 +405,11 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
 
   const addOptimisticMajlis = useCallback(
     (session: MajlisSession) => {
+      const cleanId = session.roomId.trim().toLowerCase();
+      // Un-end if creating a new room with the same ID
+      endedRoomsSetRef.current.delete(cleanId);
+      saveStoredEndedRooms(endedRoomsSetRef.current);
+
       const formatted: MajlisSession = {
         ...session,
         status: 'live',
@@ -361,7 +418,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
       };
       optimisticRoomsRef.current = [
         formatted,
-        ...optimisticRoomsRef.current.filter((p) => p.roomId.toLowerCase() !== session.roomId.toLowerCase()),
+        ...optimisticRoomsRef.current.filter((p) => p.roomId.toLowerCase() !== cleanId),
       ];
       mergeAndSync();
     },
