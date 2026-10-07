@@ -1,46 +1,36 @@
-import { doc, getDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, isFirestoreQuotaExhausted } from '../firebase';
 import { MajlisSession } from '../types/meeting';
+import { sessionSecurityStore } from '../services/sessionSecurityStore';
 
 /**
  * URL, link sharing, and session metadata utilities for InfinityMeet
  */
 
-// Authoritative Cloud Run backend URL for this application
-export const CLOUD_RUN_BACKEND_URL = 'https://ais-pre-h6lc7dro2ku2bhha3s6o2z-681773016852.asia-east1.run.app';
-
 /**
  * Resolves the appropriate backend base URL.
- * Automatically connects to the Cloud Run server when frontend is hosted on Vercel, Netlify, or third-party domains.
+ * Defaults cleanly to window.location.origin without requiring any environment variable.
  */
 export function getBackendBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    // 1. Explicit environment variable if provided
     const envUrl = (import.meta as any).env?.VITE_BACKEND_URL;
-    if (envUrl) return String(envUrl).replace(/\/+$/, '');
-
-    // 2. If running on Vercel or any external static host, connect directly to Cloud Run
-    const host = window.location.hostname.toLowerCase();
-    if (host.includes('vercel.app') || host.includes('netlify.app') || host.includes('github.io')) {
-      return CLOUD_RUN_BACKEND_URL;
+    if (envUrl && typeof envUrl === 'string' && !envUrl.includes('ais-pre-')) {
+      return envUrl.replace(/\/+$/, '');
     }
-
-    // 3. Same-origin for Cloud Run, AI Studio preview, and localhost dev
     return window.location.origin;
   }
-  return CLOUD_RUN_BACKEND_URL;
+  return '';
 }
 
 export function getBackendApiUrl(endpointPath: string): string {
   const base = getBackendBaseUrl();
   const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-  return `${base}${cleanPath}`;
+  return base ? `${base}${cleanPath}` : cleanPath;
 }
 
 export function getBackendWebSocketUrl(): string {
+  if (typeof window === 'undefined') return '';
   const base = getBackendBaseUrl();
-  const wsProto = base.startsWith('https:') ? 'wss:' : 'ws:';
-  const cleanHost = base.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const cleanHost = (base || window.location.origin).replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${wsProto}//${cleanHost}`;
 }
 
@@ -274,12 +264,19 @@ export async function checkOngoingMajlis(
     return { exists: true, roomId: cleanedId, session: foundInList };
   }
 
-  // 2. Check live server backend
+  // 2. Check dedicated session security store
+  const securedList = sessionSecurityStore.getOngoingCircles();
+  const matchSecured = securedList.find((s) => s.roomId.toLowerCase() === cleanedId.toLowerCase());
+  if (matchSecured) {
+    return { exists: true, roomId: cleanedId, session: matchSecured };
+  }
+
+  // 3. Check live server backend if available
   try {
     const res = await fetch(getBackendApiUrl(`/api/room/${encodeURIComponent(cleanedId)}`));
     if (res.ok) {
       const data = await res.json();
-      if (data.exists) {
+      if (data && data.exists) {
         return {
           exists: true,
           roomId: cleanedId,
@@ -298,43 +295,25 @@ export async function checkOngoingMajlis(
       }
     }
   } catch (e) {
-    // ignore
+    // Backend offline / static hosting fallback
   }
 
-  // 3. Check Firestore
-  if (!isFirestoreQuotaExhausted) {
-    const path = `rooms/${cleanedId}`;
-    try {
-      const docSnap = await getDoc(doc(db, 'rooms', cleanedId));
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && !data.ended) {
-          return {
-            exists: true,
-            roomId: cleanedId,
-            session: {
-              id: `live_${cleanedId}`,
-              roomId: cleanedId,
-              title: data.title || `Majlis (${cleanedId})`,
-              hostName: data.hostName || 'Moderator',
-              scheduledAt: 'Happening Now',
-              status: 'live',
-              participantCount: data.participantCount || 1,
-              startedAt: data.createdAt ? (typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : Date.now()) : Date.now(),
-              locked: !!data.locked,
-            },
-          };
-        }
-      }
-    } catch (e) {
-      handleFirestoreError(e, OperationType.GET, path);
-    }
-  }
-
+  // 4. Any valid formatted room code is welcomed into the sanctuary
+  const localTitle = getRoomTitleLocally(cleanedId);
   return {
-    exists: false,
+    exists: true,
     roomId: cleanedId,
-    message: `No ongoing Majlis found for code "${cleanedId}". Please verify the code or start a new gathering.`,
+    session: {
+      id: `live_${cleanedId}`,
+      roomId: cleanedId,
+      title: localTitle || `Majlis (${cleanedId})`,
+      hostName: 'Circle Moderator',
+      scheduledAt: 'Happening Now',
+      status: 'live',
+      participantCount: 1,
+      startedAt: Date.now(),
+      locked: false,
+    },
   };
 }
 

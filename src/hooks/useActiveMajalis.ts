@@ -1,9 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, isFirestoreQuotaExhausted, handleFirestoreError, OperationType } from '../firebase';
 import { MajlisSession } from '../types/meeting';
-import { activeSessionsStore } from '../services/activeSessionsStore';
-import { getBackendApiUrl } from '../utils/urlHelper';
+import { sessionSecurityStore } from '../services/sessionSecurityStore';
+import { getBackendApiUrl, getRoomTitleLocally } from '../utils/urlHelper';
 
 export interface RoomVerificationResult {
   isOngoing: boolean;
@@ -28,8 +26,8 @@ export function extractRoomInfoFromInput(rawInput: string): { roomId: string; ti
         : `${window.location.origin}${input.startsWith('/') ? '' : '/'}${input}`;
       const url = new URL(urlStr);
 
-      const searchRoom = url.searchParams.get('room') || url.searchParams.get('roomId');
-      const searchTitle = url.searchParams.get('title');
+      const searchRoom = url.searchParams.get('room') || url.searchParams.get('roomId') || url.searchParams.get('r');
+      const searchTitle = url.searchParams.get('title') || url.searchParams.get('t');
       if (searchRoom) {
         return {
           roomId: searchRoom.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
@@ -107,16 +105,16 @@ export async function verifyMajlisOngoing(
     }
   }
 
-  // 2. Check dedicated active sessions store
-  const storedActive = activeSessionsStore.getStoredActiveSessions();
-  const matchStored = storedActive.find((s) => s.roomId.toLowerCase() === roomId.toLowerCase());
-  if (matchStored) {
+  // 2. Check dedicated session security store
+  const securedList = sessionSecurityStore.getOngoingCircles();
+  const matchSecured = securedList.find((s) => s.roomId.toLowerCase() === roomId.toLowerCase());
+  if (matchSecured) {
     return {
       isOngoing: true,
-      roomId: matchStored.roomId,
-      title: matchStored.title || parsedTitle,
-      hostName: matchStored.hostName,
-      session: matchStored,
+      roomId: matchSecured.roomId,
+      title: matchSecured.title || parsedTitle,
+      hostName: matchSecured.hostName,
+      session: matchSecured,
     };
   }
 
@@ -163,12 +161,13 @@ export async function verifyMajlisOngoing(
     // ignore
   }
 
-  // If user provided a valid code format (alphanumeric with hyphens), allow opening circle
-  if (roomId.length >= 3) {
+  // 5. Valid room code allows instant entry
+  if (roomId.length >= 2) {
+    const localTitle = getRoomTitleLocally(roomId);
     return {
       isOngoing: true,
       roomId,
-      title: parsedTitle || `Majlis (${roomId})`,
+      title: parsedTitle || localTitle || `Majlis (${roomId})`,
       hostName: 'Circle Host',
     };
   }
@@ -182,23 +181,23 @@ export async function verifyMajlisOngoing(
 
 export function useActiveMajalis(isInsideMeeting: boolean) {
   const [activeMajalis, setActiveMajalis] = useState<MajlisSession[]>(() =>
-    activeSessionsStore.getStoredActiveSessions()
+    sessionSecurityStore.getOngoingCircles()
   );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Subscribe to dedicated store updates
-    const unsub = activeSessionsStore.subscribe((sessions) => {
+    // Subscribe to dedicated session security store updates
+    const unsub = sessionSecurityStore.subscribe((sessions) => {
       setActiveMajalis(sessions);
       setLoading(false);
     });
 
     // Initial silent refresh from server
-    activeSessionsStore.refreshFromServer().catch(() => {});
+    sessionSecurityStore.refreshFromServer().catch(() => {});
 
     // Silent background poll
     const interval = setInterval(() => {
-      activeSessionsStore.refreshFromServer().catch(() => {});
+      sessionSecurityStore.refreshFromServer().catch(() => {});
     }, 6000);
 
     return () => {
@@ -210,7 +209,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   const refreshActiveMajalis = useCallback(async () => {
     setLoading(true);
     try {
-      const refreshed = await activeSessionsStore.refreshFromServer();
+      const refreshed = await sessionSecurityStore.refreshFromServer();
       setActiveMajalis(refreshed);
     } finally {
       setLoading(false);
@@ -218,23 +217,26 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   }, []);
 
   const addOptimisticMajlis = useCallback((session: MajlisSession) => {
-    activeSessionsStore.saveSession({
+    sessionSecurityStore.saveSecuredMeeting({
       roomId: session.roomId,
       title: session.title,
-      hostName: session.hostName,
+      userName: session.hostName,
+      userId: 'usr_host_' + Date.now(),
+      isHost: true,
       participantCount: session.participantCount,
       locked: session.locked,
     });
-    setActiveMajalis(activeSessionsStore.getStoredActiveSessions());
+    setActiveMajalis(sessionSecurityStore.getOngoingCircles());
   }, []);
 
   const removeRoom = useCallback((roomId: string) => {
-    activeSessionsStore.markSessionEnded(roomId);
-    setActiveMajalis(activeSessionsStore.getStoredActiveSessions());
+    sessionSecurityStore.endSecuredMeeting(roomId);
+    setActiveMajalis(sessionSecurityStore.getOngoingCircles());
   }, []);
 
   const clearAllActive = useCallback(() => {
-    activeSessionsStore.clearAll();
+    const current = sessionSecurityStore.getOngoingCircles();
+    current.forEach((s) => sessionSecurityStore.endSecuredMeeting(s.roomId));
     setActiveMajalis([]);
   }, []);
 

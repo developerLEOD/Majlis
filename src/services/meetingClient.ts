@@ -2,6 +2,8 @@ import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
 import { saveRoomTitleLocally, getRoomTitleLocally, getBackendWebSocketUrl, getBackendApiUrl } from '../utils/urlHelper';
 import { FirebaseMeetingSync } from './firebaseMeetingSync';
 import { activeSessionsStore } from './activeSessionsStore';
+import { sessionSecurityStore } from './sessionSecurityStore';
+import { UniversalSignalingTransport } from './universalSignaling';
 
 export interface MeetingClientEvents {
   onRoomJoined: (data: {
@@ -83,6 +85,7 @@ export class MeetingClient {
   private broadcastChannel: BroadcastChannel | null = null;
   private firebaseSync: FirebaseMeetingSync | null = null;
   private knownParticipants = new Map<string, Participant>();
+  private universalTransport: UniversalSignalingTransport | null = null;
 
   public roomId: string = '';
   public userId: string = '';
@@ -120,12 +123,36 @@ export class MeetingClient {
       saveRoomTitleLocally(this.roomId, this.sessionTitle);
     }
 
-    // Save/secure session in dedicated activeSessionsStore
+    // Save/secure session in dedicated sessionSecurityStore & activeSessionsStore
     activeSessionsStore.saveSession({
       roomId: this.roomId,
       title: this.sessionTitle,
       hostName: this.isHost ? this.userName : 'Facilitator',
     });
+
+    sessionSecurityStore.saveSecuredMeeting({
+      roomId: this.roomId,
+      title: this.sessionTitle,
+      userName: this.userName,
+      userId: this.userId,
+      isHost: this.isHost,
+      isCoModerator: this.isCoModerator,
+      isMuted: !this.localStream?.getAudioTracks().some((t) => t.enabled),
+      isVideoOff: !this.localStream?.getVideoTracks().some((t) => t.enabled),
+    });
+
+    // Initialize universal multi-peer signaling (works across Vercel, external networks, and Node WS)
+    try {
+      this.universalTransport = new UniversalSignalingTransport(
+        this.roomId,
+        this.userId,
+        (msg) => {
+          this.handleServerMessage(msg);
+        }
+      );
+    } catch (e) {
+      console.warn('Universal signaling init error:', e);
+    }
 
     // 1. Initialize Firebase Cloud Sync
     try {
@@ -441,8 +468,16 @@ export class MeetingClient {
       _senderId: this.userId,
     };
 
+    if (this.universalTransport) {
+      try {
+        this.universalTransport.send(payload);
+      } catch (e) {}
+    }
+
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+      try {
+        this.ws.send(JSON.stringify(payload));
+      } catch (e) {}
     }
 
     if (this.broadcastChannel) {
@@ -1389,6 +1424,10 @@ export class MeetingClient {
       roomId: this.roomId,
       message: 'The facilitator has concluded this Majlis session.',
     });
+    // Remove from dedicated session security store and active sessions store
+    sessionSecurityStore.endSecuredMeeting(this.roomId);
+    activeSessionsStore.markSessionEnded(this.roomId);
+
     // Delete room and participants from Firestore so it disappears from Ongoing list immediately
     this.firebaseSync?.endRoomSession().catch(() => {});
     // Notify server to purge from active rooms
@@ -1437,6 +1476,13 @@ export class MeetingClient {
       userId: this.userId,
       name: this.userName,
     });
+
+    if (this.universalTransport) {
+      try {
+        this.universalTransport.close();
+      } catch (e) {}
+      this.universalTransport = null;
+    }
 
     if (this.broadcastChannel) {
       try {

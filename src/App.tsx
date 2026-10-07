@@ -18,6 +18,7 @@ import {
   getBackendApiUrl,
 } from './utils/urlHelper';
 import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis';
+import { sessionSecurityStore } from './services/sessionSecurityStore';
 import {
   createCloudRoom,
   DEFAULT_UPCOMING_SESSIONS,
@@ -31,7 +32,17 @@ function MainAppContent() {
   const [userName, setUserName] = useState<string>(() => {
     return localStorage.getItem('infinitymeet_username') || 'Araiz Hasan';
   });
-  const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
+  const [userId] = useState(() => {
+    const existing = sessionSecurityStore.getSecuredActiveMeeting();
+    if (existing && existing.userId) return existing.userId;
+    const stored = typeof window !== 'undefined' ? sessionStorage.getItem('infinitymeet_user_id') : null;
+    if (stored) return stored;
+    const newId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    if (typeof window !== 'undefined') {
+      try { sessionStorage.setItem('infinitymeet_user_id', newId); } catch (e) {}
+    }
+    return newId;
+  });
   const [mirrorVideo, setMirrorVideo] = useState(true);
 
   const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>(DEFAULT_UPCOMING_SESSIONS);
@@ -39,13 +50,45 @@ function MainAppContent() {
   const [startModalMode, setStartModalMode] = useState<'start' | 'schedule'>('start');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Pre-join Target
+  // Active Live Meeting State — restores seamlessly from dedicated secured session on refresh
+  const [activeMeeting, setActiveMeeting] = useState<{
+    roomId: string;
+    title: string;
+    userName: string;
+    isHost: boolean;
+    stream: MediaStream | null;
+    isMuted: boolean;
+    isVideoOff: boolean;
+  } | null>(() => {
+    const secured = sessionSecurityStore.getSecuredActiveMeeting();
+    const info = getRoomInfoFromCurrentLocation();
+    // If user refreshed while in a meeting, restore active meeting directly
+    if (secured && info && info.roomId && secured.roomId.toLowerCase() === info.roomId.toLowerCase()) {
+      return {
+        roomId: secured.roomId,
+        title: secured.title,
+        userName: secured.userName,
+        isHost: secured.isHost,
+        stream: null,
+        isMuted: secured.isMuted,
+        isVideoOff: secured.isVideoOff,
+      };
+    }
+    return null;
+  });
+
+  // Pre-join Target (for first-time joiners or entering via code/link)
   const [preJoinTarget, setPreJoinTarget] = useState<{
     roomId: string;
     title?: string;
     isHost?: boolean;
   } | null>(() => {
     const info = getRoomInfoFromCurrentLocation();
+    const secured = sessionSecurityStore.getSecuredActiveMeeting();
+    // If already restored into activeMeeting, do not show prejoin
+    if (secured && info && info.roomId && secured.roomId.toLowerCase() === info.roomId.toLowerCase()) {
+      return null;
+    }
     if (info && info.roomId) {
       const localTitle = getRoomTitleLocally(info.roomId);
       return {
@@ -56,17 +99,6 @@ function MainAppContent() {
     }
     return null;
   });
-
-  // Active Live Meeting State
-  const [activeMeeting, setActiveMeeting] = useState<{
-    roomId: string;
-    title: string;
-    userName: string;
-    isHost: boolean;
-    stream: MediaStream | null;
-    isMuted: boolean;
-    isVideoOff: boolean;
-  } | null>(null);
 
   const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
 
@@ -160,6 +192,18 @@ function MainAppContent() {
     // Grant host/moderator privileges if entering as host or authenticated as moderator
     const effectiveIsHost = Boolean(params.isHost || isModerator);
 
+    // Secure the live session and all its details in dedicated store
+    sessionSecurityStore.saveSecuredMeeting({
+      roomId: params.roomId,
+      title,
+      userName: chosenName,
+      userId,
+      isHost: effectiveIsHost,
+      isMuted: params.isMuted,
+      isVideoOff: params.isVideoOff,
+      participantCount: 1,
+    });
+
     setActiveMeeting({
       roomId: params.roomId,
       title,
@@ -180,6 +224,7 @@ function MainAppContent() {
       activeMeeting.stream.getTracks().forEach((track) => track.stop());
     }
     if (targetRoomId) {
+      sessionSecurityStore.endSecuredMeeting(targetRoomId);
       removeRoom(targetRoomId);
       endCloudRoomSession(targetRoomId).catch(() => {});
       fetch(getBackendApiUrl('/api/end-majlis'), {
@@ -197,6 +242,16 @@ function MainAppContent() {
 
     // Save locally for Vercel / multi-tab sessions
     saveRoomTitleLocally(newSession.roomId, newSession.title);
+
+    // Secure in dedicated session security store
+    sessionSecurityStore.saveSecuredMeeting({
+      roomId: newSession.roomId,
+      title: newSession.title,
+      userName: newSession.hostName,
+      userId,
+      isHost: true,
+      participantCount: 1,
+    });
 
     // Optimistically add to active list
     addOptimisticMajlis(newSession);
