@@ -28,14 +28,14 @@ service cloud.firestore {
     match /rooms/{roomId} {
       allow read: if true;
       allow create, update: if isValidId(roomId)
-        && incoming().roomId is string && incoming().roomId.size() <= 128
-        && incoming().title is string && incoming().title.size() <= 200;
+        && (!('roomId' in incoming()) || (incoming().roomId is string && incoming().roomId.size() <= 128))
+        && (!('title' in incoming()) || (incoming().title is string && incoming().title.size() <= 200));
       allow delete: if isValidId(roomId);
 
       match /participants/{participantId} {
         allow read: if true;
         allow create, update: if isValidId(participantId)
-          && incoming().name is string && incoming().name.size() <= 128;
+          && (!('name' in incoming()) || (incoming().name is string && incoming().name.size() <= 128));
         allow delete: if isValidId(participantId);
       }
 

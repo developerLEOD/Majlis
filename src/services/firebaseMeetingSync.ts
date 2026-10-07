@@ -427,6 +427,35 @@ export class FirebaseMeetingSync {
   }
 }
 
+// Create or register a live room document directly in Firestore
+export async function createCloudRoom(session: {
+  roomId: string;
+  title: string;
+  hostName: string;
+  hostId?: string;
+}): Promise<void> {
+  const cleanRoomId = session.roomId.trim().toLowerCase();
+  const path = `rooms/${cleanRoomId}`;
+  try {
+    await setDoc(
+      doc(db, 'rooms', cleanRoomId),
+      {
+        roomId: cleanRoomId,
+        title: session.title || 'Live Majlis',
+        hostName: session.hostName || 'Facilitator',
+        hostId: session.hostId || '',
+        ended: false,
+        participantCount: 1,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    handleFirestoreError(e, OperationType.WRITE, path);
+  }
+}
+
 // Global active rooms listener for the directory/home screen
 export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) => void): () => void {
   const path = 'rooms';
@@ -438,16 +467,16 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
       const list: MajlisSession[] = [];
       snapshot.forEach((docSnap) => {
         const d = docSnap.data();
-        if (d.roomId && d.title && !d.ended) {
+        if (d && d.roomId && !d.ended) {
           list.push({
             id: `live_${d.roomId}`,
             roomId: d.roomId,
-            title: d.title,
+            title: d.title || 'Live Majlis',
             hostName: d.hostName || 'Facilitator',
             scheduledAt: 'Happening Now',
             status: 'live',
-            participantCount: d.participantCount || 1,
-            startedAt: d.createdAt ? d.createdAt.toMillis?.() || Date.now() : Date.now(),
+            participantCount: typeof d.participantCount === 'number' && d.participantCount > 0 ? d.participantCount : 1,
+            startedAt: d.createdAt ? (d.createdAt.toMillis?.() || Date.now()) : Date.now(),
             locked: !!d.locked,
           });
         }
@@ -455,7 +484,7 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
       onUpdate(list);
     },
     (err) => {
-      handleFirestoreError(err, OperationType.LIST, path);
+      console.warn('Cloud active rooms snapshot notice:', err);
     }
   );
 }

@@ -190,11 +190,75 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
   });
 
   const [loading, setLoading] = useState(true);
+  const cloudRoomsRef = useRef<MajlisSession[]>([]);
+  const serverRoomsRef = useRef<MajlisSession[]>([]);
+  const optimisticRoomsRef = useRef<MajlisSession[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
 
+  // Helper to merge all active sources without race conditions or flapping
+  const mergeAndSync = useCallback(() => {
+    const mergedMap = new Map<string, MajlisSession>();
+
+    // 1. Add cloud rooms from Firestore
+    for (const r of cloudRoomsRef.current) {
+      if (r && r.roomId) {
+        mergedMap.set(r.roomId.toLowerCase(), r);
+      }
+    }
+
+    // 2. Add server rooms from WebSocket / REST
+    for (const r of serverRoomsRef.current) {
+      if (r && r.roomId) {
+        const key = r.roomId.toLowerCase();
+        const existing = mergedMap.get(key);
+        if (existing) {
+          mergedMap.set(key, {
+            ...existing,
+            ...r,
+            title: r.title || existing.title,
+            hostName: r.hostName || existing.hostName,
+            participantCount: Math.max(existing.participantCount || 1, r.participantCount || 1),
+          });
+        } else {
+          mergedMap.set(key, r);
+        }
+      }
+    }
+
+    // 3. Add optimistic locally created rooms (within 15 minutes)
+    const now = Date.now();
+    optimisticRoomsRef.current = optimisticRoomsRef.current.filter(
+      (r) => !r.startedAt || now - (typeof r.startedAt === 'number' ? r.startedAt : now) < 1000 * 60 * 15
+    );
+    for (const r of optimisticRoomsRef.current) {
+      if (r && r.roomId) {
+        const key = r.roomId.toLowerCase();
+        if (!mergedMap.has(key)) {
+          mergedMap.set(key, r);
+        }
+      }
+    }
+
+    const mergedList = Array.from(mergedMap.values());
+    setActiveMajalis(mergedList);
+    setLoading(false);
+
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_ROOMS_KEY, JSON.stringify(mergedList));
+      if (broadcastRef.current) {
+        broadcastRef.current.postMessage({ type: 'directory-update', rooms: mergedList });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
   const clearAllActive = useCallback(async () => {
     try {
+      cloudRoomsRef.current = [];
+      serverRoomsRef.current = [];
+      optimisticRoomsRef.current = [];
       localStorage.removeItem(STORAGE_ACTIVE_ROOMS_KEY);
       setActiveMajalis([]);
       if (broadcastRef.current) {
@@ -209,49 +273,33 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     }
   }, []);
 
-  const persistAndBroadcast = useCallback((rooms: MajlisSession[]) => {
-    setActiveMajalis(rooms);
-    setLoading(false);
-    try {
-      localStorage.setItem(STORAGE_ACTIVE_ROOMS_KEY, JSON.stringify(rooms));
-      if (broadcastRef.current) {
-        broadcastRef.current.postMessage({ type: 'directory-update', rooms });
-      }
-    } catch (e) {
-      // ignore
-    }
-  }, []);
-
   const fetchActive = useCallback(async () => {
     try {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.activeMajalis)) {
-          persistAndBroadcast(data.activeMajalis);
+          serverRoomsRef.current = data.activeMajalis;
+          mergeAndSync();
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch active majalis:', e);
+      console.warn('Failed to fetch active majalis from server:', e);
     } finally {
       setLoading(false);
     }
-  }, [persistAndBroadcast]);
+  }, [mergeAndSync]);
 
-  const addOptimisticMajlis = useCallback((session: MajlisSession) => {
-    setActiveMajalis((prev) => {
-      const filtered = prev.filter((p) => p.roomId.toLowerCase() !== session.roomId.toLowerCase());
-      const updated = [session, ...filtered];
-      try {
-        localStorage.setItem(STORAGE_ACTIVE_ROOMS_KEY, JSON.stringify(updated));
-        if (broadcastRef.current) {
-          broadcastRef.current.postMessage({ type: 'directory-update', rooms: updated });
-        }
-      } catch (e) {}
-      return updated;
-    });
-    setLoading(false);
-  }, []);
+  const addOptimisticMajlis = useCallback(
+    (session: MajlisSession) => {
+      optimisticRoomsRef.current = [
+        session,
+        ...optimisticRoomsRef.current.filter((p) => p.roomId.toLowerCase() !== session.roomId.toLowerCase()),
+      ];
+      mergeAndSync();
+    },
+    [mergeAndSync]
+  );
 
   useEffect(() => {
     // 1. Firebase Cloud Firestore Real-time listener for active meetings
@@ -259,7 +307,8 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     try {
       cloudUnsub = subscribeToCloudActiveRooms((cloudRooms) => {
         if (Array.isArray(cloudRooms)) {
-          persistAndBroadcast(cloudRooms);
+          cloudRoomsRef.current = cloudRooms;
+          mergeAndSync();
         }
         setLoading(false);
       });
@@ -295,13 +344,13 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
     window.addEventListener('storage', handleStorage);
 
-    // 4. REST Polling fallback
+    // 4. REST Polling
     fetchActive();
     const pollInterval = setInterval(() => {
       fetchActive();
-    }, 5000);
+    }, 4000);
 
-    // 5. WebSocket connection for instant local push updates
+    // 5. WebSocket connection for instant push updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -317,8 +366,8 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'active-majalis-update' && Array.isArray(message.activeMajalis)) {
-            persistAndBroadcast(message.activeMajalis);
-            setLoading(false);
+            serverRoomsRef.current = message.activeMajalis;
+            mergeAndSync();
           }
         } catch (e) {
           // ignore
@@ -347,7 +396,7 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
         broadcastRef.current = null;
       }
     };
-  }, [fetchActive, persistAndBroadcast]);
+  }, [fetchActive, mergeAndSync]);
 
   return { activeMajalis, refreshActiveMajalis: fetchActive, addOptimisticMajlis, clearAllActive, loading };
 }

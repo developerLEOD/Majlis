@@ -17,6 +17,7 @@ import {
   getRoomTitleLocally,
 } from './utils/urlHelper';
 import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis';
+import { createCloudRoom } from './services/firebaseMeetingSync';
 
 function MainAppContent() {
   const { user, isModerator } = useAuth();
@@ -164,6 +165,13 @@ function MainAppContent() {
 
     // Optimistically add to active list
     addOptimisticMajlis(newSession);
+
+    // Register on cloud Firestore
+    createCloudRoom({
+      roomId: newSession.roomId,
+      title: newSession.title,
+      hostName: newSession.hostName,
+    }).catch(console.warn);
 
     // Register on server
     fetch('/api/create-majlis', {
