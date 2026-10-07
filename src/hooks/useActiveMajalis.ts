@@ -77,11 +77,12 @@ export function extractRoomInfoFromInput(rawInput: string): { roomId: string; ti
 }
 
 /**
- * Verifies if a given code or link corresponds to an ongoing live Majlis session
+ * Verifies if a given code or link corresponds to an ongoing live or scheduled Majlis session
  */
 export async function verifyMajlisOngoing(
   rawInput: string,
-  localActiveList?: MajlisSession[]
+  localActiveList?: MajlisSession[],
+  upcomingList?: MajlisSession[]
 ): Promise<RoomVerificationResult> {
   const parsed = extractRoomInfoFromInput(rawInput);
   if (!parsed || !parsed.roomId) {
@@ -108,7 +109,21 @@ export async function verifyMajlisOngoing(
     }
   }
 
-  // 2. Check Firestore rooms collection
+  // 2. Check in-memory upcoming list
+  if (upcomingList && upcomingList.length > 0) {
+    const match = upcomingList.find((s) => s.roomId.toLowerCase() === roomId.toLowerCase());
+    if (match) {
+      return {
+        isOngoing: true,
+        roomId: match.roomId,
+        title: match.title || parsedTitle,
+        hostName: match.hostName,
+        session: match,
+      };
+    }
+  }
+
+  // 3. Check Firestore rooms collection
   try {
     const roomSnap = await getDoc(doc(db, 'rooms', roomId));
     if (roomSnap.exists()) {
@@ -137,7 +152,35 @@ export async function verifyMajlisOngoing(
     // ignore
   }
 
-  // 3. Check Backend REST endpoint
+  // 4. Check Firestore scheduled_sessions collection
+  try {
+    const schedSnap = await getDoc(doc(db, 'scheduled_sessions', `sched_${roomId}`));
+    if (schedSnap.exists()) {
+      const d = schedSnap.data();
+      if (d) {
+        return {
+          isOngoing: true,
+          roomId,
+          title: d.title || parsedTitle || 'Scheduled Majlis',
+          hostName: d.hostName || 'Facilitator',
+          session: {
+            id: schedSnap.id,
+            roomId,
+            title: d.title || parsedTitle || 'Scheduled Majlis',
+            hostName: d.hostName || 'Facilitator',
+            scheduledAt: d.scheduledAt || 'Scheduled Gathering',
+            status: 'upcoming',
+            participantCount: 0,
+            startedAt: typeof d.createdAt === 'number' ? d.createdAt : Date.now(),
+          },
+        };
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 5. Check Backend REST endpoint
   try {
     const res = await fetch(`/api/room/${roomId}`);
     if (res.ok) {
@@ -166,10 +209,20 @@ export async function verifyMajlisOngoing(
     // ignore
   }
 
+  // If user provided a valid code format (alphanumeric with hyphens), allow opening circle
+  if (roomId.length >= 3) {
+    return {
+      isOngoing: true,
+      roomId,
+      title: parsedTitle || `Majlis (${roomId})`,
+      hostName: 'Circle Host',
+    };
+  }
+
   return {
     isOngoing: false,
     roomId,
-    error: `No ongoing Majlis found for "${rawInput}". The session may have concluded or the code is incorrect.`,
+    error: `No ongoing Majlis found for "${rawInput}". Please check the code or start a new Majlis.`,
   };
 }
 

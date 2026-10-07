@@ -499,3 +499,108 @@ export async function clearAllCloudActiveRooms(): Promise<void> {
     handleFirestoreError(e, OperationType.DELETE, path);
   }
 }
+
+export const DEFAULT_UPCOMING_SESSIONS: MajlisSession[] = [
+  {
+    id: 'up_1',
+    roomId: 'quran-tafsir-04',
+    title: 'The Exegesis of the Noble Quran',
+    hostName: 'Sana Amjad',
+    scheduledAt: 'Today · 8:00 PM',
+    status: 'upcoming',
+    participantCount: 0,
+  },
+  {
+    id: 'up_2',
+    roomId: 'adab-fahm-02',
+    title: 'Adab & Fahm al-Din',
+    hostName: 'Rahim Muhammad Syed',
+    scheduledAt: 'Tomorrow · 7:30 PM',
+    status: 'upcoming',
+    participantCount: 0,
+  },
+  {
+    id: 'up_3',
+    roomId: 'abu-bakr-audio-01',
+    title: 'Abu Bakr RA — Early Life & Legacy',
+    hostName: 'Sheikh Anwar Al-Awlaki',
+    scheduledAt: 'Sat, 12 Oct · 8:00 PM',
+    status: 'upcoming',
+    participantCount: 0,
+  },
+];
+
+export function subscribeToScheduledSessions(onUpdate: (sessions: MajlisSession[]) => void): () => void {
+  const path = 'scheduled_sessions';
+  const q = query(collection(db, 'scheduled_sessions'), limit(50));
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        onUpdate(DEFAULT_UPCOMING_SESSIONS);
+        return;
+      }
+      const list: MajlisSession[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (d && d.roomId) {
+          list.push({
+            id: docSnap.id,
+            roomId: d.roomId,
+            title: d.title || 'Scheduled Majlis',
+            hostName: d.hostName || 'Facilitator',
+            scheduledAt: d.scheduledAt || 'Scheduled Gathering',
+            status: 'upcoming',
+            participantCount: 0,
+            startedAt: typeof d.createdAt === 'number' ? d.createdAt : Date.now(),
+          });
+        }
+      });
+      onUpdate(list.length > 0 ? list : DEFAULT_UPCOMING_SESSIONS);
+    },
+    (err) => {
+      console.warn('Scheduled sessions snapshot error, using default:', err);
+      onUpdate(DEFAULT_UPCOMING_SESSIONS);
+    }
+  );
+}
+
+export async function createScheduledSession(session: {
+  roomId: string;
+  title: string;
+  hostName: string;
+  scheduledAt: string;
+  series?: string;
+}): Promise<void> {
+  const cleanId = `sched_${session.roomId.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')}`;
+  const path = `scheduled_sessions/${cleanId}`;
+  try {
+    await setDoc(
+      doc(db, 'scheduled_sessions', cleanId),
+      {
+        id: cleanId,
+        roomId: session.roomId.trim().toLowerCase(),
+        title: session.title.trim(),
+        hostName: session.hostName.trim() || 'Facilitator',
+        scheduledAt: session.scheduledAt.trim() || 'Scheduled Gathering',
+        series: session.series || '',
+        status: 'upcoming',
+        createdAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    handleFirestoreError(e, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteScheduledSession(sessionId: string): Promise<void> {
+  const cleanId = sessionId.trim();
+  const path = `scheduled_sessions/${cleanId}`;
+  try {
+    await deleteDoc(doc(db, 'scheduled_sessions', cleanId));
+  } catch (e) {
+    handleFirestoreError(e, OperationType.DELETE, path);
+  }
+}

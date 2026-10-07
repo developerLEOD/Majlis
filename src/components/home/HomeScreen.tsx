@@ -50,7 +50,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     setIsVerifying(true);
 
     try {
-      const result = await verifyMajlisOngoing(inputCode, activeMajalis);
+      const result = await verifyMajlisOngoing(inputCode, activeMajalis, propUpcoming);
 
       if (!result.isOngoing) {
         setErrorMessage(
@@ -78,41 +78,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   // Curated upcoming sessions with authentic Stained Glass jewel tones
-  const defaultUpcoming = [
+  const displayedUpcoming = propUpcoming && propUpcoming.length > 0 ? propUpcoming : [
     {
       id: 'up_1',
       title: 'The Exegesis of the Noble Quran',
       series: 'Surah An-Nisa · Session 04',
-      date: 'Today · 8:00 PM',
-      facilitator: 'Sana Amjad',
-      colorBg: 'bg-[#075E4A]',
-      colorBorder: 'border-[#19A6A0]/50',
-      starVariant: 'full' as const,
-      isPrimaryAction: true,
+      scheduledAt: 'Today · 8:00 PM',
+      hostName: 'Sana Amjad',
+      status: 'upcoming' as const,
+      participantCount: 0,
       roomId: 'quran-tafsir-04',
     },
     {
       id: 'up_2',
       title: 'Adab & Fahm al-Din',
       series: 'Introductory Series · Session 02',
-      date: 'Tomorrow · 7:30 PM',
-      facilitator: 'Rahim Muhammad Syed',
-      colorBg: 'bg-[#174A83]',
-      colorBorder: 'border-[#2D6BB5]/50',
-      starVariant: 'full' as const,
-      isPrimaryAction: false,
+      scheduledAt: 'Tomorrow · 7:30 PM',
+      hostName: 'Rahim Muhammad Syed',
+      status: 'upcoming' as const,
+      participantCount: 0,
       roomId: 'adab-fahm-02',
     },
     {
       id: 'up_3',
-      title: 'Abu Bakr RA',
+      title: 'Abu Bakr RA — Early Life & Legacy',
       series: 'Audio Study · Session 01',
-      date: 'Sat, 12 Oct · 8:00 PM',
-      facilitator: 'Sheikh Anwar Al-Awlaki',
-      colorBg: 'bg-[#302116]',
-      colorBorder: 'border-[#E9A83A]/40',
-      starVariant: 'full' as const,
-      isPrimaryAction: false,
+      scheduledAt: 'Sat, 12 Oct · 8:00 PM',
+      hostName: 'Sheikh Anwar Al-Awlaki',
+      status: 'upcoming' as const,
+      participantCount: 0,
       roomId: 'abu-bakr-audio-01',
     },
   ];
@@ -393,59 +387,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
               {/* Upcoming Scheduled Rows */}
               <div className="space-y-2.5">
-                {defaultUpcoming.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-[#1A110A] border border-[#302116] rounded-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 hover:border-[#E9A83A]/50 transition-colors shadow-md"
-                  >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      {/* Geometric Thumbnail */}
-                      <div
-                        className={`w-10 h-10 rounded-sm ${item.colorBg} border ${item.colorBorder} flex items-center justify-center shrink-0 overflow-hidden shadow-xs`}
-                      >
-                        <IslamicStarRosette size={22} variant="full" />
-                      </div>
+                {displayedUpcoming.map((item, index) => {
+                  const bgColors = ['bg-[#075E4A]', 'bg-[#174A83]', 'bg-[#302116]'];
+                  const borderColors = ['border-[#19A6A0]/50', 'border-[#2D6BB5]/50', 'border-[#E9A83A]/40'];
+                  const colorBg = bgColors[index % bgColors.length];
+                  const colorBorder = borderColors[index % borderColors.length];
 
-                      <div className="min-w-0">
-                        <h4 className="text-sm font-bold text-[#FFFCF5] truncate">
-                          {item.title}
-                        </h4>
-                        <div className="text-xs text-[#A8988B] mt-0.5 truncate">
-                          {item.series}
+                  return (
+                    <div
+                      key={item.id || item.roomId}
+                      className="bg-[#1A110A] border border-[#302116] rounded-sm p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 hover:border-[#E9A83A]/50 transition-colors shadow-md"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        {/* Geometric Thumbnail */}
+                        <div
+                          className={`w-10 h-10 rounded-sm ${colorBg} border ${colorBorder} flex items-center justify-center shrink-0 overflow-hidden shadow-xs`}
+                        >
+                          <IslamicStarRosette size={22} variant="full" />
                         </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0">
-                      {/* Date & Facilitator */}
-                      <div className="text-right text-xs">
-                        <div className="font-semibold text-[#FFFCF5]">
-                          {item.date}
-                        </div>
-                        <div className="text-[#8A7A6D] text-[11px]">
-                          {item.facilitator}
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-bold text-[#FFFCF5] truncate">
+                            {item.title}
+                          </h4>
+                          <div className="text-xs text-[#A8988B] mt-0.5 truncate">
+                            {(item as any).series || `Room #${item.roomId}`}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Action Button */}
-                      {item.isPrimaryAction ? (
+                      <div className="flex items-center justify-between sm:justify-end gap-5 shrink-0">
+                        {/* Date & Facilitator */}
+                        <div className="text-right text-xs">
+                          <div className="font-semibold text-[#FFFCF5]">
+                            {item.scheduledAt}
+                          </div>
+                          <div className="text-[#8A7A6D] text-[11px]">
+                            {item.hostName}
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
                         <button
                           onClick={() => onJoinMajlis(item.roomId, item.title)}
                           className="px-4 py-1.5 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] text-xs font-semibold rounded-sm transition-colors shrink-0 border border-[#19A6A0]/40 shadow-xs"
                         >
                           Join
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => onJoinMajlis(item.roomId, item.title)}
-                          className="px-3.5 py-1.5 bg-[#24170E] hover:bg-[#2F1F14] border border-[#3A2619] text-[#E0C2A6] text-xs font-semibold rounded-sm transition-colors shrink-0"
-                        >
-                          Details
-                        </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

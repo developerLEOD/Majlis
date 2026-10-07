@@ -17,7 +17,11 @@ import {
   getRoomTitleLocally,
 } from './utils/urlHelper';
 import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis';
-import { createCloudRoom } from './services/firebaseMeetingSync';
+import {
+  createCloudRoom,
+  DEFAULT_UPCOMING_SESSIONS,
+  subscribeToScheduledSessions,
+} from './services/firebaseMeetingSync';
 
 function MainAppContent() {
   const { user, isModerator } = useAuth();
@@ -28,8 +32,9 @@ function MainAppContent() {
   const [userId] = useState(() => 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7));
   const [mirrorVideo, setMirrorVideo] = useState(true);
 
-  const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<MajlisSession[]>(DEFAULT_UPCOMING_SESSIONS);
   const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+  const [startModalMode, setStartModalMode] = useState<'start' | 'schedule'>('start');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Pre-join Target
@@ -67,14 +72,32 @@ function MainAppContent() {
   const { activeMajalis, addOptimisticMajlis, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
+    // Subscribe to Firestore scheduled sessions for real-time schedule sync
+    let schedUnsub: (() => void) | null = null;
+    try {
+      schedUnsub = subscribeToScheduledSessions((sessions) => {
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          setUpcomingSessions(sessions);
+        }
+      });
+    } catch (e) {
+      console.warn('Scheduled sessions subscriber error:', e);
+    }
+
+    return () => {
+      if (schedUnsub) schedUnsub();
+    };
+  }, []);
+
+  useEffect(() => {
     fetchAppConfig();
 
     const handleLocationChange = async () => {
       const info = getRoomInfoFromCurrentLocation();
       if (info && info.roomId && !activeMeeting) {
         const cleanedId = info.roomId.toLowerCase().replace(/[^a-z0-9-]/g, '');
-        // Verify whether the room from URL is an active ongoing session
-        const verifyResult = await verifyMajlisOngoing(cleanedId, activeMajalis);
+        // Verify whether the room from URL is an active ongoing session or scheduled session
+        const verifyResult = await verifyMajlisOngoing(cleanedId, activeMajalis, upcomingSessions);
         if (verifyResult.isOngoing) {
           const localTitle = getRoomTitleLocally(cleanedId);
           setJoinErrorMessage(null);
@@ -98,7 +121,7 @@ function MainAppContent() {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, [activeMeeting, activeMajalis]);
+  }, [activeMeeting, activeMajalis, upcomingSessions]);
 
   const handleUpdateUserName = (newName: string) => {
     setUserName(newName);
@@ -263,7 +286,14 @@ function MainAppContent() {
             loadingActiveMajalis={loading}
             upcomingSessions={upcomingSessions}
             onJoinMajlis={handleInitiateJoin}
-            onStartMajlis={() => setIsStartModalOpen(true)}
+            onStartMajlis={() => {
+              setStartModalMode('start');
+              setIsStartModalOpen(true);
+            }}
+            onScheduleMajlis={() => {
+              setStartModalMode('schedule');
+              setIsStartModalOpen(true);
+            }}
             onClearActive={clearAllActive}
           />
         )}
@@ -291,6 +321,7 @@ function MainAppContent() {
           onClose={() => setIsStartModalOpen(false)}
           onStartSession={handleStartNewSession}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          initialMode={startModalMode}
         />
       )}
 

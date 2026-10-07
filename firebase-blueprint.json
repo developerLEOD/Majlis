@@ -77,6 +77,22 @@
         "timestamp": { "type": "number" }
       },
       "required": ["id", "senderId", "senderName", "emoji"]
+    },
+    "ScheduledSession": {
+      "title": "ScheduledSession",
+      "description": "Scheduled or upcoming study circle sessions in the Majlis directory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "roomId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "hostName": { "type": "string", "maxLength": 128 },
+        "scheduledAt": { "type": "string", "maxLength": 128 },
+        "series": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "roomId", "title", "hostName", "scheduledAt"]
     }
   },
   "firestore": {
@@ -99,6 +115,10 @@
     "/rooms/{roomId}/reactions/{reactionId}": {
       "schema": { "$ref": "#/entities/Reaction" },
       "description": "Live floating emoji reactions"
+    },
+    "/scheduled_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ScheduledSession" },
+      "description": "Scheduled study circle sessions in the Majlis directory"
     }
   }
 }

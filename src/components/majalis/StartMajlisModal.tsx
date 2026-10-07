@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Crown, Shield, X, Key } from 'lucide-react';
+import { Crown, Shield, X, Key, Calendar, Clock, Sparkles } from 'lucide-react';
 import { MajlisSession } from '../../types/meeting';
 import { useAuth } from '../../context/AuthContext';
+import { createScheduledSession } from '../../services/firebaseMeetingSync';
 
 interface StartMajlisModalProps {
   userName: string;
   onClose: () => void;
   onStartSession: (session: MajlisSession) => void;
   onOpenAuthModal: () => void;
+  initialMode?: 'start' | 'schedule';
 }
 
 export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
@@ -15,10 +17,15 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
   onClose,
   onStartSession,
   onOpenAuthModal,
+  initialMode = 'start',
 }) => {
   const { user, isModerator } = useAuth();
+  const [activeTab, setActiveTab] = useState<'start' | 'schedule'>(initialMode);
   const [title, setTitle] = useState('');
   const [hostName, setHostName] = useState(userName || user?.displayName || 'Moderator');
+  const [scheduledDate, setScheduledDate] = useState('Today · 8:00 PM');
+  const [seriesName, setSeriesName] = useState('');
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
 
   const generateRoomId = () => {
     const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -30,11 +37,30 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
     return code;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
     const roomId = generateRoomId();
+
+    if (activeTab === 'schedule') {
+      setIsSavingSchedule(true);
+      try {
+        await createScheduledSession({
+          roomId,
+          title: title.trim(),
+          hostName: hostName.trim() || 'Moderator',
+          scheduledAt: scheduledDate.trim() || 'Upcoming Gathering',
+          series: seriesName.trim() || undefined,
+        });
+        onClose();
+      } catch (err) {
+        console.warn('Error saving scheduled session:', err);
+      } finally {
+        setIsSavingSchedule(false);
+      }
+      return;
+    }
 
     const newSession: MajlisSession = {
       id: 'session_' + Date.now(),
@@ -58,7 +84,8 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
               The Wisdom Lounge
             </span>
             <h2 className="text-base font-bold text-[#1C1917] flex items-center gap-2 mt-0.5">
-              <Crown className="w-4 h-4 text-[#E9A83A]" /> Start Majlis
+              <Crown className="w-4 h-4 text-[#E9A83A]" />
+              {activeTab === 'start' ? 'Start Majlis' : 'Schedule Gathering'}
             </h2>
           </div>
           <button
@@ -66,6 +93,34 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
             className="p-1 text-[#8E7E73] hover:text-[#1C1917] transition-colors"
           >
             <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tab Selector */}
+        <div className="flex rounded-sm bg-[#EFEAE1] p-0.5 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setActiveTab('start')}
+            className={`flex-1 py-1.5 rounded-xs transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === 'start'
+                ? 'bg-[#075E4A] text-[#FFFCF5] shadow-xs'
+                : 'text-[#68594E] hover:text-[#1C1917]'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Start Live</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('schedule')}
+            className={`flex-1 py-1.5 rounded-xs transition-colors flex items-center justify-center gap-1.5 ${
+              activeTab === 'schedule'
+                ? 'bg-[#075E4A] text-[#FFFCF5] shadow-xs'
+                : 'text-[#68594E] hover:text-[#1C1917]'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Schedule</span>
           </button>
         </div>
 
@@ -79,7 +134,7 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
             <div className="p-2.5 bg-[#F5F2EB] border border-[#E6DFD5] rounded-sm text-[11px] text-[#68594E] flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5 text-[#E9A83A]" />
-                <span>Launching as Circle Facilitator</span>
+                <span>Circle Facilitator</span>
               </div>
               {onOpenAuthModal && (
                 <button
@@ -98,21 +153,52 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
 
           <div>
             <label className="font-semibold text-[#1C1917] block mb-1">
-              Majlis Title
+              Majlis Topic / Title
             </label>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Weekly Reflection & Inquiry"
+              placeholder="e.g. The Exegesis of the Noble Quran"
               className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
             />
           </div>
 
+          {activeTab === 'schedule' && (
+            <>
+              <div>
+                <label className="font-semibold text-[#1C1917] block mb-1">
+                  Series / Context (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={seriesName}
+                  onChange={(e) => setSeriesName(e.target.value)}
+                  placeholder="e.g. Surah An-Nisa · Session 05"
+                  className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-[#1C1917] block mb-1">
+                  Scheduled Time
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  placeholder="e.g. Today · 8:30 PM, or Tomorrow · 7:00 PM"
+                  className="w-full bg-[#FFFCF5] border border-[#D9D0C3] rounded-sm px-3 py-2 text-xs text-[#1C1917] focus:outline-none focus:border-[#075E4A]"
+                />
+              </div>
+            </>
+          )}
+
           <div>
             <label className="font-semibold text-[#1C1917] block mb-1">
-              Moderator Display Name
+              Facilitator Name
             </label>
             <input
               type="text"
@@ -133,9 +219,16 @@ export const StartMajlisModal: React.FC<StartMajlisModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] font-semibold text-xs rounded-sm border border-[#19A6A0]/40 transition-colors"
+              disabled={isSavingSchedule}
+              className="px-4 py-2 bg-[#075E4A] hover:bg-[#05493A] text-[#FFFCF5] font-semibold text-xs rounded-sm border border-[#19A6A0]/40 transition-colors flex items-center gap-1.5"
             >
-              Start Majlis
+              {activeTab === 'start' ? (
+                <span>Start Majlis</span>
+              ) : isSavingSchedule ? (
+                <span>Scheduling...</span>
+              ) : (
+                <span>Add to Schedule</span>
+              )}
             </button>
           </div>
         </form>
