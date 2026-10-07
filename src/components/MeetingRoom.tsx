@@ -43,6 +43,7 @@ import { ModeratorHubModal } from './ModeratorHubModal';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
 import { HoneycombGrid } from './common/HoneycombGrid';
 import { useAuth } from '../context/AuthContext';
+import { createMixedAudioStream } from '../utils/media';
 import heroStainedGlassImg from '../assets/images/hero_stained_glass_1791132771042.jpg';
 import {
   buildMeetingInviteUrl,
@@ -609,10 +610,13 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
         const combinedStream = new MediaStream();
         screenStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
-        screenStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
-        if (localStreamRef.current) {
-          localStreamRef.current.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+
+        const streamsToMix: MediaStream[] = [screenStream];
+        if (localStreamRef.current && localStreamRef.current.getAudioTracks().length > 0) {
+          streamsToMix.push(localStreamRef.current);
         }
+        const { mixedStream } = createMixedAudioStream(streamsToMix);
+        mixedStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
 
         clientRef.current?.setLocalStream(combinedStream);
 
