@@ -918,7 +918,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       )}
 
       {/* TOP COMPACT HEADER */}
-      <header className="h-12 sm:h-13 px-2.5 sm:px-4 md:px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md gap-1.5 sm:gap-3">
+      {!isScreenMaximized && (
+        <header className="h-12 sm:h-13 px-2.5 sm:px-4 md:px-5 bg-[#160E09]/95 backdrop-blur-md border-b border-[#302116] flex items-center justify-between z-20 shrink-0 shadow-md gap-1.5 sm:gap-3">
         <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
           <IslamicStarRosette size={22} variant="full" className="shrink-0" />
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
@@ -985,6 +986,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
 
         </div>
       </header>
+      )}
 
       {/* STAGE ANNOUNCEMENT BANNER */}
       {stageAnnouncement && (
@@ -1083,28 +1085,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                     </div>
                   </div>
 
-                  {otherParticipants.length > 0 && !isScreenMaximized && (
-                    <div className="h-28 flex gap-2.5 overflow-x-auto pb-1 shrink-0">
-                      {otherParticipants.map((p) => (
-                        <div key={p.id} className="w-44 h-full shrink-0">
-                          <VideoTile
-                            participant={p}
-                            isLocal={p.isLocal}
-                            mirror={mirrorVideo}
-                            canModerate={canModerate}
-                            onMuteUser={handleMuteUser}
-                            onStopVideoUser={handleStopVideoUser}
-                            videoRefCallback={(el) => {
-                              if (el) videoElementsRef.current.set(p.id, el);
-                              else videoElementsRef.current.delete(p.id);
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex-1 bg-black rounded-sm overflow-hidden relative border border-[#3A2619] shadow-2xl flex items-center justify-center">
+                   <div className="flex-1 bg-black rounded-sm overflow-hidden relative border border-[#3A2619] shadow-2xl flex items-center justify-center min-h-0">
                     <video
                       ref={(el) => {
                         if (el && screenSharer.stream && el.srcObject !== screenSharer.stream) {
@@ -1118,6 +1099,53 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                       className="w-full h-full object-contain bg-black"
                     />
                   </div>
+
+                  {/* Thin Bottom Ribbon Participants List */}
+                  {participants.length > 0 && (
+                    <div className="h-16 sm:h-20 bg-[#160E09]/95 backdrop-blur-md border border-[#3A2619] rounded-sm px-3 py-1.5 flex items-center gap-3 overflow-x-auto shrink-0 shadow-xl scrollbar-thin">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#E9A83A] uppercase tracking-wider shrink-0 pr-2 border-r border-[#3A2619]">
+                        <Users className="w-3.5 h-3.5" />
+                        <span>({participants.length})</span>
+                      </div>
+                      <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0">
+                        {participants.map((p) => (
+                          <div
+                            key={p.id}
+                            className={`flex items-center gap-2 px-2.5 py-1 rounded-sm bg-[#1F140D] border shrink-0 transition-colors ${
+                              p.id === screenSharer.id
+                                ? 'border-[#19A6A0] bg-[#075E4A]/30'
+                                : 'border-[#3A2619] hover:border-[#E9A83A]/50'
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-full bg-[#075E4A] border border-[#19A6A0]/50 flex items-center justify-center font-bold text-[11px] text-[#FFFCF5] shrink-0 relative">
+                              {p.name.charAt(0).toUpperCase()}
+                              {p.handRaised && (
+                                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#E9A83A] text-[#1E140C] flex items-center justify-center border border-[#160E09]">
+                                  <Hand className="w-2 h-2" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 text-left">
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold text-xs text-[#FFFCF5] truncate max-w-[90px]">
+                                  {p.name}
+                                </span>
+                                {p.isLocal && <span className="text-[9px] text-[#8A7A6D]">(You)</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 ml-1">
+                              <div className={`p-0.5 rounded-sm ${p.isMuted ? 'text-[#A83245]' : 'text-[#19A6A0]'}`}>
+                                {p.isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                              </div>
+                              <div className={`p-0.5 rounded-sm ${p.isVideoOff ? 'text-[#A83245]' : 'text-[#8A7A6D]'}`}>
+                                {p.isVideoOff ? <VideoOff className="w-3 h-3" /> : <Video className="w-3 h-3" />}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -1247,7 +1275,8 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       </div>
 
       {/* BOTTOM CONTROL BAR */}
-      <footer className="h-14 sm:h-16 bg-[#160E09]/95 backdrop-blur-lg border-t border-[#302116] px-2 sm:px-4 md:px-6 flex items-center justify-between z-30 shrink-0 shadow-2xl gap-1 sm:gap-2">
+      {!isScreenMaximized && (
+        <footer className="h-14 sm:h-16 bg-[#160E09]/95 backdrop-blur-lg border-t border-[#302116] px-2 sm:px-4 md:px-6 flex items-center justify-between z-30 shrink-0 shadow-2xl gap-1 sm:gap-2">
         {/* Left Audio & Video Controls */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <button
@@ -1409,6 +1438,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           </button>
         </div>
       </footer>
+      )}
 
       {/* Confirmation Dialog */}
       {showLeaveConfirmDialog && (
