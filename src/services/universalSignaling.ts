@@ -50,22 +50,34 @@ export class UniversalSignalingTransport {
   private initTrysteroSignaling() {
     try {
       this.trysteroRoom = joinRoom({ appId: 'infinitymeet_twl_majlis' }, this.roomId);
-      const [sendSignal, getSignal] = this.trysteroRoom.makeAction('sig');
-      this.sendTrysteroAction = sendSignal;
+      const sigAction = this.trysteroRoom.makeAction('sig');
 
-      getSignal((data: any, peerId: string) => {
+      this.sendTrysteroAction = (data: any) => {
+        try {
+          sigAction.send(data).catch(() => {});
+        } catch (e) {}
+      };
+
+      sigAction.onMessage = (data: any) => {
         if (!data || data._senderId === this.userId) return;
         this.onMessageCallback?.(data);
-      });
+      };
 
-      this.trysteroRoom.onPeerJoin((peerId: string) => {
-        // Announce presence when new peer connects
+      this.trysteroRoom.onPeerJoin = (peerId: string) => {
+        // Announce presence when new peer connects to this room
         this.send({
           type: 'peer-joined-signaling',
           peerId,
           userId: this.userId,
         });
-      });
+      };
+
+      this.trysteroRoom.onPeerLeave = (peerId: string) => {
+        this.onMessageCallback?.({
+          type: 'peer-left-signaling',
+          peerId,
+        });
+      };
     } catch (err) {
       console.warn('Trystero signaling init warning:', err);
     }

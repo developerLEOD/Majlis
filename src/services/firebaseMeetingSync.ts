@@ -319,7 +319,7 @@ export class FirebaseMeetingSync {
   // WebRTC Signaling via Firestore
   public async sendSignal(targetId: string, signalData: any) {
     if (isFirestoreQuotaExhausted) return;
-    const signalId = `sig_${this.userId}_to_${targetId}_${Date.now()}`;
+    const signalId = `sig_${this.userId}_to_${targetId}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const path = `rooms/${this.roomId}/signals/${signalId}`;
     try {
       await setDoc(doc(db, 'rooms', this.roomId, 'signals', signalId), {

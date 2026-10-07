@@ -1,5 +1,7 @@
 import { MajlisSession } from '../types/meeting';
 import { getBackendApiUrl } from '../utils/urlHelper';
+import { joinRoom } from '@trystero-p2p/mqtt';
+import { subscribeToCloudActiveRooms } from './firebaseMeetingSync';
 
 /**
  * Dedicated session security store for InfinityMeet / Majlis.
@@ -31,6 +33,11 @@ class SessionSecurityStoreService {
   private broadcastChannel: BroadcastChannel | null = null;
   private listeners: Set<(sessions: MajlisSession[]) => void> = new Set();
   private remoteDiscoveredRooms = new Map<string, MajlisSession>();
+  private roomLastSeenMap = new Map<string, number>();
+  private lobbyRoom: any = null;
+  private lobbyAnnounceAction: any = null;
+  private lobbyQueryAction: any = null;
+  private heartbeatTimer: any = null;
 
   constructor() {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -45,8 +52,7 @@ class SessionSecurityStoreService {
           } else if (msg.type === 'session_saved' || msg.type === 'sessions_updated') {
             this.notifyListeners();
           } else if (msg.type === 'announce_room' && msg.session) {
-            this.remoteDiscoveredRooms.set(msg.session.roomId.toLowerCase(), msg.session);
-            this.notifyListeners();
+            this.registerDiscoveredRoom(msg.session);
           }
         };
       } catch (e) {
@@ -60,7 +66,143 @@ class SessionSecurityStoreService {
           this.notifyListeners();
         }
       });
+
+      this.initGlobalLobby();
+
+      // Subscribe to Firestore active rooms for instant directory sync
+      try {
+        subscribeToCloudActiveRooms((rooms) => {
+          if (Array.isArray(rooms)) {
+            const cloudRoomIds = new Set<string>();
+            rooms.forEach((room) => {
+              if (room && room.roomId) {
+                const cleanId = String(room.roomId).toLowerCase().trim();
+                cloudRoomIds.add(cleanId);
+                this.registerDiscoveredRoom(room);
+              }
+            });
+
+            // Clean up any remote rooms that have been ended/deleted from cloud Firestore
+            let changed = false;
+            for (const id of this.remoteDiscoveredRooms.keys()) {
+              if (!cloudRoomIds.has(id)) {
+                this.remoteDiscoveredRooms.delete(id);
+                this.roomLastSeenMap.delete(id);
+                changed = true;
+              }
+            }
+            if (changed) {
+              this.notifyListeners();
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('Firestore active rooms subscription warning:', e);
+      }
     }
+  }
+
+  private initGlobalLobby() {
+    try {
+      this.lobbyRoom = joinRoom({ appId: 'infinitymeet_twl_majlis' }, 'infinitymeet_twl_global_lobby');
+
+      const announce = this.lobbyRoom.makeAction('announce');
+      this.lobbyAnnounceAction = announce;
+
+      announce.onMessage = (data: any) => {
+        if (!data) return;
+        if (data.type === 'announce_room' && data.session && data.session.roomId) {
+          this.registerDiscoveredRoom(data.session);
+        } else if (data.type === 'session_ended' && data.roomId) {
+          this.handleRemoteSessionEnded(data.roomId);
+        }
+      };
+
+      const query = this.lobbyRoom.makeAction('query');
+      this.lobbyQueryAction = query;
+
+      query.onMessage = (data: any, meta: any) => {
+        const current = this.getSecuredActiveMeeting();
+        if (current && !this.isRoomEnded(current.roomId)) {
+          const sessionObj: MajlisSession = {
+            id: `live_${current.roomId}`,
+            roomId: current.roomId,
+            title: current.title,
+            hostName: current.isHost ? current.userName : 'Circle Moderator',
+            scheduledAt: 'Happening Now',
+            status: 'live',
+            participantCount: current.participantCount || 1,
+            startedAt: current.joinedAt,
+            locked: current.locked,
+          };
+          this.lobbyAnnounceAction?.send({
+            type: 'announce_room',
+            session: sessionObj,
+          }, meta?.peerId ? { target: meta.peerId } : undefined);
+        }
+      };
+
+      // Periodic heartbeat and stale room cleanup
+      this.heartbeatTimer = setInterval(() => {
+        const current = this.getSecuredActiveMeeting();
+        if (current && !this.isRoomEnded(current.roomId)) {
+          const sessionObj: MajlisSession = {
+            id: `live_${current.roomId}`,
+            roomId: current.roomId,
+            title: current.title,
+            hostName: current.isHost ? current.userName : 'Circle Moderator',
+            scheduledAt: 'Happening Now',
+            status: 'live',
+            participantCount: current.participantCount || 1,
+            startedAt: current.joinedAt,
+            locked: current.locked,
+          };
+          this.lobbyAnnounceAction?.send({
+            type: 'announce_room',
+            session: sessionObj,
+          }).catch(() => {});
+        }
+
+        const now = Date.now();
+        let changed = false;
+        for (const [id, lastSeen] of this.roomLastSeenMap.entries()) {
+          if (now - lastSeen > 25000) {
+            this.remoteDiscoveredRooms.delete(id);
+            this.roomLastSeenMap.delete(id);
+            changed = true;
+          }
+        }
+        if (changed) {
+          this.notifyListeners();
+        }
+      }, 4000);
+
+      // Query active rooms on startup
+      setTimeout(() => {
+        this.queryLobbyForActiveRooms();
+      }, 800);
+    } catch (err) {
+      console.warn('Global lobby signaling init warning:', err);
+    }
+  }
+
+  public registerDiscoveredRoom(session: MajlisSession) {
+    if (!session || !session.roomId) return;
+    const cleanId = String(session.roomId).toLowerCase().trim();
+    if (this.isRoomEnded(cleanId)) return;
+
+    this.remoteDiscoveredRooms.set(cleanId, {
+      ...session,
+      roomId: cleanId,
+    });
+    this.roomLastSeenMap.set(cleanId, Date.now());
+    this.notifyListeners();
+  }
+
+  public queryLobbyForActiveRooms() {
+    try {
+      this.lobbyQueryAction?.send({ type: 'query_active_rooms' }).catch(() => {});
+    } catch (e) {}
   }
 
   /**
@@ -386,6 +528,14 @@ class SessionSecurityStoreService {
     }
     this.removeFromActiveCirclesList(roomId.toLowerCase());
     this.remoteDiscoveredRooms.delete(roomId.toLowerCase());
+    this.notifyListeners();
+  }
+
+  private handleRemoteSessionEnded(roomId: string) {
+    const cleanId = String(roomId).trim().toLowerCase();
+    this.remoteDiscoveredRooms.delete(cleanId);
+    this.roomLastSeenMap.delete(cleanId);
+    this.removeFromActiveCirclesList(cleanId);
     this.notifyListeners();
   }
 
