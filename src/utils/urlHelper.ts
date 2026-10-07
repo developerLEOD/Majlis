@@ -1,5 +1,5 @@
 import { doc, getDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, isFirestoreQuotaExhausted } from '../firebase';
 import { MajlisSession } from '../types/meeting';
 
 /**
@@ -257,31 +257,33 @@ export async function checkOngoingMajlis(
   }
 
   // 3. Check Firestore
-  const path = `rooms/${cleanedId}`;
-  try {
-    const docSnap = await getDoc(doc(db, 'rooms', cleanedId));
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data && !data.ended) {
-        return {
-          exists: true,
-          roomId: cleanedId,
-          session: {
-            id: `live_${cleanedId}`,
+  if (!isFirestoreQuotaExhausted) {
+    const path = `rooms/${cleanedId}`;
+    try {
+      const docSnap = await getDoc(doc(db, 'rooms', cleanedId));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && !data.ended) {
+          return {
+            exists: true,
             roomId: cleanedId,
-            title: data.title || `Majlis (${cleanedId})`,
-            hostName: data.hostName || 'Moderator',
-            scheduledAt: 'Happening Now',
-            status: 'live',
-            participantCount: data.participantCount || 1,
-            startedAt: data.createdAt ? (typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : Date.now()) : Date.now(),
-            locked: !!data.locked,
-          },
-        };
+            session: {
+              id: `live_${cleanedId}`,
+              roomId: cleanedId,
+              title: data.title || `Majlis (${cleanedId})`,
+              hostName: data.hostName || 'Moderator',
+              scheduledAt: 'Happening Now',
+              status: 'live',
+              participantCount: data.participantCount || 1,
+              startedAt: data.createdAt ? (typeof data.createdAt.toMillis === 'function' ? data.createdAt.toMillis() : Date.now()) : Date.now(),
+              locked: !!data.locked,
+            },
+          };
+        }
       }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, path);
     }
-  } catch (e) {
-    handleFirestoreError(e, OperationType.GET, path);
   }
 
   return {

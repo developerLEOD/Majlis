@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, disableNetwork, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -33,6 +33,11 @@ export interface FirestoreErrorInfo {
 let hasReportedQuotaExhausted = false;
 export let isFirestoreQuotaExhausted = false;
 
+// Silence internal Firestore SDK logs
+try {
+  setLogLevel('silent');
+} catch (e) {}
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errStr = error instanceof Error ? error.message : String(error);
   const isQuota =
@@ -47,6 +52,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       console.warn(
         'Firestore free daily write quota reached. Seamlessly switching to local WebSocket and BroadcastChannel synchronization.'
       );
+      try {
+        disableNetwork(db).catch(() => {});
+      } catch (e) {}
     }
     return {
       error: 'Firestore quota limit reached. Using WebSocket / REST fallback.',
@@ -73,7 +81,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path,
   };
-  console.warn('Firestore notice: ', JSON.stringify(errInfo));
   return errInfo;
 }
 
@@ -82,16 +89,45 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
-// Validate connection safely without throwing quota errors
-async function testConnection() {
-  if (isFirestoreQuotaExhausted) return;
-  try {
-    await getDocFromServer(doc(db, 'rooms', 'test-connection'));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'rooms/test-connection');
-  }
-}
-
+// Global console filter to catch and silence internal Firestore quota and backoff messages
 if (typeof window !== 'undefined') {
-  testConnection();
+  const filterMsg = (msg: string) =>
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('maximum backoff delay') ||
+    msg.includes('prevent overloading the backend');
+
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const originalInfo = console.info;
+
+  console.error = (...args: any[]) => {
+    const msg = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
+    if (filterMsg(msg)) {
+      isFirestoreQuotaExhausted = true;
+      try {
+        disableNetwork(db).catch(() => {});
+      } catch (e) {}
+      return;
+    }
+    originalError.apply(console, args);
+  };
+
+  console.warn = (...args: any[]) => {
+    const msg = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
+    if (filterMsg(msg)) {
+      isFirestoreQuotaExhausted = true;
+      try {
+        disableNetwork(db).catch(() => {});
+      } catch (e) {}
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+
+  console.info = (...args: any[]) => {
+    const msg = args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ');
+    if (filterMsg(msg)) return;
+    originalInfo.apply(console, args);
+  };
 }

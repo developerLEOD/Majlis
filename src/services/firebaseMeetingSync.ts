@@ -93,6 +93,7 @@ export class FirebaseMeetingSync {
 
   // Listen to room metadata changes in real-time
   public subscribeToRoom(onUpdate: (data: any | null) => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}`;
     const unsub = onSnapshot(
       doc(db, 'rooms', this.roomId),
@@ -264,6 +265,7 @@ export class FirebaseMeetingSync {
 
   // Subscribe to kick notices for this user
   public subscribeToKicked(onKicked: () => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}/kicked/${this.userId}`;
     const unsub = onSnapshot(
       doc(db, 'rooms', this.roomId, 'kicked', this.userId),
@@ -282,6 +284,7 @@ export class FirebaseMeetingSync {
 
   // Listen to participants real-time
   public subscribeToParticipants(onUpdate: (participants: Participant[]) => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}/participants`;
     const colRef = collection(db, 'rooms', this.roomId, 'participants');
     const unsub = onSnapshot(
@@ -332,6 +335,7 @@ export class FirebaseMeetingSync {
 
   // Subscribe to signals intended for this user
   public subscribeToSignals(onSignal: (senderId: string, signalData: any) => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}/signals`;
     const q = query(
       collection(db, 'rooms', this.roomId, 'signals'),
@@ -379,6 +383,7 @@ export class FirebaseMeetingSync {
   }
 
   public subscribeToChatMessages(onMessage: (message: ChatMessage) => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}/messages`;
     const q = query(collection(db, 'rooms', this.roomId, 'messages'), limit(100));
 
@@ -425,6 +430,7 @@ export class FirebaseMeetingSync {
   }
 
   public subscribeToReactions(onReaction: (reaction: ReactionItem) => void): () => void {
+    if (isFirestoreQuotaExhausted) return () => {};
     const path = `rooms/${this.roomId}/reactions`;
     const q = query(collection(db, 'rooms', this.roomId, 'reactions'), limit(50));
 
@@ -493,6 +499,10 @@ export async function createCloudRoom(session: {
 
 // Global active rooms listener for the directory/home screen
 export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) => void): () => void {
+  if (isFirestoreQuotaExhausted) {
+    onUpdate([]);
+    return () => {};
+  }
   const path = 'rooms';
   const q = query(collection(db, 'rooms'), limit(50));
 
@@ -534,7 +544,7 @@ export function subscribeToCloudActiveRooms(onUpdate: (rooms: MajlisSession[]) =
       onUpdate(list);
     },
     (err) => {
-      console.warn('Cloud active rooms snapshot notice:', err);
+      handleFirestoreError(err, OperationType.LIST, path);
     }
   );
 }
@@ -603,6 +613,10 @@ export const DEFAULT_UPCOMING_SESSIONS: MajlisSession[] = [
 ];
 
 export function subscribeToScheduledSessions(onUpdate: (sessions: MajlisSession[]) => void): () => void {
+  if (isFirestoreQuotaExhausted) {
+    onUpdate(DEFAULT_UPCOMING_SESSIONS);
+    return () => {};
+  }
   const path = 'scheduled_sessions';
   const q = query(collection(db, 'scheduled_sessions'), limit(50));
 
@@ -632,7 +646,7 @@ export function subscribeToScheduledSessions(onUpdate: (sessions: MajlisSession[
       onUpdate(list.length > 0 ? list : DEFAULT_UPCOMING_SESSIONS);
     },
     (err) => {
-      console.warn('Scheduled sessions snapshot error, using default:', err);
+      handleFirestoreError(err, OperationType.LIST, path);
       onUpdate(DEFAULT_UPCOMING_SESSIONS);
     }
   );

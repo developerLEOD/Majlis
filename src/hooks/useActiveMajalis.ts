@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, isFirestoreQuotaExhausted, handleFirestoreError, OperationType } from '../firebase';
 import { MajlisSession } from '../types/meeting';
 import { subscribeToCloudActiveRooms, clearAllCloudActiveRooms } from '../services/firebaseMeetingSync';
 
@@ -146,60 +146,62 @@ export async function verifyMajlisOngoing(
   }
 
   // 3. Check Firestore rooms collection
-  try {
-    const roomSnap = await getDoc(doc(db, 'rooms', roomId));
-    if (roomSnap.exists()) {
-      const d = roomSnap.data();
-      if (d && !d.ended) {
-        return {
-          isOngoing: true,
-          roomId,
-          title: d.title || parsedTitle || 'Live Majlis',
-          hostName: d.hostName || 'Facilitator',
-          session: {
-            id: `live_${roomId}`,
+  if (!isFirestoreQuotaExhausted) {
+    try {
+      const roomSnap = await getDoc(doc(db, 'rooms', roomId));
+      if (roomSnap.exists()) {
+        const d = roomSnap.data();
+        if (d && !d.ended) {
+          return {
+            isOngoing: true,
             roomId,
             title: d.title || parsedTitle || 'Live Majlis',
             hostName: d.hostName || 'Facilitator',
-            scheduledAt: 'Happening Now',
-            status: 'live',
-            participantCount: d.participantCount || 1,
-            startedAt: d.createdAt?.toMillis?.() || Date.now(),
-            locked: !!d.locked,
-          },
-        };
+            session: {
+              id: `live_${roomId}`,
+              roomId,
+              title: d.title || parsedTitle || 'Live Majlis',
+              hostName: d.hostName || 'Facilitator',
+              scheduledAt: 'Happening Now',
+              status: 'live',
+              participantCount: d.participantCount || 1,
+              startedAt: d.createdAt?.toMillis?.() || Date.now(),
+              locked: !!d.locked,
+            },
+          };
+        }
       }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, `rooms/${roomId}`);
     }
-  } catch (e) {
-    // ignore
-  }
 
-  // 4. Check Firestore scheduled_sessions collection
-  try {
-    const schedSnap = await getDoc(doc(db, 'scheduled_sessions', `sched_${roomId}`));
-    if (schedSnap.exists()) {
-      const d = schedSnap.data();
-      if (d) {
-        return {
-          isOngoing: true,
-          roomId,
-          title: d.title || parsedTitle || 'Scheduled Majlis',
-          hostName: d.hostName || 'Facilitator',
-          session: {
-            id: schedSnap.id,
+    // 4. Check Firestore scheduled_sessions collection
+    try {
+      const schedSnap = await getDoc(doc(db, 'scheduled_sessions', `sched_${roomId}`));
+      if (schedSnap.exists()) {
+        const d = schedSnap.data();
+        if (d) {
+          return {
+            isOngoing: true,
             roomId,
             title: d.title || parsedTitle || 'Scheduled Majlis',
             hostName: d.hostName || 'Facilitator',
-            scheduledAt: d.scheduledAt || 'Scheduled Gathering',
-            status: 'upcoming',
-            participantCount: 0,
-            startedAt: typeof d.createdAt === 'number' ? d.createdAt : Date.now(),
-          },
-        };
+            session: {
+              id: schedSnap.id,
+              roomId,
+              title: d.title || parsedTitle || 'Scheduled Majlis',
+              hostName: d.hostName || 'Facilitator',
+              scheduledAt: d.scheduledAt || 'Scheduled Gathering',
+              status: 'upcoming',
+              participantCount: 0,
+              startedAt: typeof d.createdAt === 'number' ? d.createdAt : Date.now(),
+            },
+          };
+        }
       }
+    } catch (e) {
+      handleFirestoreError(e, OperationType.GET, `scheduled_sessions/sched_${roomId}`);
     }
-  } catch (e) {
-    // ignore
   }
 
   // 5. Check Backend REST endpoint
@@ -383,8 +385,10 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     }
   }, [activeMajalis]);
 
-  const fetchActive = useCallback(async () => {
-    setLoading(true);
+  const fetchActive = useCallback(async (showLoading = false) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     try {
       const res = await fetch('/api/active-majalis');
       if (res.ok) {
@@ -472,11 +476,11 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
     window.addEventListener('storage', handleStorage);
 
-    // 4. REST Polling
-    fetchActive();
+    // 4. REST Polling (silent background sync)
+    fetchActive(false);
     const pollInterval = setInterval(() => {
-      fetchActive();
-    }, 4000);
+      fetchActive(false);
+    }, 6000);
 
     // 5. WebSocket connection for instant push updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -528,5 +532,9 @@ export function useActiveMajalis(isInsideMeeting: boolean) {
     };
   }, [fetchActive, mergeAndSync, removeRoom]);
 
-  return { activeMajalis, refreshActiveMajalis: fetchActive, addOptimisticMajlis, removeRoom, clearAllActive, loading };
+  const handleManualRefresh = useCallback(() => {
+    fetchActive(true);
+  }, [fetchActive]);
+
+  return { activeMajalis, refreshActiveMajalis: handleManualRefresh, addOptimisticMajlis, removeRoom, clearAllActive, loading };
 }
