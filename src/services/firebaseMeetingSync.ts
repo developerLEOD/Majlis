@@ -69,6 +69,7 @@ export class FirebaseMeetingSync {
         {
           ended: true,
           endedAt: serverTimestamp(),
+          participantCount: 0,
         },
         { merge: true }
       );
@@ -79,12 +80,8 @@ export class FirebaseMeetingSync {
         deleteDoc(d.ref).catch(() => {});
       }
 
-      // 3. Delete room document completely so it's removed from directory
-      setTimeout(async () => {
-        try {
-          await deleteDoc(doc(db, 'rooms', this.roomId));
-        } catch (e) {}
-      }, 500);
+      // 3. Immediately delete room document
+      await deleteDoc(doc(db, 'rooms', this.roomId)).catch(() => {});
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, path);
     }
@@ -495,6 +492,29 @@ export async function clearAllCloudActiveRooms(): Promise<void> {
     const snapshot = await getDocs(collection(db, 'rooms'));
     const promises = snapshot.docs.map((docSnap) => deleteDoc(docSnap.ref));
     await Promise.all(promises);
+  } catch (e) {
+    handleFirestoreError(e, OperationType.DELETE, path);
+  }
+}
+
+export async function endCloudRoomSession(roomId: string): Promise<void> {
+  const cleanRoomId = roomId.trim().toLowerCase();
+  const path = `rooms/${cleanRoomId}`;
+  try {
+    await setDoc(
+      doc(db, 'rooms', cleanRoomId),
+      {
+        ended: true,
+        endedAt: serverTimestamp(),
+        participantCount: 0,
+      },
+      { merge: true }
+    );
+    const participantsSnap = await getDocs(collection(db, 'rooms', cleanRoomId, 'participants'));
+    for (const d of participantsSnap.docs) {
+      deleteDoc(d.ref).catch(() => {});
+    }
+    await deleteDoc(doc(db, 'rooms', cleanRoomId)).catch(() => {});
   } catch (e) {
     handleFirestoreError(e, OperationType.DELETE, path);
   }

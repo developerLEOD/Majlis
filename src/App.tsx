@@ -20,6 +20,7 @@ import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis'
 import {
   createCloudRoom,
   DEFAULT_UPCOMING_SESSIONS,
+  endCloudRoomSession,
   subscribeToScheduledSessions,
 } from './services/firebaseMeetingSync';
 
@@ -69,7 +70,7 @@ function MainAppContent() {
   const [joinErrorMessage, setJoinErrorMessage] = useState<string | null>(null);
 
   // Live ongoing majalis fetched and synced via WebSocket & REST
-  const { activeMajalis, addOptimisticMajlis, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
+  const { activeMajalis, addOptimisticMajlis, removeRoom, clearAllActive, loading } = useActiveMajalis(!!activeMeeting);
 
   useEffect(() => {
     // Subscribe to Firestore scheduled sessions for real-time schedule sync
@@ -172,9 +173,19 @@ function MainAppContent() {
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
 
-  const handleEndOrLeaveMeeting = () => {
+  const handleEndOrLeaveMeeting = (endedRoomId?: string) => {
+    const targetRoomId = endedRoomId || activeMeeting?.roomId;
     if (activeMeeting?.stream) {
       activeMeeting.stream.getTracks().forEach((track) => track.stop());
+    }
+    if (targetRoomId) {
+      removeRoom(targetRoomId);
+      endCloudRoomSession(targetRoomId).catch(() => {});
+      fetch('/api/end-majlis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId: targetRoomId }),
+      }).catch(() => {});
     }
     setActiveMeeting(null);
     window.history.pushState({}, '', window.location.pathname);

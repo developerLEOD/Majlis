@@ -61,7 +61,7 @@ interface MeetingRoomProps {
   initialStream: MediaStream | null;
   initialMuted: boolean;
   initialVideoOff: boolean;
-  onEndOrLeaveMeeting: () => void;
+  onEndOrLeaveMeeting: (roomId?: string) => void;
 }
 
 export const MeetingRoom: React.FC<MeetingRoomProps> = ({
@@ -1005,7 +1005,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }
     clientRef.current?.hostEndSession();
     clientRef.current?.leave();
-    onEndOrLeaveMeeting();
+    onEndOrLeaveMeeting(roomId);
   };
 
   const copyMeetingLink = async () => {
@@ -1033,11 +1033,11 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       localStreamRef.current.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     }
-    if (isHost) {
+    if (isHost || participants.length <= 1) {
       clientRef.current?.hostEndSession();
     }
     clientRef.current?.leave();
-    onEndOrLeaveMeeting();
+    onEndOrLeaveMeeting(roomId);
   };
 
   const pinnedParticipant = participants.find((p) => p.id === pinnedUserId);

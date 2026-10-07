@@ -47,7 +47,7 @@ const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function getActiveRoomsList() {
   return Array.from(rooms.values())
-    .filter((r) => r.participants.size > 0 || Date.now() - r.createdAt < 1000 * 60 * 10)
+    .filter((r) => r.participants.size > 0)
     .map((r) => ({
       id: `live_${r.id}`,
       roomId: r.id,
@@ -788,17 +788,16 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         case 'host-end-session': {
-          if (!currentRoomId || !currentUserId) return;
-          const room = rooms.get(currentRoomId);
-          if (!room) return;
-          const sender = room.participants.get(currentUserId);
-          if (!sender?.isHost) return;
-
-          broadcastToRoom(currentRoomId, currentUserId, {
-            type: 'session-ended',
-            message: 'The facilitator has concluded this Majlis session.',
-          });
-          rooms.delete(currentRoomId);
+          const targetRoomId = message.roomId || currentRoomId;
+          if (!targetRoomId) return;
+          const room = rooms.get(targetRoomId);
+          if (room) {
+            broadcastToRoom(targetRoomId, null, {
+              type: 'session-ended',
+              message: message.message || 'The facilitator has concluded this Majlis session.',
+            });
+            rooms.delete(targetRoomId);
+          }
           broadcastActiveRooms();
           break;
         }
@@ -845,14 +844,7 @@ wss.on('connection', (ws: WebSocket) => {
     }
 
     if (room.participants.size === 0) {
-      // Keep room open for 5 minutes to allow reconnects
-      setTimeout(() => {
-        const currentR = rooms.get(roomId);
-        if (currentR && currentR.participants.size === 0) {
-          rooms.delete(roomId);
-          broadcastActiveRooms();
-        }
-      }, 1000 * 60 * 5);
+      rooms.delete(roomId);
     }
 
     broadcastActiveRooms();
@@ -954,6 +946,23 @@ app.post('/api/clear-active-majalis', (req, res) => {
   rooms.clear();
   broadcastActiveRooms();
   res.json({ success: true, message: 'All active ongoing majalis cleared.' });
+});
+
+app.post('/api/end-majlis', (req, res) => {
+  const { roomId } = req.body;
+  if (roomId) {
+    const cleanId = String(roomId).trim().toLowerCase();
+    const room = rooms.get(cleanId);
+    if (room) {
+      broadcastToRoom(cleanId, null, {
+        type: 'session-ended',
+        message: 'The facilitator has concluded this Majlis session.',
+      });
+      rooms.delete(cleanId);
+    }
+    broadcastActiveRooms();
+  }
+  res.json({ success: true });
 });
 
 app.post('/api/create-majlis', (req, res) => {
