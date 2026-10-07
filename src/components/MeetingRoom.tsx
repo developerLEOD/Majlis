@@ -128,10 +128,32 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   const wasVideoOffRef = useRef<boolean>(initialVideoOff);
   const clientRef = useRef<MeetingClient | null>(null);
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const participantsRef = useRef<Participant[]>([]);
 
   useEffect(() => {
     participantsRef.current = participants;
+  }, [participants]);
+
+  useEffect(() => {
+    const el = screenVideoRef.current;
+    const screenSharer = participants.find((p) => p.isScreenSharing);
+    if (el && screenSharer?.stream) {
+      if (el.srcObject !== screenSharer.stream) {
+        el.srcObject = screenSharer.stream || null;
+      }
+      el.play().catch(() => {});
+      const handleTrack = () => {
+        if (el.srcObject !== screenSharer.stream) {
+          el.srcObject = screenSharer.stream || null;
+        }
+        el.play().catch(() => {});
+      };
+      screenSharer.stream.getTracks().forEach((t) => {
+        t.onunmute = handleTrack;
+        t.onmute = handleTrack;
+      });
+    }
   }, [participants]);
 
   // Auto-spotlight stage when a participant shares screen
@@ -1088,8 +1110,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                    <div className="flex-1 bg-black rounded-sm overflow-hidden relative border border-[#3A2619] shadow-2xl flex items-center justify-center min-h-0">
                     <video
                       ref={(el) => {
+                        screenVideoRef.current = el;
                         if (el && screenSharer.stream && el.srcObject !== screenSharer.stream) {
-                          el.srcObject = screenSharer.stream;
+                          el.srcObject = screenSharer.stream || null;
                           el.play().catch(() => {});
                         }
                         if (el) videoElementsRef.current.set(screenSharer.id, el);

@@ -41,6 +41,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
   // Bind video stream and check tracks
   useEffect(() => {
+    const videoEl = videoRef.current;
     const checkTracks = () => {
       if (!participant.stream) {
         setHasVideoTrack(false);
@@ -52,14 +53,14 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
     checkTracks();
 
-    if (videoRef.current && participant.stream) {
-      if (videoRef.current.srcObject !== participant.stream) {
-        videoRef.current.srcObject = participant.stream;
+    if (videoEl && participant.stream) {
+      if (videoEl.srcObject !== participant.stream) {
+        videoEl.srcObject = participant.stream;
       }
       if (videoRefCallback) {
-        videoRefCallback(videoRef.current);
+        videoRefCallback(videoEl);
       }
-      videoRef.current.play().catch(() => {});
+      videoEl.play().catch(() => {});
     }
 
     // Remote audio playback
@@ -70,10 +71,33 @@ export const VideoTile: React.FC<VideoTileProps> = ({
       audioRef.current.play().catch(() => {});
     }
 
+    const handleTrackEvent = () => {
+      checkTracks();
+      if (videoEl && participant.stream) {
+        if (videoEl.srcObject !== participant.stream) {
+          videoEl.srcObject = participant.stream;
+        }
+        videoEl.play().catch(() => {});
+      }
+    };
+
     if (participant.stream) {
-      participant.stream.onaddtrack = checkTracks;
-      participant.stream.onremovetrack = checkTracks;
+      participant.stream.onaddtrack = handleTrackEvent;
+      participant.stream.onremovetrack = handleTrackEvent;
+      participant.stream.getTracks().forEach((track) => {
+        track.onunmute = handleTrackEvent;
+        track.onmute = handleTrackEvent;
+      });
     }
+
+    return () => {
+      if (participant.stream) {
+        participant.stream.getTracks().forEach((track) => {
+          track.onunmute = null;
+          track.onmute = null;
+        });
+      }
+    };
   }, [participant.stream, isLocal, videoRefCallback, participant.isVideoOff, participant.isScreenSharing]);
 
   // Audio speaking detection
