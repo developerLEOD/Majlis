@@ -42,13 +42,14 @@ interface Room {
 
 // Store ONLY real, active rooms created by users
 const rooms = new Map<string, Room>();
+const endedRooms = new Set<string>();
 // Grace period timers for reconnecting users
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 function getActiveRoomsList() {
   const now = Date.now();
   return Array.from(rooms.values())
-    .filter((r) => r.participants.size > 0 || (now - r.createdAt < 1000 * 60 * 15))
+    .filter((r) => !endedRooms.has(r.id) && (r.participants.size > 0 || (now - r.createdAt < 1000 * 60 * 30)))
     .map((r) => ({
       id: `live_${r.id}`,
       roomId: r.id,
@@ -944,6 +945,9 @@ app.get('/api/active-majalis', (req, res) => {
 });
 
 app.post('/api/clear-active-majalis', (req, res) => {
+  for (const rId of rooms.keys()) {
+    endedRooms.add(rId);
+  }
   rooms.clear();
   broadcastActiveRooms();
   res.json({ success: true, message: 'All active ongoing majalis cleared.' });
@@ -953,6 +957,7 @@ app.post('/api/end-majlis', (req, res) => {
   const { roomId } = req.body;
   if (roomId) {
     const cleanId = String(roomId).trim().toLowerCase();
+    endedRooms.add(cleanId);
     const room = rooms.get(cleanId);
     if (room) {
       broadcastToRoom(cleanId, null, {
@@ -972,10 +977,13 @@ app.post('/api/create-majlis', (req, res) => {
     return res.status(400).json({ error: 'roomId is required' });
   }
 
-  let room = rooms.get(roomId);
+  const cleanId = String(roomId).trim().toLowerCase();
+  endedRooms.delete(cleanId);
+
+  let room = rooms.get(cleanId);
   if (!room) {
     room = {
-      id: roomId,
+      id: cleanId,
       title: title || 'Live Majlis',
       hostId: '',
       hostName: hostName || 'Facilitator',
@@ -984,7 +992,7 @@ app.post('/api/create-majlis', (req, res) => {
       participants: new Map(),
       createdAt: Date.now(),
     };
-    rooms.set(roomId, room);
+    rooms.set(cleanId, room);
   } else {
     if (title) room.title = title;
     if (hostName) room.hostName = hostName;
