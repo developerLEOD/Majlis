@@ -126,6 +126,7 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
   // References
   const localStreamRef = useRef<MediaStream | null>(initialStream);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenAudioMixerRef = useRef<{ audioContext: AudioContext; mixedStream: MediaStream; cleanup: () => void } | null>(null);
   const wasVideoOffRef = useRef<boolean>(initialVideoOff);
   const clientRef = useRef<MeetingClient | null>(null);
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -332,6 +333,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         showNotification('Microphone muted by facilitator');
       },
 
+      onForceUnmute: () => {
+        setIsMuted(false);
+        if (localStreamRef.current) {
+          localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = true));
+        }
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isMuted: false } : p))
+        );
+        clientRef.current?.updateStatus({ isMuted: false });
+        showNotification('Microphone unmuted by facilitator');
+      },
+
       onForceStopVideo: () => {
         setIsVideoOff(true);
         if (localStreamRef.current) {
@@ -342,6 +355,18 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         );
         clientRef.current?.updateStatus({ isVideoOff: true });
         showNotification('Camera turned off by facilitator');
+      },
+
+      onForceStartVideo: () => {
+        setIsVideoOff(false);
+        if (localStreamRef.current) {
+          localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = true));
+        }
+        setParticipants((prev) =>
+          prev.map((p) => (p.isLocal ? { ...p, isVideoOff: false } : p))
+        );
+        clientRef.current?.updateStatus({ isVideoOff: false });
+        showNotification('Camera turned on by facilitator');
       },
 
       onKicked: (reason) => {
@@ -495,7 +520,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           const newTrack = newAudioStream.getAudioTracks()[0];
           if (newTrack) {
             localStreamRef.current.addTrack(newTrack);
-            clientRef.current?.setLocalStream(localStreamRef.current);
           }
         } catch (err) {
           console.warn('Could not acquire audio track:', err);
@@ -508,15 +532,47 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           video: !isVideoOff,
         });
         localStreamRef.current = newStream;
-        clientRef.current?.setLocalStream(newStream);
       } catch (err) {
         console.warn('Could not initialize audio stream:', err);
       }
     }
 
-    setParticipants((prev) =>
-      prev.map((p) => (p.isLocal ? { ...p, isMuted: nextMuted, stream: localStreamRef.current || undefined } : p))
-    );
+    if (isScreenSharing && screenStreamRef.current) {
+      const combinedStream = new MediaStream();
+      screenStreamRef.current.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
+
+      const screenAudioTracks = screenStreamRef.current.getAudioTracks();
+      const micAudioTracks = localStreamRef.current
+        ? localStreamRef.current.getAudioTracks().filter((t) => t.enabled && t.readyState === 'live')
+        : [];
+
+      if (screenAudioMixerRef.current) {
+        screenAudioMixerRef.current.cleanup();
+        screenAudioMixerRef.current = null;
+      }
+
+      if (screenAudioTracks.length > 0 && micAudioTracks.length > 0 && !nextMuted) {
+        const mixer = createMixedAudioStream([screenStreamRef.current, localStreamRef.current!]);
+        screenAudioMixerRef.current = mixer;
+        mixer.mixedStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+      } else if (screenAudioTracks.length > 0) {
+        screenAudioTracks.forEach((t) => combinedStream.addTrack(t));
+      } else if (localStreamRef.current && localStreamRef.current.getAudioTracks().length > 0 && !nextMuted) {
+        localStreamRef.current.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+      }
+
+      clientRef.current?.setLocalStream(combinedStream);
+      setParticipants((prev) =>
+        prev.map((p) => (p.isLocal ? { ...p, isMuted: nextMuted, stream: combinedStream } : p))
+      );
+    } else {
+      if (localStreamRef.current) {
+        clientRef.current?.setLocalStream(localStreamRef.current);
+      }
+      setParticipants((prev) =>
+        prev.map((p) => (p.isLocal ? { ...p, isMuted: nextMuted, stream: localStreamRef.current || undefined } : p))
+      );
+    }
 
     clientRef.current?.updateStatus({ isMuted: nextMuted });
   };
@@ -540,7 +596,6 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           const newTrack = newVideoStream.getVideoTracks()[0];
           if (newTrack) {
             localStreamRef.current.addTrack(newTrack);
-            clientRef.current?.setLocalStream(localStreamRef.current);
           }
         } catch (err) {
           console.warn('Could not acquire video track:', err);
@@ -553,17 +608,22 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
           audio: !isMuted,
         });
         localStreamRef.current = newStream;
-        clientRef.current?.setLocalStream(newStream);
       } catch (err) {
         console.warn('Could not initialize video stream:', err);
       }
     }
 
-    setParticipants((prev) =>
-      prev.map((p) => (p.isLocal ? { ...p, isVideoOff: nextVideoOff, stream: localStreamRef.current || undefined } : p))
-    );
-
-    clientRef.current?.updateStatus({ isVideoOff: nextVideoOff });
+    if (isScreenSharing && screenStreamRef.current) {
+      wasVideoOffRef.current = nextVideoOff;
+    } else {
+      if (localStreamRef.current) {
+        clientRef.current?.setLocalStream(localStreamRef.current);
+      }
+      setParticipants((prev) =>
+        prev.map((p) => (p.isLocal ? { ...p, isVideoOff: nextVideoOff, stream: localStreamRef.current || undefined } : p))
+      );
+      clientRef.current?.updateStatus({ isVideoOff: nextVideoOff });
+    }
   };
 
   const toggleScreenShare = async () => {
@@ -573,6 +633,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     }
 
     if (isScreenSharing) {
+      if (screenAudioMixerRef.current) {
+        screenAudioMixerRef.current.cleanup();
+        screenAudioMixerRef.current = null;
+      }
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
         screenStreamRef.current = null;
@@ -600,10 +664,27 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
       try {
         wasVideoOffRef.current = isVideoOff;
 
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { cursor: 'always' } as any,
-          audio: true,
-        });
+        let screenStream: MediaStream;
+        try {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              cursor: 'always',
+            } as any,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            } as any,
+            systemAudio: 'include',
+            selfBrowserSurface: 'include',
+          } as any);
+        } catch (e) {
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always' } as any,
+            audio: true,
+          });
+        }
+
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
         setIsVideoOff(false);
@@ -611,12 +692,25 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         const combinedStream = new MediaStream();
         screenStream.getVideoTracks().forEach((t) => combinedStream.addTrack(t));
 
-        const streamsToMix: MediaStream[] = [screenStream];
-        if (localStreamRef.current && localStreamRef.current.getAudioTracks().length > 0) {
-          streamsToMix.push(localStreamRef.current);
+        const screenAudioTracks = screenStream.getAudioTracks();
+        const micAudioTracks = localStreamRef.current
+          ? localStreamRef.current.getAudioTracks().filter((t) => t.enabled && t.readyState === 'live')
+          : [];
+
+        if (screenAudioMixerRef.current) {
+          screenAudioMixerRef.current.cleanup();
+          screenAudioMixerRef.current = null;
         }
-        const { mixedStream } = createMixedAudioStream(streamsToMix);
-        mixedStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+
+        if (screenAudioTracks.length > 0 && micAudioTracks.length > 0 && !isMuted) {
+          const mixer = createMixedAudioStream([screenStream, localStreamRef.current!]);
+          screenAudioMixerRef.current = mixer;
+          mixer.mixedStream.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+        } else if (screenAudioTracks.length > 0) {
+          screenAudioTracks.forEach((t) => combinedStream.addTrack(t));
+        } else if (localStreamRef.current && localStreamRef.current.getAudioTracks().length > 0 && !isMuted) {
+          localStreamRef.current.getAudioTracks().forEach((t) => combinedStream.addTrack(t));
+        }
 
         clientRef.current?.setLocalStream(combinedStream);
 
@@ -634,6 +728,10 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
         const videoTrack = screenStream.getVideoTracks()[0];
         if (videoTrack) {
           videoTrack.onended = () => {
+            if (screenAudioMixerRef.current) {
+              screenAudioMixerRef.current.cleanup();
+              screenAudioMixerRef.current = null;
+            }
             if (screenStreamRef.current) {
               screenStreamRef.current.getTracks().forEach((t) => t.stop());
               screenStreamRef.current = null;
@@ -786,10 +884,22 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
     showNotification('Microphone muted for attendee');
   };
 
+  const handleUnmuteUser = (targetUserId: string) => {
+    clientRef.current?.hostUnmuteUser(targetUserId);
+    setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isMuted: false } : p)));
+    showNotification('Microphone unmuted for attendee');
+  };
+
   const handleStopVideoUser = (targetUserId: string) => {
     clientRef.current?.hostStopVideo(targetUserId);
     setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isVideoOff: true } : p)));
     showNotification('Camera turned off for attendee');
+  };
+
+  const handleStartVideoUser = (targetUserId: string) => {
+    clientRef.current?.hostStartVideo(targetUserId);
+    setParticipants((prev) => prev.map((p) => (p.id === targetUserId ? { ...p, isVideoOff: false } : p)));
+    showNotification('Camera turned on for attendee');
   };
 
   const handleStopAllVideo = () => {
@@ -1115,14 +1225,17 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                     <video
                       ref={(el) => {
                         screenVideoRef.current = el;
-                        if (el && screenSharer.stream && el.srcObject !== screenSharer.stream) {
-                          el.srcObject = screenSharer.stream || null;
+                        if (el && screenSharer.stream) {
+                          if (el.srcObject !== screenSharer.stream) {
+                            el.srcObject = screenSharer.stream;
+                          }
                           el.play().catch(() => {});
                         }
                         if (el) videoElementsRef.current.set(screenSharer.id, el);
                       }}
                       autoPlay
                       playsInline
+                      muted={true}
                       className="w-full h-full object-contain bg-black"
                     />
                   </div>
@@ -1209,7 +1322,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                           mirror={mirrorVideo}
                           canModerate={canModerate}
                           onMuteUser={handleMuteUser}
+                          onUnmuteUser={handleUnmuteUser}
                           onStopVideoUser={handleStopVideoUser}
+                          onStartVideoUser={handleStartVideoUser}
                           forceShape="star-medallion"
                           onTogglePin={() => {}}
                           videoRefCallback={(el) => {
@@ -1244,7 +1359,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
                         mirrorVideo={mirrorVideo}
                         canModerate={canModerate}
                         onMuteUser={handleMuteUser}
+                        onUnmuteUser={handleUnmuteUser}
                         onStopVideoUser={handleStopVideoUser}
+                        onStartVideoUser={handleStartVideoUser}
                         onPinUser={() => {}}
                         videoElementsRef={videoElementsRef}
                       />
@@ -1260,6 +1377,25 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
               </div>
             );
           })()}
+
+          {/* Persistent Remote Audio Bridge ensuring audio is always audible for all attendees and screen shares */}
+          <div className="hidden pointer-events-none" aria-hidden="true">
+            {participants
+              .filter((p) => !p.isLocal && p.stream)
+              .map((p) => (
+                <audio
+                  key={`audio-bridge-${p.id}`}
+                  ref={(el) => {
+                    if (el && p.stream && el.srcObject !== p.stream) {
+                      el.srcObject = p.stream;
+                      el.play().catch(() => {});
+                    }
+                  }}
+                  autoPlay
+                  playsInline
+                />
+              ))}
+          </div>
         </main>
 
         {/* Side Panels */}
@@ -1287,7 +1423,9 @@ export const MeetingRoom: React.FC<MeetingRoomProps> = ({
             onStopAllVideo={handleStopAllVideo}
             onToggleLock={handleToggleLock}
             onMuteUser={handleMuteUser}
+            onUnmuteUser={handleUnmuteUser}
             onStopVideoUser={handleStopVideoUser}
+            onStartVideoUser={handleStartVideoUser}
             onLowerHand={handleLowerHand}
             onSpotlightUser={handleSpotlightUser}
             onToggleSpeaker={handleToggleSpeaker}

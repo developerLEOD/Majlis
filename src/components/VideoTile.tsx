@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Crown, Hand, Mic, MicOff, VideoOff } from 'lucide-react';
+import { Camera, Crown, Hand, Mic, MicOff, VideoOff } from 'lucide-react';
 import { Participant } from '../types/meeting';
 import { createAudioMeter } from '../utils/media';
 import { IslamicStarRosette } from './common/IslamicStarRosette';
@@ -12,7 +12,9 @@ interface VideoTileProps {
   isPinned?: boolean;
   canModerate?: boolean;
   onMuteUser?: (userId: string) => void;
+  onUnmuteUser?: (userId: string) => void;
   onStopVideoUser?: (userId: string) => void;
+  onStartVideoUser?: (userId: string) => void;
   forceShape?: 'star-medallion' | 'arc-door' | 'honeycomb' | 'standard';
   themeIndex?: number;
   onTogglePin?: () => void;
@@ -27,7 +29,9 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   isPinned = false,
   canModerate,
   onMuteUser,
+  onUnmuteUser,
   onStopVideoUser,
+  onStartVideoUser,
   forceShape,
   themeIndex,
   onTogglePin,
@@ -161,7 +165,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           />
         )}
 
-        {/* Video Element */}
+        {/* Video Element (Muted so autoplay policy never blocks video decoding) */}
         <video
           ref={(el) => {
             videoRef.current = el;
@@ -173,7 +177,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           }}
           autoPlay
           playsInline
-          muted={isLocal}
+          muted={true}
           className={`absolute inset-0 w-full h-full ${objectFitClass} transition-opacity duration-300 ${
             isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
           } ${mirrorClass}`}
@@ -240,6 +244,64 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             <MicOff className="w-3 h-3" />
           </div>
         )}
+
+        {/* Moderator Hover Controls Overlay */}
+        {canModerate && !isLocal && (
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30 pointer-events-auto">
+            {!participant.isMuted && onMuteUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMuteUser(participant.id);
+                }}
+                className="p-2 rounded-sm bg-[#A83245] text-white hover:bg-[#8B2334] shadow-md transition-transform hover:scale-110"
+                title="Mute Microphone"
+              >
+                <MicOff className="w-4 h-4" />
+              </button>
+            )}
+            {participant.isMuted && onUnmuteUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnmuteUser(participant.id);
+                }}
+                className="p-2 rounded-sm bg-[#075E4A] text-white hover:bg-[#05493A] shadow-md transition-transform hover:scale-110"
+                title="Unmute Microphone"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            )}
+            {!participant.isVideoOff && onStopVideoUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStopVideoUser(participant.id);
+                }}
+                className="p-2 rounded-sm bg-[#A83245] text-white hover:bg-[#8B2334] shadow-md transition-transform hover:scale-110"
+                title="Turn Off Video"
+              >
+                <VideoOff className="w-4 h-4" />
+              </button>
+            )}
+            {participant.isVideoOff && onStartVideoUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartVideoUser(participant.id);
+                }}
+                className="p-2 rounded-sm bg-[#075E4A] text-white hover:bg-[#05493A] shadow-md transition-transform hover:scale-110"
+                title="Turn On Video"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -289,7 +351,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           />
         )}
 
-        {/* Video Element */}
+        {/* Video Element (Muted so autoplay policy never blocks video decoding) */}
         <video
           ref={(el) => {
             videoRef.current = el;
@@ -301,7 +363,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           }}
           autoPlay
           playsInline
-          muted={isLocal}
+          muted={true}
           className={`absolute inset-0 w-full h-full ${objectFitClass} transition-opacity duration-300 ${
             isVideoHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'
           } ${mirrorClass}`}
@@ -375,7 +437,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
 
         {/* Moderator Hover Controls Overlay */}
         {canModerate && !isLocal && (
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30">
+          <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-30 pointer-events-auto">
             {!participant.isMuted && onMuteUser && (
               <button
                 type="button"
@@ -389,6 +451,19 @@ export const VideoTile: React.FC<VideoTileProps> = ({
                 <MicOff className="w-3.5 h-3.5" />
               </button>
             )}
+            {participant.isMuted && onUnmuteUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnmuteUser(participant.id);
+                }}
+                className="p-1.5 rounded-sm bg-[#075E4A] text-white hover:bg-[#05493A] shadow-md transition-transform hover:scale-110"
+                title="Unmute Microphone"
+              >
+                <Mic className="w-3.5 h-3.5" />
+              </button>
+            )}
             {!participant.isVideoOff && onStopVideoUser && (
               <button
                 type="button"
@@ -400,6 +475,19 @@ export const VideoTile: React.FC<VideoTileProps> = ({
                 title="Turn Off Video"
               >
                 <VideoOff className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {participant.isVideoOff && onStartVideoUser && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartVideoUser(participant.id);
+                }}
+                className="p-1.5 rounded-sm bg-[#075E4A] text-white hover:bg-[#05493A] shadow-md transition-transform hover:scale-110"
+                title="Turn On Video"
+              >
+                <Camera className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

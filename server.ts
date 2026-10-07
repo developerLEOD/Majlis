@@ -352,7 +352,6 @@ wss.on('connection', (ws: WebSocket) => {
           if (!currentRoomId || !currentUserId || !targetId) return;
           const room = rooms.get(currentRoomId);
           if (!room) return;
-          const host = room.participants.get(currentUserId);
           const isHostAuth = isAuthorizedHost(room, currentUserId);
           if (!isHostAuth) return;
 
@@ -360,7 +359,7 @@ wss.on('connection', (ws: WebSocket) => {
           if (target) {
             target.isMuted = true;
             if (target.socket.readyState === WebSocket.OPEN) {
-              target.socket.send(JSON.stringify({ type: 'force-mute' }));
+              target.socket.send(JSON.stringify({ type: 'force-mute', targetId }));
             }
             broadcastToRoom(currentRoomId, null, {
               type: 'user-status-changed',
@@ -371,12 +370,34 @@ wss.on('connection', (ws: WebSocket) => {
           break;
         }
 
+        case 'host-unmute-user': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const isHostAuth = isAuthorizedHost(room, currentUserId);
+          if (!isHostAuth) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.isMuted = false;
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({ type: 'force-unmute', targetId }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              isMuted: false,
+            });
+          }
+          break;
+        }
+
         case 'host-stop-video': {
           const { targetId } = message;
           if (!currentRoomId || !currentUserId || !targetId) return;
           const room = rooms.get(currentRoomId);
           if (!room) return;
-          const host = room.participants.get(currentUserId);
           const isHostAuth = isAuthorizedHost(room, currentUserId);
           if (!isHostAuth) return;
 
@@ -384,12 +405,35 @@ wss.on('connection', (ws: WebSocket) => {
           if (target) {
             target.isVideoOff = true;
             if (target.socket.readyState === WebSocket.OPEN) {
-              target.socket.send(JSON.stringify({ type: 'force-stop-video' }));
+              target.socket.send(JSON.stringify({ type: 'force-stop-video', targetId }));
             }
             broadcastToRoom(currentRoomId, null, {
               type: 'user-status-changed',
               userId: targetId,
               isVideoOff: true,
+            });
+          }
+          break;
+        }
+
+        case 'host-start-video': {
+          const { targetId } = message;
+          if (!currentRoomId || !currentUserId || !targetId) return;
+          const room = rooms.get(currentRoomId);
+          if (!room) return;
+          const isHostAuth = isAuthorizedHost(room, currentUserId);
+          if (!isHostAuth) return;
+
+          const target = room.participants.get(targetId);
+          if (target) {
+            target.isVideoOff = false;
+            if (target.socket.readyState === WebSocket.OPEN) {
+              target.socket.send(JSON.stringify({ type: 'force-start-video', targetId }));
+            }
+            broadcastToRoom(currentRoomId, null, {
+              type: 'user-status-changed',
+              userId: targetId,
+              isVideoOff: false,
             });
           }
           break;

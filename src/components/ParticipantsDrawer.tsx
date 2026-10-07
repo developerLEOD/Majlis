@@ -34,7 +34,9 @@ interface ParticipantsDrawerProps {
   onStopAllVideo?: () => void;
   onToggleLock: () => void;
   onMuteUser?: (userId: string) => void;
+  onUnmuteUser?: (userId: string) => void;
   onStopVideoUser?: (userId: string) => void;
+  onStartVideoUser?: (userId: string) => void;
   onLowerHand?: (userId: string) => void;
   onSpotlightUser?: (userId: string | null) => void;
   onToggleSpeaker?: (userId: string) => void;
@@ -58,7 +60,9 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
   onStopAllVideo,
   onToggleLock,
   onMuteUser,
+  onUnmuteUser,
   onStopVideoUser,
+  onStartVideoUser,
   onLowerHand,
   onSpotlightUser,
   onToggleSpeaker,
@@ -289,6 +293,18 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                           </button>
                         )}
 
+                        {p.isMuted && onUnmuteUser && (
+                          <button
+                            onClick={() => {
+                              onUnmuteUser(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#19A6A0]"
+                          >
+                            <Mic className="w-3.5 h-3.5 text-[#19A6A0]" /> Unmute Microphone
+                          </button>
+                        )}
+
                         {!p.isVideoOff && onStopVideoUser && !isMe && (
                           <button
                             onClick={() => {
@@ -298,6 +314,18 @@ export const ParticipantsDrawer: React.FC<ParticipantsDrawerProps> = ({
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#FFFCF5]"
                           >
                             <VideoOff className="w-3.5 h-3.5 text-[#A83245]" /> Turn Off Video
+                          </button>
+                        )}
+
+                        {p.isVideoOff && onStartVideoUser && !isMe && (
+                          <button
+                            onClick={() => {
+                              onStartVideoUser(p.id);
+                              setActiveMenuId(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-[#2E1E14] text-[#19A6A0]"
+                          >
+                            <Camera className="w-3.5 h-3.5 text-[#19A6A0]" /> Turn On Video
                           </button>
                         )}
 

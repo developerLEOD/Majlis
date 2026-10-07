@@ -30,7 +30,9 @@ export interface MeetingClientEvents {
   onChatMessage: (message: ChatMessage) => void;
   onReaction: (reaction: ReactionItem) => void;
   onForceMute: () => void;
+  onForceUnmute?: () => void;
   onForceStopVideo?: () => void;
+  onForceStartVideo?: () => void;
   onKicked: (reason: string) => void;
   onLockChanged: (locked: boolean) => void;
   onRecordingNotice: (isRecording: boolean, recordedBy: string) => void;
@@ -721,6 +723,22 @@ export class MeetingClient {
         break;
       }
 
+      case 'host-start-video':
+      case 'force-start-video': {
+        if (msg.targetId === this.userId || !msg.targetId) {
+          this.events.onForceStartVideo?.();
+        }
+        if (msg.targetId) {
+          const p = this.knownParticipants.get(msg.targetId);
+          if (p) p.isVideoOff = false;
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            isVideoOff: false,
+          });
+        }
+        break;
+      }
+
       case 'host-mute-user':
       case 'force-mute': {
         if (msg.targetId === this.userId || !msg.targetId) {
@@ -732,6 +750,22 @@ export class MeetingClient {
           this.events.onUserStatusChanged({
             userId: msg.targetId,
             isMuted: true,
+          });
+        }
+        break;
+      }
+
+      case 'host-unmute-user':
+      case 'force-unmute': {
+        if (msg.targetId === this.userId || !msg.targetId) {
+          this.events.onForceUnmute?.();
+        }
+        if (msg.targetId) {
+          const p = this.knownParticipants.get(msg.targetId);
+          if (p) p.isMuted = false;
+          this.events.onUserStatusChanged({
+            userId: msg.targetId,
+            isMuted: false,
           });
         }
         break;
@@ -1016,39 +1050,64 @@ export class MeetingClient {
     }
   }
 
+  private async renegotiatePeer(peerId: string, pc: RTCPeerConnection) {
+    if (pc.signalingState !== 'stable') return;
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const signalData = { sdp: pc.localDescription };
+      this.sendWsMessage({
+        type: 'signal',
+        senderId: this.userId,
+        targetId: peerId,
+        signalData,
+      });
+      this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
+    } catch (err) {
+      console.warn('Renegotiation error with peer:', peerId, err);
+    }
+  }
+
   public setLocalStream(newStream: MediaStream) {
     this.localStream = newStream;
 
-    for (const pc of this.peerConnections.values()) {
+    for (const [peerId, pc] of this.peerConnections.entries()) {
       const senders = pc.getSenders();
+      let needsRenegotiation = false;
 
       const audioTrack = newStream.getAudioTracks()[0];
       const videoTrack = newStream.getVideoTracks()[0];
 
       if (audioTrack) {
         const audioSender = senders.find(
-          (s) => (s.track && s.track.kind === 'audio') || (!s.track && senders.indexOf(s) === 0)
+          (s) => (s.track && s.track.kind === 'audio') || ((s as any).kind === 'audio')
         );
         if (audioSender) {
           audioSender.replaceTrack(audioTrack).catch(console.warn);
         } else {
           try {
             pc.addTrack(audioTrack, newStream);
+            needsRenegotiation = true;
           } catch (e) {}
         }
       }
 
       if (videoTrack) {
         const videoSender = senders.find(
-          (s) => (s.track && s.track.kind === 'video') || (!s.track && senders.length > 0)
+          (s) => (s.track && s.track.kind === 'video') || ((s as any).kind === 'video')
         );
         if (videoSender) {
           videoSender.replaceTrack(videoTrack).catch(console.warn);
         } else {
           try {
             pc.addTrack(videoTrack, newStream);
+            needsRenegotiation = true;
           } catch (e) {}
         }
+      }
+
+      if (needsRenegotiation) {
+        this.renegotiatePeer(peerId, pc).catch(() => {});
       }
     }
   }
@@ -1144,12 +1203,28 @@ export class MeetingClient {
     this.firebaseSync?.updateParticipantStatusForUser(targetId, { isMuted: true }).catch(() => {});
   }
 
+  public hostUnmuteUser(targetId: string) {
+    this.broadcastToAllChannels({
+      type: 'host-unmute-user',
+      targetId,
+    });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isMuted: false }).catch(() => {});
+  }
+
   public hostStopVideo(targetId: string) {
     this.broadcastToAllChannels({
       type: 'host-stop-video',
       targetId,
     });
     this.firebaseSync?.updateParticipantStatusForUser(targetId, { isVideoOff: true }).catch(() => {});
+  }
+
+  public hostStartVideo(targetId: string) {
+    this.broadcastToAllChannels({
+      type: 'host-start-video',
+      targetId,
+    });
+    this.firebaseSync?.updateParticipantStatusForUser(targetId, { isVideoOff: false }).catch(() => {});
   }
 
   public hostStopAllVideo() {
