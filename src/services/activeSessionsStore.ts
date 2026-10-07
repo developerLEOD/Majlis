@@ -200,19 +200,41 @@ class ActiveSessionsStoreService {
         const data = await res.json();
         if (Array.isArray(data.activeMajalis)) {
           const ended = this.getEndedRoomIds();
-          const serverSessions: MajlisSession[] = data.activeMajalis.filter(
-            (s: MajlisSession) => s && s.roomId && !ended.has(s.roomId.toLowerCase().trim())
-          );
+
+          // Server active list is authoritative for ongoing sessions
+          const serverSessions: MajlisSession[] = data.activeMajalis.map((s: MajlisSession) => {
+            const cleanId = s.roomId.toLowerCase().trim();
+            // If server says room is active, remove from ended set
+            if (ended.has(cleanId)) {
+              ended.delete(cleanId);
+            }
+            return {
+              id: `live_${cleanId}`,
+              roomId: cleanId,
+              title: s.title || 'Live Majlis',
+              hostName: s.hostName || 'Facilitator',
+              scheduledAt: 'Happening Now',
+              status: 'live' as const,
+              participantCount: Math.max(s.participantCount ?? 1, 1),
+              startedAt: s.startedAt || Date.now(),
+              locked: !!s.locked,
+            };
+          });
+
+          // Save updated ended set
+          try {
+            const arr = Array.from(ended);
+            localStorage.setItem(ENDED_SESSIONS_STORAGE_KEY, JSON.stringify(arr));
+            sessionStorage.setItem(ENDED_SESSIONS_STORAGE_KEY, JSON.stringify(arr));
+          } catch (e) {}
 
           // Merge server sessions into local sessions
           const local = this.getStoredActiveSessions();
           const mergedMap = new Map<string, MajlisSession>();
 
-          // Prefer server sessions as authoritative if active
           for (const s of serverSessions) {
             mergedMap.set(s.roomId.toLowerCase().trim(), s);
           }
-          // Add local optimistic sessions if not ended
           for (const s of local) {
             const key = s.roomId.toLowerCase().trim();
             if (!ended.has(key) && !mergedMap.has(key)) {

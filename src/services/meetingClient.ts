@@ -1,6 +1,7 @@
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
 import { saveRoomTitleLocally, getRoomTitleLocally } from '../utils/urlHelper';
 import { FirebaseMeetingSync } from './firebaseMeetingSync';
+import { activeSessionsStore } from './activeSessionsStore';
 
 export interface MeetingClientEvents {
   onRoomJoined: (data: {
@@ -118,6 +119,13 @@ export class MeetingClient {
     if (this.sessionTitle && !this.sessionTitle.startsWith('Majlis (')) {
       saveRoomTitleLocally(this.roomId, this.sessionTitle);
     }
+
+    // Save/secure session in dedicated activeSessionsStore
+    activeSessionsStore.saveSession({
+      roomId: this.roomId,
+      title: this.sessionTitle,
+      hostName: this.isHost ? this.userName : 'Facilitator',
+    });
 
     // 1. Initialize Firebase Cloud Sync
     try {
