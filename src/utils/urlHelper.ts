@@ -128,7 +128,6 @@ export function buildMeetingInviteUrl(
   forcedBaseUrl?: string
 ): string {
   const cleanRoom = roomId.trim().toLowerCase();
-  const baseUrl = forcedBaseUrl || cachedPublicAppUrl;
 
   const params = new URLSearchParams();
   params.set('room', cleanRoom);
@@ -137,15 +136,23 @@ export function buildMeetingInviteUrl(
   }
   const queryString = params.toString();
 
-  if (baseUrl && !baseUrl.includes('localhost')) {
-    const cleanBase = baseUrl.replace(/\/+$/, '');
+  // 1. If forcedBaseUrl is specified and not localhost, use it
+  if (forcedBaseUrl && !forcedBaseUrl.includes('localhost')) {
+    const cleanBase = forcedBaseUrl.replace(/\/+$/, '');
     return `${cleanBase}/?${queryString}`;
   }
 
-  if (typeof window !== 'undefined') {
+  // 2. In browser context, use window.location.origin so links match the current accessible domain
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
     const origin = window.location.origin;
     const pathname = window.location.pathname.replace(/\/+$/, '');
     return `${origin}${pathname}/?${queryString}`;
+  }
+
+  // 3. Fallback to cached public app url
+  if (cachedPublicAppUrl && !cachedPublicAppUrl.includes('localhost')) {
+    const cleanBase = cachedPublicAppUrl.replace(/\/+$/, '');
+    return `${cleanBase}/?${queryString}`;
   }
 
   return `/?${queryString}`;

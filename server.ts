@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { WebSocketServer, WebSocket } from 'ws';
 
@@ -10,6 +11,101 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
+
+const ACTIVE_SESSIONS_FILE = path.resolve(__dirname, 'active_sessions.json');
+
+export interface StoredSession {
+  id: string;
+  roomId: string;
+  title: string;
+  hostName: string;
+  hostId?: string;
+  scheduledAt: string;
+  status: 'live';
+  participantCount: number;
+  startedAt: number;
+  locked: boolean;
+  isRecording?: boolean;
+  updatedAt: number;
+}
+
+function readStoredSessionsFromFile(): StoredSession[] {
+  try {
+    if (!fs.existsSync(ACTIVE_SESSIONS_FILE)) {
+      fs.writeFileSync(ACTIVE_SESSIONS_FILE, JSON.stringify([], null, 2), 'utf-8');
+      return [];
+    }
+    const data = fs.readFileSync(ACTIVE_SESSIONS_FILE, 'utf-8');
+    if (!data.trim()) return [];
+    const parsed = JSON.parse(data);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((s) => s && s.roomId && typeof s.roomId === 'string');
+    }
+  } catch (err) {
+    console.error('Error reading active_sessions.json:', err);
+  }
+  return [];
+}
+
+function writeStoredSessionsToFile(sessions: StoredSession[]): void {
+  try {
+    const valid = sessions.filter((s) => s && s.roomId && typeof s.roomId === 'string');
+    fs.writeFileSync(ACTIVE_SESSIONS_FILE, JSON.stringify(valid, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing active_sessions.json:', err);
+  }
+}
+
+function saveSessionToFile(session: {
+  roomId: string;
+  title?: string;
+  hostName?: string;
+  hostId?: string;
+  participantCount?: number;
+  locked?: boolean;
+  isRecording?: boolean;
+  startedAt?: number;
+}): StoredSession {
+  const cleanId = String(session.roomId).trim().toLowerCase();
+  const current = readStoredSessionsFromFile();
+  const existingIndex = current.findIndex((s) => s.roomId.toLowerCase() === cleanId);
+  const now = Date.now();
+
+  const record: StoredSession = {
+    id: `live_${cleanId}`,
+    roomId: cleanId,
+    title: (session.title && session.title.trim()) || (existingIndex >= 0 ? current[existingIndex].title : 'Live Majlis'),
+    hostName: (session.hostName && session.hostName.trim()) || (existingIndex >= 0 ? current[existingIndex].hostName : 'Facilitator'),
+    hostId: session.hostId || (existingIndex >= 0 ? current[existingIndex].hostId : undefined),
+    scheduledAt: 'Happening Now',
+    status: 'live',
+    participantCount: session.participantCount !== undefined ? Math.max(session.participantCount, 1) : (existingIndex >= 0 ? current[existingIndex].participantCount : 1),
+    startedAt: session.startedAt || (existingIndex >= 0 ? current[existingIndex].startedAt : now),
+    locked: session.locked !== undefined ? !!session.locked : (existingIndex >= 0 ? !!current[existingIndex].locked : false),
+    isRecording: session.isRecording !== undefined ? !!session.isRecording : (existingIndex >= 0 ? !!current[existingIndex].isRecording : false),
+    updatedAt: now,
+  };
+
+  if (existingIndex >= 0) {
+    current[existingIndex] = record;
+  } else {
+    current.unshift(record);
+  }
+
+  writeStoredSessionsToFile(current);
+  return record;
+}
+
+function removeSessionFromFile(roomId: string): void {
+  const cleanId = String(roomId).trim().toLowerCase();
+  const current = readStoredSessionsFromFile();
+  const filtered = current.filter((s) => s.roomId.toLowerCase() !== cleanId);
+  writeStoredSessionsToFile(filtered);
+}
+
+function clearAllSessionsFromFile(): void {
+  writeStoredSessionsToFile([]);
+}
 
 interface Participant {
   id: string;
@@ -40,27 +136,51 @@ interface Room {
   createdAt: number;
 }
 
-// Store ONLY real, active rooms created by users
+// Store in-memory rooms synchronized with active_sessions.json
 const rooms = new Map<string, Room>();
-const endedRooms = new Set<string>();
 // Grace period timers for reconnecting users
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
-function getActiveRoomsList() {
-  const now = Date.now();
-  return Array.from(rooms.values())
-    .filter((r) => !endedRooms.has(r.id) && (r.participants.size > 0 || (now - r.createdAt < 1000 * 60 * 30)))
-    .map((r) => ({
-      id: `live_${r.id}`,
-      roomId: r.id,
-      title: r.title || 'Live Majlis',
-      hostName: r.hostName || 'Facilitator',
-      scheduledAt: 'Happening Now',
-      status: 'live' as const,
-      participantCount: Math.max(r.participants.size, 1),
-      startedAt: r.createdAt,
-      locked: r.locked,
-    }));
+// Restore any existing sessions from active_sessions.json at server startup
+try {
+  const initialSessions = readStoredSessionsFromFile();
+  for (const s of initialSessions) {
+    if (!rooms.has(s.roomId)) {
+      rooms.set(s.roomId, {
+        id: s.roomId,
+        title: s.title,
+        hostId: s.hostId || '',
+        hostName: s.hostName,
+        locked: !!s.locked,
+        isRecording: !!s.isRecording,
+        participants: new Map(),
+        createdAt: s.startedAt,
+      });
+    }
+  }
+} catch (e) {
+  console.warn('Startup session load error:', e);
+}
+
+function getActiveRoomsList(): StoredSession[] {
+  const stored = readStoredSessionsFromFile();
+  let modified = false;
+  const list = stored.map((s) => {
+    const memoryRoom = rooms.get(s.roomId);
+    if (memoryRoom) {
+      const actualCount = Math.max(memoryRoom.participants.size, 1);
+      if (s.participantCount !== actualCount || s.locked !== memoryRoom.locked) {
+        s.participantCount = actualCount;
+        s.locked = memoryRoom.locked;
+        modified = true;
+      }
+    }
+    return s;
+  });
+  if (modified) {
+    writeStoredSessionsToFile(list);
+  }
+  return list;
 }
 
 function broadcastActiveRooms() {
@@ -112,7 +232,8 @@ wss.on('connection', (ws: WebSocket) => {
 
         case 'join': {
           const { roomId, userId, userName, isHost, title } = message;
-          currentRoomId = roomId;
+          const cleanId = String(roomId || '').trim().toLowerCase();
+          currentRoomId = cleanId;
           currentUserId = userId;
 
           // If there was a pending disconnect timer for this user, cancel it immediately
@@ -121,10 +242,10 @@ wss.on('connection', (ws: WebSocket) => {
             pendingDisconnects.delete(userId);
           }
 
-          let room = rooms.get(roomId);
+          let room = rooms.get(cleanId);
           if (!room) {
             room = {
-              id: roomId,
+              id: cleanId,
               title: title || (isHost ? `${userName}'s Majlis` : 'Live Majlis'),
               hostId: isHost ? userId : '',
               hostName: isHost ? (userName || 'Moderator') : 'Facilitator',
@@ -136,7 +257,7 @@ wss.on('connection', (ws: WebSocket) => {
               participants: new Map(),
               createdAt: Date.now(),
             };
-            rooms.set(roomId, room);
+            rooms.set(cleanId, room);
           } else if (room.kickedUsers?.has(userId)) {
             ws.send(JSON.stringify({
               type: 'error',
@@ -174,6 +295,18 @@ wss.on('connection', (ws: WebSocket) => {
 
           room.participants.set(userId, participant);
 
+          // Save and secure session in dedicated active_sessions.json
+          saveSessionToFile({
+            roomId: cleanId,
+            title: room.title,
+            hostName: room.hostName,
+            hostId: room.hostId,
+            participantCount: room.participants.size,
+            locked: room.locked,
+            isRecording: room.isRecording,
+            startedAt: room.createdAt,
+          });
+
           // Return list of all current participants to the new user
           const existingParticipants = Array.from(room.participants.values())
             .filter((p) => p.id !== userId)
@@ -191,7 +324,7 @@ wss.on('connection', (ws: WebSocket) => {
 
           ws.send(JSON.stringify({
             type: 'room-joined',
-            roomId,
+            roomId: cleanId,
             userId,
             isHost: participant.isHost,
             isCoModerator: participant.isCoModerator,
@@ -206,7 +339,7 @@ wss.on('connection', (ws: WebSocket) => {
           }));
 
           // Notify everyone else that this user joined
-          broadcastToRoom(roomId, userId, {
+          broadcastToRoom(cleanId, userId, {
             type: 'user-joined',
             user: {
               id: participant.id,
@@ -792,13 +925,15 @@ wss.on('connection', (ws: WebSocket) => {
         case 'host-end-session': {
           const targetRoomId = message.roomId || currentRoomId;
           if (!targetRoomId) return;
-          const room = rooms.get(targetRoomId);
+          const cleanId = String(targetRoomId).trim().toLowerCase();
+          removeSessionFromFile(cleanId);
+          const room = rooms.get(cleanId);
           if (room) {
-            broadcastToRoom(targetRoomId, null, {
+            broadcastToRoom(cleanId, null, {
               type: 'session-ended',
               message: message.message || 'The facilitator has concluded this Majlis session.',
             });
-            rooms.delete(targetRoomId);
+            rooms.delete(cleanId);
           }
           broadcastActiveRooms();
           break;
@@ -810,13 +945,14 @@ wss.on('connection', (ws: WebSocket) => {
   });
 
   function performParticipantRemoval(roomId: string, userId: string) {
-    const room = rooms.get(roomId);
+    const cleanId = String(roomId || '').trim().toLowerCase();
+    const room = rooms.get(cleanId);
     if (!room) return;
 
     const leavingUser = room.participants.get(userId);
     room.participants.delete(userId);
 
-    broadcastToRoom(roomId, null, {
+    broadcastToRoom(cleanId, null, {
       type: 'user-left',
       userId,
       name: leavingUser?.name || 'A participant',
@@ -837,7 +973,7 @@ wss.on('connection', (ws: WebSocket) => {
             })
           );
         }
-        broadcastToRoom(roomId, null, {
+        broadcastToRoom(cleanId, null, {
           type: 'new-host',
           hostId: nextHost.id,
           hostName: nextHost.name,
@@ -846,7 +982,19 @@ wss.on('connection', (ws: WebSocket) => {
     }
 
     if (room.participants.size === 0) {
-      rooms.delete(roomId);
+      rooms.delete(cleanId);
+      removeSessionFromFile(cleanId);
+    } else {
+      saveSessionToFile({
+        roomId: cleanId,
+        title: room.title,
+        hostName: room.hostName,
+        hostId: room.hostId,
+        participantCount: room.participants.size,
+        locked: room.locked,
+        isRecording: room.isRecording,
+        startedAt: room.createdAt,
+      });
     }
 
     broadcastActiveRooms();
@@ -945,19 +1093,17 @@ app.get('/api/active-majalis', (req, res) => {
 });
 
 app.post('/api/clear-active-majalis', (req, res) => {
-  for (const rId of rooms.keys()) {
-    endedRooms.add(rId);
-  }
+  clearAllSessionsFromFile();
   rooms.clear();
   broadcastActiveRooms();
-  res.json({ success: true, message: 'All active ongoing majalis cleared.' });
+  res.json({ success: true, message: 'All active ongoing majalis cleared from dedicated file and memory.' });
 });
 
 app.post('/api/end-majlis', (req, res) => {
   const { roomId } = req.body;
   if (roomId) {
     const cleanId = String(roomId).trim().toLowerCase();
-    endedRooms.add(cleanId);
+    removeSessionFromFile(cleanId);
     const room = rooms.get(cleanId);
     if (room) {
       broadcastToRoom(cleanId, null, {
@@ -972,20 +1118,19 @@ app.post('/api/end-majlis', (req, res) => {
 });
 
 app.post('/api/create-majlis', (req, res) => {
-  const { roomId, title, hostName } = req.body;
+  const { roomId, title, hostName, hostId } = req.body;
   if (!roomId) {
     return res.status(400).json({ error: 'roomId is required' });
   }
 
   const cleanId = String(roomId).trim().toLowerCase();
-  endedRooms.delete(cleanId);
 
   let room = rooms.get(cleanId);
   if (!room) {
     room = {
       id: cleanId,
       title: title || 'Live Majlis',
-      hostId: '',
+      hostId: hostId || '',
       hostName: hostName || 'Facilitator',
       locked: false,
       isRecording: false,
@@ -996,26 +1141,66 @@ app.post('/api/create-majlis', (req, res) => {
   } else {
     if (title) room.title = title;
     if (hostName) room.hostName = hostName;
+    if (hostId) room.hostId = hostId;
   }
 
+  const savedRecord = saveSessionToFile({
+    roomId: cleanId,
+    title: room.title,
+    hostName: room.hostName,
+    hostId: room.hostId,
+    participantCount: Math.max(room.participants.size, 1),
+    locked: room.locked,
+    isRecording: room.isRecording,
+    startedAt: room.createdAt,
+  });
+
   broadcastActiveRooms();
-  res.json({ success: true, room: { id: room.id, title: room.title, hostName: room.hostName } });
+  res.json({ success: true, room: savedRecord });
 });
 
 app.get('/api/room/:roomId', (req, res) => {
-  const room = rooms.get(req.params.roomId);
-  if (!room) {
-    res.json({ exists: false });
-    return;
+  const cleanId = String(req.params.roomId || '').trim().toLowerCase();
+  const stored = readStoredSessionsFromFile();
+  const fileSession = stored.find((s) => s.roomId.toLowerCase() === cleanId);
+  const memoryRoom = rooms.get(cleanId);
+
+  if (fileSession) {
+    return res.json({
+      exists: true,
+      roomId: fileSession.roomId,
+      title: fileSession.title,
+      hostName: fileSession.hostName,
+      participantCount: memoryRoom ? Math.max(memoryRoom.participants.size, fileSession.participantCount) : fileSession.participantCount,
+      locked: memoryRoom ? memoryRoom.locked : fileSession.locked,
+      isRecording: memoryRoom ? memoryRoom.isRecording : !!fileSession.isRecording,
+      startedAt: fileSession.startedAt,
+    });
   }
-  res.json({
-    exists: true,
-    title: room.title,
-    hostName: room.hostName,
-    participantCount: room.participants.size,
-    locked: room.locked,
-    isRecording: room.isRecording,
-  });
+
+  if (memoryRoom) {
+    const saved = saveSessionToFile({
+      roomId: cleanId,
+      title: memoryRoom.title,
+      hostName: memoryRoom.hostName,
+      participantCount: Math.max(memoryRoom.participants.size, 1),
+      locked: memoryRoom.locked,
+      isRecording: memoryRoom.isRecording,
+      startedAt: memoryRoom.createdAt,
+    });
+    return res.json({
+      exists: true,
+      roomId: saved.roomId,
+      title: saved.title,
+      hostName: saved.hostName,
+      participantCount: saved.participantCount,
+      locked: saved.locked,
+      isRecording: saved.isRecording,
+      startedAt: saved.startedAt,
+    });
+  }
+
+  res.json({ exists: false, roomId: cleanId });
 });
 
 // Vite middleware in dev or static files in production

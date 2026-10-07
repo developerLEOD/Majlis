@@ -97,21 +97,21 @@ function MainAppContent() {
       const info = getRoomInfoFromCurrentLocation();
       if (info && info.roomId && !activeMeeting) {
         const cleanedId = info.roomId.toLowerCase().replace(/[^a-z0-9-]/g, '');
-        // Verify whether the room from URL is an active ongoing session or scheduled session
-        const verifyResult = await verifyMajlisOngoing(cleanedId, activeMajalis, upcomingSessions);
-        if (verifyResult.isOngoing) {
+        if (cleanedId.length >= 2) {
+          // Look up title and host from active list, local title, or URL
+          const existing = activeMajalis.find((m) => m.roomId.toLowerCase() === cleanedId);
           const localTitle = getRoomTitleLocally(cleanedId);
+          const resolvedTitle = info.title || existing?.title || localTitle || `Majlis (${cleanedId})`;
+
           setJoinErrorMessage(null);
-          setPreJoinTarget({
-            roomId: cleanedId,
-            title: info.title || verifyResult.title || localTitle || `Majlis (${cleanedId})`,
-            isHost: false,
+          setPreJoinTarget((curr) => {
+            if (curr && curr.roomId === cleanedId) return curr;
+            return {
+              roomId: cleanedId,
+              title: resolvedTitle,
+              isHost: false,
+            };
           });
-        } else {
-          setJoinErrorMessage(
-            `No active Majlis found for "${cleanedId}". The session may have ended or the link is expired.`
-          );
-          window.history.replaceState({}, '', window.location.pathname);
         }
       }
     };
@@ -122,7 +122,7 @@ function MainAppContent() {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, [activeMeeting, activeMajalis, upcomingSessions]);
+  }, [activeMeeting, activeMajalis]);
 
   const handleUpdateUserName = (newName: string) => {
     setUserName(newName);

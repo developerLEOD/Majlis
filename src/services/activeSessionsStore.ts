@@ -191,7 +191,7 @@ class ActiveSessionsStoreService {
   }
 
   /**
-   * Refreshes active sessions directly from server REST endpoint & merges into dedicated store
+   * Refreshes active sessions directly from server REST endpoint & secures in dedicated store
    */
   public async refreshFromServer(): Promise<MajlisSession[]> {
     try {
@@ -199,52 +199,26 @@ class ActiveSessionsStoreService {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.activeMajalis)) {
-          const ended = this.getEndedRoomIds();
+          // Server's dedicated active_sessions.json is authoritative for ongoing sessions
+          const serverSessions: MajlisSession[] = data.activeMajalis
+            .filter((s: any) => s && s.roomId)
+            .map((s: any) => {
+              const cleanId = String(s.roomId).toLowerCase().trim();
+              return {
+                id: s.id || `live_${cleanId}`,
+                roomId: cleanId,
+                title: s.title || 'Live Majlis',
+                hostName: s.hostName || 'Facilitator',
+                scheduledAt: 'Happening Now',
+                status: 'live' as const,
+                participantCount: Math.max(s.participantCount ?? 1, 1),
+                startedAt: s.startedAt || Date.now(),
+                locked: !!s.locked,
+              };
+            });
 
-          // Server active list is authoritative for ongoing sessions
-          const serverSessions: MajlisSession[] = data.activeMajalis.map((s: MajlisSession) => {
-            const cleanId = s.roomId.toLowerCase().trim();
-            // If server says room is active, remove from ended set
-            if (ended.has(cleanId)) {
-              ended.delete(cleanId);
-            }
-            return {
-              id: `live_${cleanId}`,
-              roomId: cleanId,
-              title: s.title || 'Live Majlis',
-              hostName: s.hostName || 'Facilitator',
-              scheduledAt: 'Happening Now',
-              status: 'live' as const,
-              participantCount: Math.max(s.participantCount ?? 1, 1),
-              startedAt: s.startedAt || Date.now(),
-              locked: !!s.locked,
-            };
-          });
-
-          // Save updated ended set
-          try {
-            const arr = Array.from(ended);
-            localStorage.setItem(ENDED_SESSIONS_STORAGE_KEY, JSON.stringify(arr));
-            sessionStorage.setItem(ENDED_SESSIONS_STORAGE_KEY, JSON.stringify(arr));
-          } catch (e) {}
-
-          // Merge server sessions into local sessions
-          const local = this.getStoredActiveSessions();
-          const mergedMap = new Map<string, MajlisSession>();
-
-          for (const s of serverSessions) {
-            mergedMap.set(s.roomId.toLowerCase().trim(), s);
-          }
-          for (const s of local) {
-            const key = s.roomId.toLowerCase().trim();
-            if (!ended.has(key) && !mergedMap.has(key)) {
-              mergedMap.set(key, s);
-            }
-          }
-
-          const finalList = Array.from(mergedMap.values());
-          this.saveStoredActiveSessions(finalList);
-          return finalList;
+          this.saveStoredActiveSessions(serverSessions);
+          return serverSessions;
         }
       }
     } catch (e) {

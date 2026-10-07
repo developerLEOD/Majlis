@@ -316,7 +316,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               </div>
 
               {/* Active Sessions List or Loading State or Compact Empty State */}
-              {loadingActiveMajalis ? (
+              {loadingActiveMajalis && activeMajalis.length === 0 ? (
                 <div className="bg-[#1A110A] border border-[#302116] rounded-sm p-4 text-xs flex items-center justify-between gap-4 shadow-md">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-sm bg-[#24170E] border border-[#3A2619] flex items-center justify-center shrink-0">

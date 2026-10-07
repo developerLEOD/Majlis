@@ -99,7 +99,7 @@ export const MajalisScreen: React.FC<MajalisScreenProps> = ({
           </div>
         </div>
 
-        {loadingActiveMajalis ? (
+        {loadingActiveMajalis && activeMajalis.length === 0 ? (
           <div className="p-4 bg-[#1A110A] border border-[#302116] rounded-sm flex items-center justify-between gap-3 text-xs shadow-md">
             <div className="flex items-center gap-3">
               <Loader2 className="w-4 h-4 text-[#E9A83A] animate-spin shrink-0" />
