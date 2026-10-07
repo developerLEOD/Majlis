@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, isFirestoreQuotaExhausted, handleFirestoreError, OperationType } from '../firebase';
 import { MajlisSession } from '../types/meeting';
 import { activeSessionsStore } from '../services/activeSessionsStore';
+import { getBackendApiUrl } from '../utils/urlHelper';
 
 export interface RoomVerificationResult {
   isOngoing: boolean;
@@ -135,7 +136,7 @@ export async function verifyMajlisOngoing(
 
   // 4. Check Backend REST endpoint
   try {
-    const res = await fetch(`/api/room/${roomId}`);
+    const res = await fetch(getBackendApiUrl(`/api/room/${roomId}`));
     if (res.ok) {
       const data = await res.json();
       if (data && data.exists) {

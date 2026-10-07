@@ -1,4 +1,5 @@
 import { MajlisSession } from '../types/meeting';
+import { getBackendApiUrl } from '../utils/urlHelper';
 
 const ACTIVE_SESSIONS_STORAGE_KEY = 'infinitymeet_dedicated_active_sessions_v2';
 const ENDED_SESSIONS_STORAGE_KEY = 'infinitymeet_dedicated_ended_sessions_v2';
@@ -70,7 +71,7 @@ class ActiveSessionsStoreService {
     this.saveStoredActiveSessions(filtered);
 
     // 3. Notify server endpoint
-    fetch('/api/end-majlis', {
+    fetch(getBackendApiUrl('/api/end-majlis'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roomId: cleanId }),
@@ -164,7 +165,7 @@ class ActiveSessionsStoreService {
     this.saveStoredActiveSessions(current);
 
     // Sync with backend REST
-    fetch('/api/create-majlis', {
+    fetch(getBackendApiUrl('/api/create-majlis'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -186,7 +187,7 @@ class ActiveSessionsStoreService {
     current.forEach((s) => this.markSessionEnded(s.roomId));
 
     localStorage.removeItem(ACTIVE_SESSIONS_STORAGE_KEY);
-    fetch('/api/clear-active-majalis', { method: 'POST' }).catch(() => {});
+    fetch(getBackendApiUrl('/api/clear-active-majalis'), { method: 'POST' }).catch(() => {});
     this.broadcastUpdate({ type: 'sessions_updated' });
   }
 
@@ -195,7 +196,7 @@ class ActiveSessionsStoreService {
    */
   public async refreshFromServer(): Promise<MajlisSession[]> {
     try {
-      const res = await fetch('/api/active-majalis');
+      const res = await fetch(getBackendApiUrl('/api/active-majalis'));
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.activeMajalis)) {

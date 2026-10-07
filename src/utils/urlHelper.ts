@@ -6,13 +6,51 @@ import { MajlisSession } from '../types/meeting';
  * URL, link sharing, and session metadata utilities for InfinityMeet
  */
 
+// Authoritative Cloud Run backend URL for this application
+export const CLOUD_RUN_BACKEND_URL = 'https://ais-pre-h6lc7dro2ku2bhha3s6o2z-681773016852.asia-east1.run.app';
+
+/**
+ * Resolves the appropriate backend base URL.
+ * Automatically connects to the Cloud Run server when frontend is hosted on Vercel, Netlify, or third-party domains.
+ */
+export function getBackendBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    // 1. Explicit environment variable if provided
+    const envUrl = (import.meta as any).env?.VITE_BACKEND_URL;
+    if (envUrl) return String(envUrl).replace(/\/+$/, '');
+
+    // 2. If running on Vercel or any external static host, connect directly to Cloud Run
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('vercel.app') || host.includes('netlify.app') || host.includes('github.io')) {
+      return CLOUD_RUN_BACKEND_URL;
+    }
+
+    // 3. Same-origin for Cloud Run, AI Studio preview, and localhost dev
+    return window.location.origin;
+  }
+  return CLOUD_RUN_BACKEND_URL;
+}
+
+export function getBackendApiUrl(endpointPath: string): string {
+  const base = getBackendBaseUrl();
+  const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+  return `${base}${cleanPath}`;
+}
+
+export function getBackendWebSocketUrl(): string {
+  const base = getBackendBaseUrl();
+  const wsProto = base.startsWith('https:') ? 'wss:' : 'ws:';
+  const cleanHost = base.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return `${wsProto}//${cleanHost}`;
+}
+
 // Cache for public app URL retrieved from backend
 let cachedPublicAppUrl = '';
 
 export async function fetchAppConfig(): Promise<string> {
   if (cachedPublicAppUrl) return cachedPublicAppUrl;
   try {
-    const res = await fetch('/api/config');
+    const res = await fetch(getBackendApiUrl('/api/config'));
     if (res.ok) {
       const data = await res.json();
       if (data.appUrl) {
@@ -238,7 +276,7 @@ export async function checkOngoingMajlis(
 
   // 2. Check live server backend
   try {
-    const res = await fetch(`/api/room/${encodeURIComponent(cleanedId)}`);
+    const res = await fetch(getBackendApiUrl(`/api/room/${encodeURIComponent(cleanedId)}`));
     if (res.ok) {
       const data = await res.json();
       if (data.exists) {

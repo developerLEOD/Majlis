@@ -15,6 +15,7 @@ import {
   getRoomInfoFromCurrentLocation,
   saveRoomTitleLocally,
   getRoomTitleLocally,
+  getBackendApiUrl,
 } from './utils/urlHelper';
 import { useActiveMajalis, verifyMajlisOngoing } from './hooks/useActiveMajalis';
 import {
@@ -181,7 +182,7 @@ function MainAppContent() {
     if (targetRoomId) {
       removeRoom(targetRoomId);
       endCloudRoomSession(targetRoomId).catch(() => {});
-      fetch('/api/end-majlis', {
+      fetch(getBackendApiUrl('/api/end-majlis'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomId: targetRoomId }),
@@ -208,7 +209,7 @@ function MainAppContent() {
     }).catch(console.warn);
 
     // Register on server
-    fetch('/api/create-majlis', {
+    fetch(getBackendApiUrl('/api/create-majlis'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

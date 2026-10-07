@@ -4,6 +4,7 @@ import { createAudioMeter, getLocalUserMedia } from '../../utils/media';
 import { useAuth } from '../../context/AuthContext';
 import { IslamicStarRosette } from '../common/IslamicStarRosette';
 import { SanctuaryLoader } from '../common/SanctuaryLoader';
+import { getBackendApiUrl } from '../../utils/urlHelper';
 import heroStainedGlassImg from '../../assets/images/hero_stained_glass_1791132771042.jpg';
 
 interface PreJoinScreenProps {
@@ -48,7 +49,7 @@ export const PreJoinScreen: React.FC<PreJoinScreenProps> = ({
   useEffect(() => {
     let active = true;
     if (roomId) {
-      fetch(`/api/room/${roomId}`)
+      fetch(getBackendApiUrl(`/api/room/${roomId}`))
         .then((res) => res.json())
         .then((data) => {
           if (active && data.exists && data.title) {

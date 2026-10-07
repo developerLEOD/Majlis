@@ -1,5 +1,5 @@
 import { ChatMessage, Participant, ReactionItem } from '../types/meeting';
-import { saveRoomTitleLocally, getRoomTitleLocally } from '../utils/urlHelper';
+import { saveRoomTitleLocally, getRoomTitleLocally, getBackendWebSocketUrl, getBackendApiUrl } from '../utils/urlHelper';
 import { FirebaseMeetingSync } from './firebaseMeetingSync';
 import { activeSessionsStore } from './activeSessionsStore';
 
@@ -376,8 +376,7 @@ export class MeetingClient {
 
   private initWebSocket() {
     if (this.isClosed) return;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const wsUrl = getBackendWebSocketUrl();
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -1393,7 +1392,7 @@ export class MeetingClient {
     // Delete room and participants from Firestore so it disappears from Ongoing list immediately
     this.firebaseSync?.endRoomSession().catch(() => {});
     // Notify server to purge from active rooms
-    fetch('/api/end-majlis', {
+    fetch(getBackendApiUrl('/api/end-majlis'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roomId: this.roomId }),
