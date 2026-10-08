@@ -34,6 +34,7 @@ class SessionSecurityStoreService {
   private listeners: Set<(sessions: MajlisSession[]) => void> = new Set();
   private remoteDiscoveredRooms = new Map<string, MajlisSession>();
   private roomLastSeenMap = new Map<string, number>();
+  private cloudActiveRoomIds = new Set<string>();
   private lobbyRoom: any = null;
   private lobbyAnnounceAction: any = null;
   private lobbyQueryAction: any = null;
@@ -81,6 +82,7 @@ class SessionSecurityStoreService {
                 this.registerDiscoveredRoom(room);
               }
             });
+            this.cloudActiveRoomIds = cloudRoomIds;
 
             // Clean up any remote rooms that have been ended/deleted from cloud Firestore
             let changed = false;
@@ -166,6 +168,11 @@ class SessionSecurityStoreService {
         const now = Date.now();
         let changed = false;
         for (const [id, lastSeen] of this.roomLastSeenMap.entries()) {
+          // If the room is an active cloud room from Firestore, do not let it time out locally
+          if (this.cloudActiveRoomIds.has(id)) {
+            this.roomLastSeenMap.set(id, now);
+            continue;
+          }
           if (now - lastSeen > 25000) {
             this.remoteDiscoveredRooms.delete(id);
             this.roomLastSeenMap.delete(id);

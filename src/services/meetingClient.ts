@@ -4,6 +4,7 @@ import { FirebaseMeetingSync } from './firebaseMeetingSync';
 import { activeSessionsStore } from './activeSessionsStore';
 import { sessionSecurityStore } from './sessionSecurityStore';
 import { UniversalSignalingTransport } from './universalSignaling';
+import { RTC_CONFIG } from './iceServers';
 
 export interface MeetingClientEvents {
   onRoomJoined: (data: {
@@ -61,16 +62,6 @@ export interface MeetingClientEvents {
   onError: (message: string) => void;
 }
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-  ],
-};
-
 export class MeetingClient {
   private ws: WebSocket | null = null;
   private peerConnections = new Map<string, RTCPeerConnection>();
@@ -85,7 +76,9 @@ export class MeetingClient {
   private broadcastChannel: BroadcastChannel | null = null;
   private firebaseSync: FirebaseMeetingSync | null = null;
   private knownParticipants = new Map<string, Participant>();
-  private universalTransport: UniversalSignalingTransport | null = null;
+  private universalTransport = null as UniversalSignalingTransport | null;
+  private makingOffer = new Map<string, boolean>();
+  private reconnectTimers = new Map<string, any>();
 
   public roomId: string = '';
   public userId: string = '';
@@ -973,6 +966,7 @@ export class MeetingClient {
       };
     }
 
+    // Attach local stream tracks with transceivers or addTrack
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
         try {
@@ -985,7 +979,13 @@ export class MeetingClient {
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        const signalData = { candidate: event.candidate };
+        const cand = event.candidate.toJSON ? event.candidate.toJSON() : {
+          candidate: event.candidate.candidate,
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex,
+          usernameFragment: event.candidate.usernameFragment,
+        };
+        const signalData = { candidate: cand };
         this.sendWsMessage({
           type: 'signal',
           senderId: this.userId,
@@ -1015,14 +1015,55 @@ export class MeetingClient {
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        console.log(`Peer ${peerId} connection state: ${pc.connectionState}`);
+    // Monitor ICE connection state & trigger automatic ICE restart across different WiFis
+    const handleConnectionFailures = () => {
+      const state = pc.connectionState;
+      const iceState = pc.iceConnectionState;
+
+      if (state === 'failed' || iceState === 'failed' || iceState === 'disconnected') {
+        console.log(`Peer ${peerId} connection issue (state: ${state}, ice: ${iceState}). Initiating auto-recovery.`);
+        
+        // Clear any existing timer
+        if (this.reconnectTimers.has(peerId)) {
+          clearTimeout(this.reconnectTimers.get(peerId));
+        }
+
+        const timer = setTimeout(async () => {
+          if (this.isClosed || !this.peerConnections.has(peerId)) return;
+          try {
+            console.log(`Attempting ICE restart for peer ${peerId}`);
+            if (this.userId > peerId) {
+              const restartOffer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(restartOffer);
+              const signalData = { sdp: pc.localDescription };
+              this.sendWsMessage({
+                type: 'signal',
+                senderId: this.userId,
+                targetId: peerId,
+                signalData,
+              });
+              this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
+            }
+          } catch (e) {
+            console.warn('ICE restart attempt warning:', e);
+          }
+        }, 1500);
+
+        this.reconnectTimers.set(peerId, timer);
+      } else if (state === 'connected' && iceState === 'connected') {
+        if (this.reconnectTimers.has(peerId)) {
+          clearTimeout(this.reconnectTimers.get(peerId));
+          this.reconnectTimers.delete(peerId);
+        }
       }
     };
 
+    pc.onconnectionstatechange = handleConnectionFailures;
+    pc.oniceconnectionstatechange = handleConnectionFailures;
+
     if (isInitiator) {
       try {
+        this.makingOffer.set(peerId, true);
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
@@ -1036,6 +1077,8 @@ export class MeetingClient {
         this.firebaseSync?.sendSignal(peerId, signalData).catch(() => {});
       } catch (err) {
         console.error('Error creating offer for peer:', peerId, err);
+      } finally {
+        this.makingOffer.set(peerId, false);
       }
     }
 
@@ -1047,9 +1090,30 @@ export class MeetingClient {
       const sdp = new RTCSessionDescription(signalData.sdp);
 
       if (sdp.type === 'offer') {
-        const pc = await this.createPeerConnection(senderId, false);
+        let pc = this.peerConnections.get(senderId);
+        if (!pc) {
+          pc = await this.createPeerConnection(senderId, false);
+        }
+
+        // Polite peer offer collision handling
+        const isPolite = this.userId < senderId;
+        const isMakingOffer = this.makingOffer.get(senderId) || false;
+        const offerCollision = isMakingOffer || pc.signalingState !== 'stable';
+
+        if (offerCollision) {
+          if (!isPolite) {
+            // Impolite peer ignores the incoming offer and waits for the polite peer to accept its offer
+            return;
+          }
+          // Polite peer rolls back local description to accept the remote offer
+          await Promise.all([
+            pc.setLocalDescription({ type: 'rollback' } as any).catch(() => {}),
+          ]);
+        }
+
         await pc.setRemoteDescription(sdp);
 
+        // Apply any ICE candidates that arrived before the offer SDP
         const queued = this.queuedCandidates.get(senderId) || [];
         for (const candidate of queued) {
           try {
@@ -1073,7 +1137,7 @@ export class MeetingClient {
         this.firebaseSync?.sendSignal(senderId, ansData).catch(() => {});
       } else if (sdp.type === 'answer') {
         const pc = this.peerConnections.get(senderId);
-        if (pc) {
+        if (pc && pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(sdp);
 
           const queued = this.queuedCandidates.get(senderId) || [];
@@ -1089,7 +1153,7 @@ export class MeetingClient {
       }
     } else if (signalData.candidate) {
       const pc = this.peerConnections.get(senderId);
-      if (pc && pc.remoteDescription) {
+      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
         try {
           await pc.addIceCandidate(new RTCIceCandidate(signalData.candidate));
         } catch (e) {
@@ -1439,6 +1503,12 @@ export class MeetingClient {
   }
 
   private closePeerConnection(peerId: string) {
+    if (this.reconnectTimers.has(peerId)) {
+      clearTimeout(this.reconnectTimers.get(peerId));
+      this.reconnectTimers.delete(peerId);
+    }
+    this.makingOffer.delete(peerId);
+
     const pc = this.peerConnections.get(peerId);
     if (pc) {
       try {
@@ -1460,6 +1530,12 @@ export class MeetingClient {
 
   public leave() {
     this.isClosed = true;
+
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
+    this.makingOffer.clear();
 
     // Remove our record from Firebase Firestore immediately
     if (this.firebaseSync) {

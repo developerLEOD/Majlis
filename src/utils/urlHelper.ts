@@ -15,6 +15,11 @@ export function getBackendBaseUrl(): string {
     if (envUrl && typeof envUrl === 'string' && !envUrl.includes('ais-pre-')) {
       return envUrl.replace(/\/+$/, '');
     }
+    const host = window.location.hostname;
+    // Fallback to the live AI Studio persistent Cloud Run server when hosted on Vercel
+    if (host && !host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('run.app')) {
+      return 'https://ais-pre-h6lc7dro2ku2bhha3s6o2z-681773016852.asia-east1.run.app';
+    }
     return window.location.origin;
   }
   return '';
